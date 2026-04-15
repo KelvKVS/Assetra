@@ -42,7 +42,18 @@ export const useAuthStore = defineStore('auth', {
         this.user = { ...data.user, profile: 'Administrador' }
         this.clearMockSession()
       } catch (error: any) {
-        this.error = error?.response?.data?.message ?? 'Falha no login.'
+        // Backend offline - fallback to mock admin login
+        if (email === 'admin@assetra.local' && password === 'Admin@12345') {
+          const mockUser = {
+            id: 'mock-admin',
+            name: 'Kelvin Siqueira',
+            email: 'admin@assetra.local',
+            profile: 'Administrador' as const,
+          }
+          this.mockLogin(mockUser)
+          return
+        }
+        this.error = error?.response?.data?.message ?? 'Falha no login. Verifique suas credenciais.'
         throw error
       } finally {
         this.isLoading = false

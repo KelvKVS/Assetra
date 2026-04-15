@@ -1,72 +1,81 @@
 <template>
-  <section class="card">
-    <h2>{{ isAdmin ? 'Dashboard Executivo' : 'Dashboard Operacional' }}</h2>
-    <p class="muted">
-      {{ isAdmin ? 'Indicadores e visão operacional dos ativos de TI.' : 'Resumo do que está sob sua responsabilidade.' }}
-    </p>
-
+  <div class="dashboard">
+    <!-- Stats Cards -->
     <div class="stats-grid">
-      <article class="stat-box stat-primary">
+      <div class="stat-box stat-primary">
         <span>{{ isAdmin ? 'Ativos cadastrados' : 'Meus ativos' }}</span>
         <strong>{{ isAdmin ? mockStore.assets.length : myAssets.length }}</strong>
-      </article>
-      <article class="stat-box">
+      </div>
+      <div class="stat-box stat-warning">
         <span>{{ isAdmin ? 'Chamados abertos' : 'Minhas pendências' }}</span>
         <strong>{{ isAdmin ? openMaintenances : myPendingMaintenances }}</strong>
-      </article>
-      <article class="stat-box">
+      </div>
+      <div class="stat-box stat-info">
         <span>{{ isAdmin ? 'Movimentações no mês' : 'Movimentações no meu fluxo' }}</span>
         <strong>{{ isAdmin ? mockStore.movements.length : myMovements.length }}</strong>
-      </article>
-      <article class="stat-box">
+      </div>
+      <div class="stat-box stat-success">
         <span>{{ isAdmin ? 'Usuários ativos' : 'Ativos em manutenção' }}</span>
         <strong>{{ isAdmin ? activeUsers : myAssetsInMaintenance }}</strong>
-      </article>
+      </div>
     </div>
 
+    <!-- Charts Section -->
     <div class="charts-grid" v-if="isAdmin">
-      <article class="chart-card">
+      <div class="chart-card">
         <h3>Status dos ativos</h3>
         <div class="donut" :style="donutStyle">
           <span>{{ mockStore.assets.length }}</span>
         </div>
         <ul class="legend-list">
-          <li><span class="dot dot-blue"></span>Em uso: {{ inUseAssets }}</li>
-          <li><span class="dot dot-green"></span>Disponíveis: {{ availableAssets }}</li>
-          <li><span class="dot dot-amber"></span>Em manutenção: {{ maintenanceAssets }}</li>
+          <li>
+            <span class="dot dot-blue"></span>
+            Em uso: <strong>{{ inUseAssets }}</strong>
+          </li>
+          <li>
+            <span class="dot dot-green"></span>
+            Disponíveis: <strong>{{ availableAssets }}</strong>
+          </li>
+          <li>
+            <span class="dot dot-amber"></span>
+            Em manutenção: <strong>{{ maintenanceAssets }}</strong>
+          </li>
         </ul>
-      </article>
+      </div>
 
-      <article class="chart-card">
+      <div class="chart-card">
         <h3>Movimentações recentes</h3>
         <div class="bar-list">
           <div v-for="item in movementBySector" :key="item.label" class="bar-row">
-            <span>{{ item.label }}</span>
+            <span class="bar-label">{{ item.label }}</span>
             <div class="bar-track">
               <div class="bar-fill" :style="{ width: `${item.percent}%` }"></div>
             </div>
-            <strong>{{ item.value }}</strong>
+            <strong class="bar-value">{{ item.value }}</strong>
           </div>
         </div>
-      </article>
+      </div>
     </div>
 
+    <!-- User Info -->
     <div v-else class="user-box">
-      <p><strong>Próxima ação sugerida:</strong> revisar status dos ativos do seu setor.</p>
-      <p><strong>Dica:</strong> use a tela <em>Meus Ativos</em> para acompanhar mudanças.</p>
+      <h3><Lightbulb size="20" class="box-icon" /> Dica</h3>
+      <p>Use a tela <em>Meus Ativos</em> para acompanhar mudanças e atualizações.</p>
     </div>
 
     <div class="user-box" v-if="authStore.user">
+      <h3>Informações do usuário</h3>
       <p><strong>Nome:</strong> {{ authStore.user.name }}</p>
       <p><strong>E-mail:</strong> {{ authStore.user.email }}</p>
-      <p><strong>ID:</strong> {{ authStore.user.id }}</p>
+      <p><strong>Perfil:</strong> {{ authStore.user.profile }}</p>
     </div>
 
+    <!-- Actions -->
     <div class="action-row">
-      <button class="warning" @click="handleResetData">Resetar dados mockados</button>
-      <button class="danger" @click="handleLogout">Sair</button>
+      <button class="warning" @click="handleResetData"><RefreshCw size="18" class="btn-icon" /> Resetar dados</button>
+      <button class="danger" @click="handleLogout"><LogOut size="18" class="btn-icon" /> Sair</button>
     </div>
-  </section>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -74,6 +83,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useMockDataStore } from '../stores/mockData'
+import { Lightbulb, RefreshCw, LogOut } from 'lucide-vue-next'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -94,9 +104,9 @@ const donutStyle = computed(() => {
   const maintenance = 100 - inUse - available
   return {
     background: `conic-gradient(
-      #1d4ed8 0% ${inUse}%,
-      #059669 ${inUse}% ${inUse + available}%,
-      #d97706 ${inUse + available}% ${inUse + available + maintenance}%
+      #3b82f6 0% ${inUse}%,
+      #22c55e ${inUse}% ${inUse + available}%,
+      #f59e0b ${inUse + available}% ${inUse + available + maintenance}%
     )`,
   }
 })
@@ -153,3 +163,58 @@ const handleLogout = async () => {
   await router.push('/login')
 }
 </script>
+
+<style scoped>
+.dashboard {
+  animation: fade-up 0.5s ease;
+}
+
+.stat-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.chart-card h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.user-box h3 {
+  margin: 0 0 var(--spacing-sm);
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+}
+
+.box-icon {
+  margin-right: 8px;
+}
+
+.btn-icon {
+  margin-right: 8px;
+}
+
+.user-box p {
+  margin: var(--spacing-xs) 0;
+  font-size: 1.5rem;
+  color: var(--text-secondary);
+}
+
+.user-box strong {
+  color: var(--text-primary);
+}
+
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .charts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
