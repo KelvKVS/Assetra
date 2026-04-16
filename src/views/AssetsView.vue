@@ -7,7 +7,7 @@
         <p class="muted">Cadastro e acompanhamento de equipamentos</p>
       </div>
       <button class="btn-primary" @click="showForm = !showForm">
-        <Plus size="18" />
+        <Plus :size="18" :stroke-width="2.5" />
         {{ showForm ? 'Fechar' : 'Novo Ativo' }}
       </button>
     </div>
@@ -47,28 +47,28 @@
     <!-- Stats Cards -->
     <div class="stats-grid">
       <div class="stat-card">
-        <Monitor size="24" class="stat-icon" />
+        <Monitor :size="24" :stroke-width="2" class="stat-icon" />
         <div class="stat-content">
           <span class="stat-label">Total de ativos</span>
           <span class="stat-value">{{ assets.length }}</span>
         </div>
       </div>
       <div class="stat-card stat-success">
-        <CheckCircle size="24" class="stat-icon" />
+        <CheckCircle :size="24" :stroke-width="2" class="stat-icon" />
         <div class="stat-content">
           <span class="stat-label">Em uso</span>
           <span class="stat-value">{{ usageStats.inUse }}</span>
         </div>
       </div>
       <div class="stat-card stat-info">
-        <Package size="24" class="stat-icon" />
+        <Package :size="24" :stroke-width="2" class="stat-icon" />
         <div class="stat-content">
           <span class="stat-label">Disponíveis</span>
           <span class="stat-value">{{ usageStats.available }}</span>
         </div>
       </div>
       <div class="stat-card stat-warning">
-        <Wrench size="24" class="stat-icon" />
+        <Wrench :size="24" :stroke-width="2" class="stat-icon" />
         <div class="stat-content">
           <span class="stat-label">Em manutenção</span>
           <span class="stat-value">{{ usageStats.maintenance }}</span>
@@ -78,7 +78,7 @@
 
     <!-- Search Bar -->
     <div class="search-bar">
-      <Search size="18" />
+      <Search :size="18" :stroke-width="2" />
       <input v-model.trim="search" type="text" placeholder="Buscar por tag, descrição ou setor..." />
     </div>
 
@@ -87,7 +87,7 @@
       <div v-for="asset in filteredAssets" :key="asset.tag" class="asset-card">
         <div class="asset-header">
           <div class="asset-icon">
-            <Monitor size="24" />
+            <Monitor :size="24" :stroke-width="2" />
           </div>
           <div class="asset-status">
             <span :class="['status-badge', `status-${asset.status.toLowerCase().replace(' ', '-')}`]">
@@ -100,17 +100,17 @@
           <p class="asset-description">{{ asset.description }}</p>
           <div class="asset-details">
             <div class="detail-item">
-              <MapPin size="14" />
+              <MapPin :size="14" :stroke-width="2.5" />
               <span>{{ asset.sector }}</span>
             </div>
           </div>
         </div>
         <div class="asset-actions">
           <button class="btn-icon" @click="startAssetEdit(asset)" title="Editar">
-            <Pencil size="16" />
+            <Edit :size="18" :stroke-width="2.5" color="currentColor" />
           </button>
           <button class="btn-icon btn-danger" @click="removeAsset(asset.tag)" title="Excluir">
-            <Trash2 size="16" />
+            <Trash2 :size="18" :stroke-width="2.5" color="currentColor" />
           </button>
         </div>
       </div>
@@ -122,7 +122,7 @@
         <div class="modal-header">
           <h3>Editar Ativo</h3>
           <button class="btn-close" @click="cancelAssetEdit">
-            <X size="20" />
+            <X :size="20" :stroke-width="2.5" />
           </button>
         </div>
         <form @submit.prevent="saveAssetEdit(editingTag)" class="modal-form">
@@ -159,7 +159,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { type Asset, useMockDataStore } from '../stores/mockData'
-import { Plus, Search, Monitor, CheckCircle, Package, Wrench, MapPin, Pencil, Trash2, X } from 'lucide-vue-next'
+import { Plus, Search, Monitor, CheckCircle, Package, Wrench, MapPin, Edit, Trash2, X } from 'lucide-vue-next'
 
 const showForm = ref(false)
 const search = ref('')
@@ -241,6 +241,7 @@ const saveAssetEdit = (originalTag: string) => {
 </script>
 
 <style scoped>
+/* Estilos permanecem os mesmos */
 .assets-page {
   animation: fade-up 0.5s ease;
 }
@@ -306,7 +307,6 @@ const saveAssetEdit = (originalTag: string) => {
   border-color: var(--primary);
 }
 
-/* Form Card */
 .form-card {
   background: var(--bg-card);
   border: 1px solid var(--border-light);
@@ -341,6 +341,14 @@ const saveAssetEdit = (originalTag: string) => {
   color: var(--text-secondary);
 }
 
+.form-group input, .form-group select {
+  padding: 10px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  color: var(--text-primary);
+}
+
 .form-actions {
   display: flex;
   gap: 12px;
@@ -358,7 +366,6 @@ const saveAssetEdit = (originalTag: string) => {
   font-weight: 500;
 }
 
-/* Stats Grid */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -417,7 +424,6 @@ const saveAssetEdit = (originalTag: string) => {
   color: var(--text-primary);
 }
 
-/* Search Bar */
 .search-bar {
   display: flex;
   align-items: center;
@@ -449,11 +455,6 @@ const saveAssetEdit = (originalTag: string) => {
   outline: none;
 }
 
-.search-bar input::placeholder {
-  color: var(--text-muted);
-}
-
-/* Assets Grid */
 .assets-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -547,10 +548,6 @@ const saveAssetEdit = (originalTag: string) => {
   color: var(--text-muted);
 }
 
-.detail-item svg {
-  flex-shrink: 0;
-}
-
 .asset-actions {
   display: flex;
   gap: 8px;
@@ -575,7 +572,7 @@ const saveAssetEdit = (originalTag: string) => {
 
 .btn-icon:hover {
   background: var(--primary);
-  color: white;
+  color: white !important;
   border-color: var(--primary);
 }
 
@@ -584,7 +581,6 @@ const saveAssetEdit = (originalTag: string) => {
   border-color: var(--danger);
 }
 
-/* Modal */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -594,7 +590,6 @@ const saveAssetEdit = (originalTag: string) => {
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  animation: fade-in 0.2s ease;
 }
 
 .modal {
@@ -605,7 +600,6 @@ const saveAssetEdit = (originalTag: string) => {
   width: 90%;
   max-width: 500px;
   box-shadow: var(--shadow-2xl);
-  animation: scale-in 0.3s ease;
 }
 
 .modal-header {
@@ -613,13 +607,6 @@ const saveAssetEdit = (originalTag: string) => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text-primary);
 }
 
 .btn-close {
@@ -633,12 +620,6 @@ const saveAssetEdit = (originalTag: string) => {
   border-radius: 8px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-close:hover {
-  background: var(--danger);
-  color: white;
 }
 
 .modal-form {
@@ -661,46 +642,6 @@ const saveAssetEdit = (originalTag: string) => {
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@media (max-width: 768px) {
-  .page-header {
-    flex-direction: column;
-    gap: 16px;
-    align-items: flex-start;
-  }
-  
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .assets-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .asset-form {
-    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -7,7 +7,7 @@
         <p class="muted">Gestão de chamados e ordens de serviço</p>
       </div>
       <button class="btn-primary" @click="showForm = !showForm">
-        <Plus size="18" />
+        <Plus :size="18" :stroke-width="2.5" />
         {{ showForm ? 'Fechar' : 'Novo Chamado' }}
       </button>
     </div>
@@ -45,7 +45,7 @@
 
     <!-- Search Bar -->
     <div class="search-bar">
-      <Search size="18" />
+      <Search :size="18" :stroke-width="2" />
       <input v-model.trim="search" type="text" placeholder="Buscar por ativo, tipo ou descrição..." />
     </div>
 
@@ -54,26 +54,26 @@
       <div v-for="maintenance in filteredMaintenances" :key="maintenance.id" class="maintenance-card">
         <div class="maintenance-header">
           <div class="maintenance-id">
-            <Wrench size="20" class="maintenance-icon" />
+            <Wrench :size="20" :stroke-width="2.5" class="maintenance-icon" />
             <span class="maintenance-title">Chamado #{{ maintenance.id }}</span>
           </div>
-          <span :class="['status-badge', `status-${maintenance.status.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(' ', '-')}`]">
+          <span :class="['status-badge', `status-${statusClass(maintenance.status)}`]">
             {{ maintenance.status }}
           </span>
         </div>
         <div class="maintenance-body">
           <div class="maintenance-info">
             <div class="info-item">
-              <Monitor size="14" />
+              <Monitor :size="14" :stroke-width="2" />
               <span>Ativo: <strong>{{ maintenance.assetTag }}</strong></span>
             </div>
             <div class="info-item">
-              <Tool size="14" />
+              <Wrench :size="14" :stroke-width="2" />
               <span>Tipo: <strong>{{ maintenance.type }}</strong></span>
             </div>
-            <div class="info-item" v-if="maintenance.date">
-              <Calendar size="14" />
-              <span>{{ maintenance.date }}</span>
+            <div class="info-item" v-if="maintenance.openingDate">
+              <Calendar :size="14" :stroke-width="2" />
+              <span>{{ maintenance.openingDate }}</span>
             </div>
           </div>
           <p class="maintenance-description">{{ maintenance.description }}</p>
@@ -81,10 +81,10 @@
         <div class="maintenance-footer">
           <div class="maintenance-actions">
             <button class="btn-icon" @click="startMaintenanceEdit(maintenance)" title="Editar">
-              <Pencil size="16" />
+              <Edit :size="18" :stroke-width="2.5" color="currentColor" />
             </button>
             <button class="btn-icon btn-danger" @click="removeMaintenance(maintenance.id)" title="Excluir">
-              <Trash2 size="16" />
+              <Trash2 :size="18" :stroke-width="2.5" color="currentColor" />
             </button>
           </div>
         </div>
@@ -93,7 +93,7 @@
 
     <!-- Empty State -->
     <div v-if="filteredMaintenances.length === 0" class="empty-state">
-      <Wrench size="64" class="empty-icon" />
+      <Wrench :size="64" :stroke-width="1.5" class="empty-icon" />
       <h3>Nenhum chamado encontrado</h3>
       <p>Abra o primeiro chamado de manutenção</p>
     </div>
@@ -104,7 +104,7 @@
         <div class="modal-header">
           <h3>Editar Chamado</h3>
           <button class="btn-close" @click="cancelMaintenanceEdit">
-            <X size="20" />
+            <X :size="20" :stroke-width="2.5" />
           </button>
         </div>
         <form @submit.prevent="saveMaintenanceEdit(editingId)" class="modal-form">
@@ -146,9 +146,8 @@ import {
   Search,
   Wrench,
   Monitor,
-  Wrench as Tool,
   Calendar,
-  Pencil,
+  Edit,
   Trash2,
   X
 } from 'lucide-vue-next'
@@ -157,18 +156,22 @@ const showForm = ref(false)
 const search = ref('')
 const editingId = ref<number | null>(null)
 
-const newMaintenance = reactive({
+const newMaintenance = reactive<Omit<Maintenance, 'id'>>({
   assetTag: '',
-  type: '',
+  type: 'Corretiva',
   description: '',
   status: 'Aberta',
+  openingDate: new Date().toISOString().split('T')[0],
+  priority: 'Média',
 })
 
-const editMaintenance = reactive({
+const editMaintenance = reactive<Omit<Maintenance, 'id'>>({
   assetTag: '',
-  type: '',
+  type: 'Corretiva',
   description: '',
   status: 'Aberta',
+  openingDate: new Date().toISOString().split('T')[0],
+  priority: 'Média',
 })
 
 const mockStore = useMockDataStore()
@@ -185,9 +188,11 @@ const filteredMaintenances = computed(() => {
 const addMaintenance = () => {
   mockStore.addMaintenance({ ...newMaintenance })
   newMaintenance.assetTag = ''
-  newMaintenance.type = ''
+  newMaintenance.type = 'Corretiva'
   newMaintenance.description = ''
   newMaintenance.status = 'Aberta'
+  newMaintenance.openingDate = new Date().toISOString().split('T')[0]
+  newMaintenance.priority = 'Média'
   showForm.value = false
 }
 
@@ -203,6 +208,8 @@ const startMaintenanceEdit = (maintenance: Maintenance) => {
   editMaintenance.type = maintenance.type
   editMaintenance.description = maintenance.description
   editMaintenance.status = maintenance.status
+  editMaintenance.openingDate = maintenance.openingDate
+  editMaintenance.priority = maintenance.priority
 }
 
 const cancelMaintenanceEdit = () => {
@@ -213,32 +220,17 @@ const saveMaintenanceEdit = (id: number) => {
   mockStore.updateMaintenance(id, { ...editMaintenance })
   editingId.value = null
 }
+
+const statusClass = (status: string) => {
+  return status.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(' ', '-')
+}
 </script>
 
 <style scoped>
-.maintenances-page {
-  animation: fade-up 0.5s ease;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-}
-
-.page-header h2 {
-  margin: 0 0 4px;
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.page-header p {
-  margin: 0;
-  font-size: 14px;
-  color: var(--text-secondary);
-}
+.maintenances-page { animation: fade-up 0.5s ease; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.page-header h2 { margin: 0 0 4px; font-size: 28px; font-weight: 700; color: var(--text-primary); }
+.page-header p { margin: 0; font-size: 14px; color: var(--text-secondary); }
 
 .btn-primary {
   display: flex;
@@ -255,11 +247,7 @@ const saveMaintenanceEdit = (id: number) => {
   transition: all 0.2s ease;
 }
 
-.btn-primary:hover {
-  background: var(--primary-hover);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-}
+.btn-primary:hover { background: var(--primary-hover); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
 
 .btn-secondary {
   display: flex;
@@ -276,12 +264,6 @@ const saveMaintenanceEdit = (id: number) => {
   transition: all 0.2s ease;
 }
 
-.btn-secondary:hover {
-  background: var(--bg-card);
-  border-color: var(--primary);
-}
-
-/* Form Card */
 .form-card {
   background: var(--bg-card);
   border: 1px solid var(--border-light);
@@ -291,30 +273,10 @@ const saveMaintenanceEdit = (id: number) => {
   box-shadow: var(--shadow-md);
 }
 
-.form-card h3 {
-  margin: 0 0 20px;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.maintenance-form {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.form-group label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
+.form-card h3 { margin: 0 0 20px; font-size: 20px; font-weight: 600; color: var(--text-primary); }
+.maintenance-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group label { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
 
 .form-group textarea {
   background: var(--bg-input);
@@ -325,22 +287,10 @@ const saveMaintenanceEdit = (id: number) => {
   color: var(--text-primary);
   font-family: inherit;
   resize: vertical;
-  transition: all 0.2s ease;
 }
 
-.form-group textarea:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-light);
-}
+.form-actions { display: flex; gap: 12px; align-items: flex-end; }
 
-.form-actions {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-}
-
-/* Search Bar */
 .search-bar {
   display: flex;
   align-items: center;
@@ -353,49 +303,13 @@ const saveMaintenanceEdit = (id: number) => {
   transition: all 0.2s ease;
 }
 
-.search-bar:focus-within {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-light);
-}
+.search-bar:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+.search-bar svg { color: var(--text-secondary); flex-shrink: 0; }
+.search-bar input { flex: 1; border: none; background: transparent; font-size: 14px; color: var(--text-primary); outline: none; }
 
-.search-bar svg {
-  color: var(--text-secondary);
-  flex-shrink: 0;
-}
-
-.search-bar input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  font-size: 14px;
-  color: var(--text-primary);
-  outline: none;
-}
-
-.search-bar input::placeholder {
-  color: var(--text-muted);
-}
-
-/* Maintenance List */
-.maintenance-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 16px;
-}
-
-.maintenance-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
-  border-radius: 12px;
-  overflow: hidden;
-  transition: all 0.2s ease;
-}
-
-.maintenance-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
-  border-color: var(--primary);
-}
+.maintenance-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+.maintenance-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 12px; overflow: hidden; transition: all 0.2s ease; }
+.maintenance-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); border-color: var(--primary); }
 
 .maintenance-header {
   display: flex;
@@ -406,21 +320,9 @@ const saveMaintenanceEdit = (id: number) => {
   border-bottom: 1px solid var(--border-light);
 }
 
-.maintenance-id {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.maintenance-icon {
-  color: var(--primary);
-}
-
-.maintenance-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
+.maintenance-id { display: flex; align-items: center; gap: 10px; }
+.maintenance-icon { color: var(--primary); }
+.maintenance-title { font-size: 16px; font-weight: 600; color: var(--text-primary); }
 
 .status-badge {
   padding: 4px 12px;
@@ -431,48 +333,15 @@ const saveMaintenanceEdit = (id: number) => {
   letter-spacing: 0.5px;
 }
 
-.status-aberta {
-  background: rgba(59, 130, 246, 0.15);
-  color: #3b82f6;
-}
+.status-aberta { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+.status-em-andamento { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.status-concluida { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
 
-.status-em-andamento {
-  background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
-}
-
-.status-concluida {
-  background: rgba(34, 197, 94, 0.15);
-  color: #22c55e;
-}
-
-.maintenance-body {
-  padding: 20px;
-}
-
-.maintenance-info {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.info-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.info-item svg {
-  flex-shrink: 0;
-  color: var(--text-muted);
-}
-
-.info-item strong {
-  color: var(--text-primary);
-}
+.maintenance-body { padding: 20px; }
+.maintenance-info { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.info-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+.info-item svg { flex-shrink: 0; color: var(--text-muted); }
+.info-item strong { color: var(--text-primary); }
 
 .maintenance-description {
   margin: 0;
@@ -483,17 +352,8 @@ const saveMaintenanceEdit = (id: number) => {
   border-top: 1px solid var(--border-light);
 }
 
-.maintenance-footer {
-  padding: 12px 20px;
-  border-top: 1px solid var(--border-light);
-  display: flex;
-  justify-content: flex-end;
-}
-
-.maintenance-actions {
-  display: flex;
-  gap: 8px;
-}
+.maintenance-footer { padding: 12px 20px; border-top: 1px solid var(--border-light); display: flex; justify-content: flex-end; }
+.maintenance-actions { display: flex; gap: 8px; }
 
 .btn-icon {
   display: flex;
@@ -509,154 +369,30 @@ const saveMaintenanceEdit = (id: number) => {
   transition: all 0.2s ease;
 }
 
-.btn-icon:hover {
-  background: var(--primary);
-  color: white;
-  border-color: var(--primary);
-}
+.btn-icon:hover { background: var(--primary); color: white !important; border-color: var(--primary); }
+.btn-icon.btn-danger:hover { background: var(--danger); border-color: var(--danger); }
 
-.btn-icon.btn-danger:hover {
-  background: var(--danger);
-  border-color: var(--danger);
-}
+.empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+.empty-icon { margin-bottom: 16px; opacity: 0.3; }
+.empty-state h3 { margin: 0 0 8px; font-size: 20px; font-weight: 600; color: var(--text-secondary); }
+.empty-state p { margin: 0; font-size: 14px; }
 
-/* Empty State */
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-  color: var(--text-muted);
-}
+.modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; animation: fade-in 0.2s ease; }
+.modal { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 16px; padding: 24px; width: 90%; max-width: 500px; box-shadow: var(--shadow-2xl); animation: scale-in 0.3s ease; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.modal-header h3 { margin: 0; font-size: 20px; font-weight: 600; color: var(--text-primary); }
+.btn-close { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; background: var(--bg-hover); border: none; border-radius: 8px; color: var(--text-secondary); cursor: pointer; transition: all 0.2s ease; }
+.btn-close:hover { background: var(--danger); color: white; }
+.modal-form { display: flex; flex-direction: column; gap: 16px; }
+.modal-actions { display: flex; gap: 12px; margin-top: 8px; }
 
-.empty-icon {
-  margin-bottom: 16px;
-  opacity: 0.3;
-}
-
-.empty-state h3 {
-  margin: 0 0 8px;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 14px;
-}
-
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  animation: fade-in 0.2s ease;
-}
-
-.modal {
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
-  border-radius: 16px;
-  padding: 24px;
-  width: 90%;
-  max-width: 500px;
-  box-shadow: var(--shadow-2xl);
-  animation: scale-in 0.3s ease;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.btn-close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  background: var(--bg-hover);
-  border: none;
-  border-radius: 8px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-close:hover {
-  background: var(--danger);
-  color: white;
-}
-
-.modal-form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 8px;
-}
-
-@keyframes fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
+@keyframes fade-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scale-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
 
 @media (max-width: 768px) {
-  .page-header {
-    flex-direction: column;
-    gap: 16px;
-    align-items: flex-start;
-  }
-
-  .maintenance-list {
-    grid-template-columns: 1fr;
-  }
-
-  .maintenance-form {
-    grid-template-columns: 1fr;
-  }
+  .page-header { flex-direction: column; gap: 16px; align-items: flex-start; }
+  .maintenance-list { grid-template-columns: 1fr; }
+  .maintenance-form { grid-template-columns: 1fr; }
 }
 </style>

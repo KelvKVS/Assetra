@@ -1,99 +1,19 @@
 <template>
   <div class="app-shell">
     <!-- Sidebar -->
-    <aside v-if="authStore.isAuthenticated" class="sidebar">
-      <div class="sidebar-header">
-        <div class="logo">
-          <div class="logo-icon-wrapper">
-            <Box size="28" color="#3b82f6" />
-          </div>
-          <span class="logo-text">Assetra</span>
-        </div>
-        <p class="logo-subtitle">Gestão de Ativos</p>
-      </div>
-
-      <nav class="sidebar-nav">
-        <div class="nav-section">
-          <span class="nav-section-title">Menu</span>
-          <RouterLink to="/dashboard" class="nav-item">
-            <LayoutDashboard size="20" />
-            <span>Dashboard</span>
-          </RouterLink>
-          <RouterLink v-if="isAdmin" to="/ativos" class="nav-item">
-            <Monitor size="20" />
-            <span>Ativos</span>
-          </RouterLink>
-          <RouterLink v-else to="/meus-ativos" class="nav-item">
-            <Package size="20" />
-            <span>Meus Ativos</span>
-          </RouterLink>
-          <RouterLink to="/movimentacoes" class="nav-item">
-            <Repeat size="20" />
-            <span>Movimentações</span>
-          </RouterLink>
-          <RouterLink to="/manutencoes" class="nav-item">
-            <Wrench size="20" />
-            <span>Manutenções</span>
-          </RouterLink>
-        </div>
-
-        <div class="nav-section" v-if="isManager || isTechnician || isAdmin">
-          <span class="nav-section-title">Gestão</span>
-          <RouterLink v-if="isManager" to="/aprovacoes" class="nav-item">
-            <CheckCircle size="20" />
-            <span>Aprovações</span>
-          </RouterLink>
-          <RouterLink v-if="isTechnician" to="/execucao-tecnica" class="nav-item">
-            <Settings size="20" />
-            <span>Execução Técnica</span>
-          </RouterLink>
-        </div>
-
-        <div class="nav-section" v-if="isAdmin">
-          <span class="nav-section-title">Administração</span>
-          <RouterLink to="/usuarios" class="nav-item">
-            <Users size="20" />
-            <span>Usuários</span>
-          </RouterLink>
-          <RouterLink to="/relatorios" class="nav-item">
-            <BarChart3 size="20" />
-            <span>Relatórios</span>
-          </RouterLink>
-        </div>
-      </nav>
-
-      <div class="sidebar-footer">
-        <button class="theme-toggle" @click="toggleTheme" aria-label="Alternar tema">
-          <Sun v-if="isDark" size="20" />
-          <Moon v-else size="20" />
-        </button>
-      </div>
-    </aside>
+    <Sidebar 
+      v-if="authStore.isAuthenticated" 
+      :is-dark="isDark" 
+      @toggle-theme="toggleTheme" 
+    />
 
     <!-- Main Content -->
     <div class="main-wrapper">
       <!-- Topbar -->
-      <header v-if="authStore.isAuthenticated" class="topbar">
-        <div class="topbar-left">
-          <h1 class="page-title">{{ currentPageTitle }}</h1>
-        </div>
-        <div class="topbar-right">
-          <div class="search-box">
-            <input type="text" placeholder="Buscar..." class="search-input" />
-            <Search class="search-icon" size="16" />
-          </div>
-          <div v-if="authStore.user" class="user-profile">
-            <div class="user-avatar">{{ userInitial }}</div>
-            <div class="user-info">
-              <strong>{{ authStore.user.name }}</strong>
-              <small>{{ authStore.user.profile }}</small>
-            </div>
-            <button class="logout-btn" @click="handleLogout" title="Sair">
-              <LogOut size="18" />
-            </button>
-          </div>
-        </div>
-      </header>
+      <Topbar 
+        v-if="authStore.isAuthenticated" 
+        :title="currentPageTitle" 
+      />
 
       <!-- Content -->
       <main class="content">
@@ -105,35 +25,14 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
+import { RouterView, useRoute } from 'vue-router'
 import { useAuthStore } from './stores/auth'
-
-// Lucide Icons
-import {
-  LayoutDashboard,
-  Monitor,
-  Package,
-  Repeat,
-  Wrench,
-  CheckCircle,
-  Settings,
-  Users,
-  BarChart3,
-  Sun,
-  Moon,
-  Search,
-  LogOut,
-  Box
-} from 'lucide-vue-next'
+import Sidebar from './components/Sidebar.vue'
+import Topbar from './components/Topbar.vue'
 
 const authStore = useAuthStore()
-const router = useRouter()
 const route = useRoute()
 const isDark = ref(true)
-const isAdmin = computed(() => authStore.user?.profile === 'Administrador')
-const isManager = computed(() => authStore.user?.profile === 'Gestor')
-const isTechnician = computed(() => authStore.user?.profile === 'Técnico')
-const userInitial = computed(() => authStore.user?.name?.charAt(0).toUpperCase() ?? 'U')
 
 const currentPageTitle = computed(() => {
   const path = route.path
@@ -161,148 +60,83 @@ const toggleTheme = () => {
   applyTheme(!isDark.value)
 }
 
-const handleLogout = async () => {
-  await authStore.logout()
-  await router.push('/login')
-}
-
-onMounted(() => {
+onMounted(async () => {
   const storedTheme = localStorage.getItem('assetra-theme')
-  applyTheme(storedTheme === 'dark')
+  applyTheme(storedTheme !== 'light')
+  
+  if (!authStore.bootstrapped) {
+    await authStore.fetchMe()
+  }
 })
 </script>
 
-<style scoped>
+<style>
+/* Estilos Globais e Reset */
+:root {
+  --bg-primary: #0f172a;
+  --bg-secondary: #111827;
+  --bg-tertiary: #1f2937;
+  --bg-card: #1e293b;
+  --bg-hover: #334155;
+  --text-primary: #ffffff;
+  --text-secondary: #9ca3af;
+  --text-muted: #64748b;
+  --accent-color: #3b82f6;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --primary-light: rgba(59, 130, 246, 0.1);
+  --success: #22c55e;
+  --success-light: rgba(34, 197, 94, 0.1);
+  --warning: #f59e0b;
+  --warning-light: rgba(245, 158, 11, 0.1);
+  --danger: #ef4444;
+  --danger-light: rgba(239, 68, 68, 0.1);
+  --info: #06b6d4;
+  --border-color: #1f2937;
+  --border-light: #334155;
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme='light'] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f5f9;
+  --bg-card: #ffffff;
+  --bg-hover: #f1f5f9;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --accent-color: #2563eb;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-light: rgba(37, 99, 235, 0.1);
+  --success: #16a34a;
+  --success-light: rgba(22, 163, 74, 0.1);
+  --warning: #d97706;
+  --warning-light: rgba(217, 119, 6, 0.1);
+  --danger: #dc2626;
+  --danger-light: rgba(220, 38, 38, 0.1);
+  --info: #0891b2;
+  --border-color: #e2e8f0;
+  --border-light: #f1f5f9;
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
 .app-shell {
   display: flex;
   min-height: 100vh;
-  background: #0f172a;
 }
 
-/* Sidebar */
-.sidebar {
-  width: 260px;
-  background: #111827;
-  border-right: 1px solid #1f2937;
-  display: flex;
-  flex-direction: column;
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  z-index: 100;
-  transition: transform 0.3s ease;
-}
-
-.sidebar-header {
-  padding: 24px 20px;
-  border-bottom: 1px solid #1f2937;
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 4px;
-}
-
-.logo-icon-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  background: rgba(59, 130, 246, 0.1);
-  border-radius: 8px;
-}
-
-.logo-text {
-  font-size: 24px;
-  font-weight: 800;
-  color: #fff;
-  letter-spacing: -0.5px;
-}
-
-.logo-subtitle {
-  margin: 0;
-  font-size: 13px;
-  color: #6b7280;
-  padding-left: 48px;
-}
-
-.sidebar-nav {
-  flex: 1;
-  padding: 20px 0;
-  overflow-y: auto;
-}
-
-.nav-section {
-  margin-bottom: 24px;
-}
-
-.nav-section-title {
-  display: block;
-  font-size: 11px;
-  font-weight: 600;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 0 20px 8px;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
-  color: #9ca3af;
-  text-decoration: none;
-  transition: all 0.2s ease;
-  cursor: pointer;
-  border-left: 3px solid transparent;
-}
-
-.nav-item svg {
-  flex-shrink: 0;
-  color: currentColor;
-}
-
-.nav-item:hover {
-  background: #1f2937;
-  color: #fff;
-}
-
-.nav-item.router-link-active {
-  background: #1f2937;
-  color: #fff;
-  border-left-color: #3b82f6;
-  font-weight: 600;
-}
-
-.sidebar-footer {
-  padding: 16px 20px;
-  border-top: 1px solid #1f2937;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.theme-toggle {
-  background: #1f2937;
-  border: 1px solid #374151;
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 20px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: #fff;
-}
-
-.theme-toggle:hover {
-  background: #374151;
-  transform: scale(1.05);
-}
-
-/* Main Wrapper */
 .main-wrapper {
   flex: 1;
   display: flex;
@@ -317,8 +151,6 @@ onMounted(() => {
 
 /* Quando não há sidebar (login), centraliza conteúdo */
 .app-shell:not(:has(.sidebar)) {
-  display: flex;
-  align-items: center;
   justify-content: center;
 }
 
@@ -327,171 +159,15 @@ onMounted(() => {
   width: 100%;
 }
 
-/* Topbar */
-.topbar {
-  background: #111827;
-  border-bottom: 1px solid #1f2937;
-  padding: 20px 32px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  position: sticky;
-  top: 0;
-  z-index: 50;
-}
-
-.page-title {
-  margin: 0;
-  font-size: 28px;
-  font-weight: 700;
-  color: #fff;
-}
-
-.topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.search-box {
-  position: relative;
-}
-
-.search-input {
-  background: #1f2937;
-  border: 1px solid #374151;
-  border-radius: 8px;
-  padding: 10px 16px 10px 40px;
-  font-size: 14px;
-  color: #fff;
-  width: 280px;
-  transition: all 0.2s ease;
-}
-
-.search-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.search-input::placeholder {
-  color: #6b7280;
-}
-
-.search-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #6b7280;
-}
-
-.user-profile {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
-  background: #1f2937;
-  border-radius: 12px;
-  border: 1px solid #374151;
-}
-
-.user-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 16px;
-  color: #fff;
-}
-
-.user-info {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.3;
-}
-
-.user-info strong {
-  font-size: 14px;
-  color: #fff;
-}
-
-.user-info small {
-  font-size: 12px;
-  color: #9ca3af;
-}
-
-.logout-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 1px solid #374151;
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 18px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: #fff;
-}
-
-.logout-btn:hover {
-  background: #dc2626;
-  border-color: #dc2626;
-  transform: scale(1.05);
-  color: #fff;
-}
-
-/* Content */
 .content {
   flex: 1;
   padding: 32px;
-  background: #0f172a;
+  background: var(--bg-primary);
 }
 
-/* Responsive */
 @media (max-width: 1024px) {
-  /* Quando há sidebar em telas médias, esconde sidebar */
-  .app-shell:has(.sidebar) .sidebar {
-    transform: translateX(-100%);
-  }
-  
   .app-shell:has(.sidebar) .main-wrapper {
     margin-left: 0;
-  }
-
-  .search-input {
-    width: 200px;
-  }
-}
-
-@media (max-width: 768px) {
-  .topbar {
-    padding: 16px 20px;
-    flex-direction: column;
-    gap: 16px;
-    align-items: flex-start;
-  }
-  
-  .topbar-right {
-    width: 100%;
-    justify-content: space-between;
-  }
-  
-  .search-input {
-    width: 100%;
-  }
-  
-  .user-info {
-    display: none;
-  }
-  
-  .content {
-    padding: 20px;
   }
 }
 </style>

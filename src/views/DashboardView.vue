@@ -59,37 +59,27 @@
 
     <!-- User Info -->
     <div v-else class="user-box">
-      <h3><Lightbulb size="20" class="box-icon" /> Dica</h3>
+      <h3><Lightbulb :size="20" class="box-icon" /> Dica</h3>
       <p>Use a tela <em>Meus Ativos</em> para acompanhar mudanças e atualizações.</p>
-    </div>
-
-    <div class="user-box" v-if="authStore.user">
-      <h3>Informações do usuário</h3>
-      <p><strong>Nome:</strong> {{ authStore.user.name }}</p>
-      <p><strong>E-mail:</strong> {{ authStore.user.email }}</p>
-      <p><strong>Perfil:</strong> {{ authStore.user.profile }}</p>
     </div>
 
     <!-- Actions -->
     <div class="action-row">
-      <button class="warning" @click="handleResetData"><RefreshCw size="18" class="btn-icon" /> Resetar dados</button>
-      <button class="danger" @click="handleLogout"><LogOut size="18" class="btn-icon" /> Sair</button>
+      <button class="warning" @click="handleResetData"><RefreshCw :size="18" class="btn-icon" /> Resetar dados</button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useMockDataStore } from '../stores/mockData'
-import { Lightbulb, RefreshCw, LogOut } from 'lucide-vue-next'
+import { Lightbulb, RefreshCw } from 'lucide-vue-next'
 
-const router = useRouter()
 const authStore = useAuthStore()
 const mockStore = useMockDataStore()
 mockStore.hydrate()
-const isAdmin = computed(() => authStore.user?.profile === 'Administrador')
+const isAdmin = computed(() => authStore.user?.role === 'ADM')
 
 const activeUsers = computed(() => mockStore.users.filter((user) => user.status === 'Ativo').length)
 const openMaintenances = computed(() => mockStore.maintenances.filter((item) => item.status !== 'Concluída').length)
@@ -156,11 +146,6 @@ const myAssetsInMaintenance = computed(() => myAssets.value.filter((asset) => as
 
 const handleResetData = () => {
   mockStore.resetAllData()
-}
-
-const handleLogout = async () => {
-  await authStore.logout()
-  await router.push('/login')
 }
 </script>
 

@@ -2,7 +2,7 @@ import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { z } from 'zod'
-import { users } from '../db/users.js'
+import prisma from '../lib/prisma.js'
 import { authMiddleware } from '../middlewares/auth.js'
 
 const loginSchema = z.object({
@@ -19,7 +19,11 @@ router.post('/login', async (req, res) => {
   }
 
   const { email, password } = parsed.data
-  const user = users.find((item) => item.email.toLowerCase() === email.toLowerCase())
+  
+  const user = await prisma.user.findUnique({
+    where: { email: email.toLowerCase() }
+  })
+
   if (!user) {
     return res.status(401).json({ message: 'Credenciais inválidas.' })
   }
@@ -30,7 +34,7 @@ router.post('/login', async (req, res) => {
   }
 
   const token = jwt.sign(
-    { sub: user.id, name: user.name, email: user.email },
+    { sub: user.id, name: user.name, email: user.email, role: user.role },
     process.env.JWT_SECRET,
     { expiresIn: '1h' },
   )
@@ -43,7 +47,7 @@ router.post('/login', async (req, res) => {
   })
 
   return res.json({
-    user: { id: user.id, name: user.name, email: user.email },
+    user: { id: user.id, name: user.name, email: user.email, role: user.role },
   })
 })
 
@@ -58,6 +62,7 @@ router.get('/me', authMiddleware, (req, res) => {
       id: req.user.sub,
       name: req.user.name,
       email: req.user.email,
+      role: req.user.role,
     },
   })
 })

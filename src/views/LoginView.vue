@@ -5,21 +5,21 @@
       <div class="login-branding">
         <div class="brand-content">
           <div class="brand-logo">
-            <Box size="64" color="#3b82f6" strokeWidth="1.5" />
+            <Box :size="64" color="#3b82f6" strokeWidth="1.5" />
           </div>
           <h1 class="brand-title">Assetra</h1>
           <p class="brand-subtitle">Gestão corporativa de ativos de tecnologia</p>
           <div class="brand-features">
             <div class="feature-item">
-              <CheckCircle size="16" />
+              <CheckCircle :size="16" />
               <span>Controle completo do inventário</span>
             </div>
             <div class="feature-item">
-              <CheckCircle size="16" />
+              <CheckCircle :size="16" />
               <span>Gestão de manutenções</span>
             </div>
             <div class="feature-item">
-              <CheckCircle size="16" />
+              <CheckCircle :size="16" />
               <span>Movimentações e transferências</span>
             </div>
           </div>
@@ -31,27 +31,14 @@
         <div class="login-form-content">
           <div class="login-header">
             <h2>Entrar no sistema</h2>
-            <p class="muted">Selecione seu perfil de acesso</p>
-          </div>
-
-          <!-- Profile Selector -->
-          <div class="profile-selector">
-            <div
-              v-for="prof in profiles"
-              :key="prof.value"
-              :class="['profile-card', { active: profile === prof.value }]"
-              @click="profile = prof.value"
-            >
-              <component :is="prof.icon" size="24" />
-              <span>{{ prof.label }}</span>
-            </div>
+            <p class="muted">Digite suas credenciais de acesso</p>
           </div>
 
           <!-- Login Form -->
           <form @submit.prevent="handleLogin" class="login-form">
             <div class="form-group">
               <label>
-                <Mail size="16" />
+                <Mail :size="16" />
                 E-mail
               </label>
               <input
@@ -60,13 +47,13 @@
                 autocomplete="username"
                 required
                 class="input-field"
-                placeholder="seu.email@assetra.local"
+                placeholder="seu.email@assetra.com.br"
               />
             </div>
 
             <div class="form-group">
               <label>
-                <Lock size="16" />
+                <Lock :size="16" />
                 Senha
               </label>
               <input
@@ -74,35 +61,48 @@
                 type="password"
                 autocomplete="current-password"
                 required
-                minlength="8"
                 class="input-field"
                 placeholder="••••••••"
               />
             </div>
 
             <button type="submit" :disabled="authStore.isLoading" class="login-btn">
-              <Loader v-if="authStore.isLoading" class="spinner" size="20" />
-              <LogIn v-else size="20" />
+              <Loader v-if="authStore.isLoading" class="spinner" :size="20" />
+              <LogIn v-else :size="20" />
               {{ authStore.isLoading ? 'Entrando...' : 'Entrar' }}
             </button>
           </form>
 
           <!-- Error Alert -->
           <div v-if="authStore.error" class="error-alert">
-            <AlertCircle size="20" />
+            <AlertCircle :size="20" />
             <p>{{ authStore.error }}</p>
           </div>
 
           <!-- Demo Credentials -->
           <div class="demo-credentials">
             <h4>Credenciais de demonstração:</h4>
-            <div class="credential-item">
-              <span class="credential-label">Admin:</span>
-              <code>admin@assetra.local</code> / <code>Admin@12345</code>
+            
+            <div class="demo-grid">
+              <div class="demo-user" @click="fillForm('admin@assetra.com.br', 'Admin@123')">
+                <span class="role-tag adm">ADM</span>
+                <code>admin@assetra.com.br</code>
+              </div>
+              
+              <div class="demo-user" @click="fillForm('gestor@assetra.com.br', 'Gestor@123')">
+                <span class="role-tag gestor">GESTOR</span>
+                <code>gestor@assetra.com.br</code>
+              </div>
+              
+              <div class="demo-user" @click="fillForm('tecnico@assetra.com.br', 'Tecnico@123')">
+                <span class="role-tag tecnico">TÉCNICO</span>
+                <code>tecnico@assetra.com.br</code>
+              </div>
             </div>
+            
             <p class="demo-note">
-              <Info size="14" />
-              Gestor e Técnico entram direto (sem senha)
+              <Info :size="14" />
+              Clique em um usuário para preencher o formulário.
             </p>
           </div>
         </div>
@@ -112,10 +112,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { useMockDataStore, type Profile } from '../stores/mockData'
 import {
   Box,
   CheckCircle,
@@ -124,67 +123,26 @@ import {
   Loader,
   LogIn,
   AlertCircle,
-  Info,
-  Shield,
-  UserCog,
-  Wrench
+  Info
 } from 'lucide-vue-next'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const mockStore = useMockDataStore()
-mockStore.hydrate()
 
-const profiles = [
-  { value: 'Administrador' as Profile, label: 'Administrador', icon: Shield },
-  { value: 'Gestor' as Profile, label: 'Gestor', icon: UserCog },
-  { value: 'Técnico' as Profile, label: 'Técnico', icon: Wrench },
-]
+const email = ref('admin@assetra.com.br')
+const password = ref('Admin@123')
 
-const profile = ref<Profile>('Administrador')
-const email = ref('admin@assetra.local')
-const password = ref('Admin@12345')
-
-const isMockProfile = computed(() => profile.value !== 'Administrador')
+const fillForm = (e: string, p: string) => {
+  email.value = e
+  password.value = p
+}
 
 const handleLogin = async () => {
   try {
-    if (isMockProfile.value) {
-      // Mock login for Gestor and Técnico
-      const matchedUser = mockStore.users.find(
-        (user) => user.profile === profile.value && user.status === 'Ativo'
-      )
-      
-      if (!matchedUser) {
-        authStore.error = `Não existe usuário ativo para o perfil ${profile.value}.`
-        return
-      }
-
-      authStore.mockLogin({
-        id: `mock-${profile.value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')}`,
-        name: matchedUser.name,
-        email: matchedUser.email,
-        profile: matchedUser.profile,
-      })
-      
-      await router.push('/dashboard')
-      return
-    }
-
-    // Real admin login
     await authStore.login(email.value, password.value)
-    await router.push('/dashboard')
-  } catch (err: any) {
-    // If backend is offline, fallback to mock admin login
-    if (email.value === 'admin@assetra.local' && password.value === 'Admin@12345') {
-      authStore.mockLogin({
-        id: 'mock-admin',
-        name: 'Kelvin Siqueira',
-        email: 'admin@assetra.local',
-        profile: 'Administrador',
-      })
-      await router.push('/dashboard')
-    }
+    router.push('/dashboard')
+  } catch (err) {
+    // Erros são tratados no store
   }
 }
 </script>
@@ -201,7 +159,7 @@ const handleLogin = async () => {
 
 .login-container {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1.2fr;
   max-width: 1100px;
   width: 100%;
   background: var(--bg-card);
@@ -221,13 +179,6 @@ const handleLogin = async () => {
   justify-content: center;
   position: relative;
   overflow: hidden;
-}
-
-.login-branding::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
 }
 
 .brand-content {
@@ -254,7 +205,6 @@ const handleLogin = async () => {
   margin: 0 0 8px;
   font-size: 36px;
   font-weight: 800;
-  letter-spacing: -1px;
 }
 
 .brand-subtitle {
@@ -277,11 +227,9 @@ const handleLogin = async () => {
   align-items: center;
   gap: 10px;
   font-size: 14px;
-  opacity: 0.95;
 }
 
 .feature-item svg {
-  flex-shrink: 0;
   color: #22c55e;
 }
 
@@ -290,12 +238,12 @@ const handleLogin = async () => {
   padding: 48px;
   display: flex;
   align-items: center;
-  overflow-y: auto;
+  background: var(--bg-card);
 }
 
 .login-form-content {
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
   margin: 0 auto;
 }
 
@@ -310,56 +258,6 @@ const handleLogin = async () => {
   color: var(--text-primary);
 }
 
-.login-header p {
-  margin: 0;
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-/* Profile Selector */
-.profile-selector {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 32px;
-}
-
-.profile-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 16px 12px;
-  background: var(--bg-hover);
-  border: 2px solid var(--border-light);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.profile-card:hover {
-  border-color: var(--primary);
-  background: var(--primary-light);
-}
-
-.profile-card.active {
-  background: var(--primary-light);
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-.profile-card svg {
-  transition: transform 0.2s ease;
-}
-
-.profile-card:hover svg {
-  transform: scale(1.1);
-}
-
-/* Login Form */
 .login-form {
   display: flex;
   flex-direction: column;
@@ -382,11 +280,6 @@ const handleLogin = async () => {
   color: var(--text-secondary);
 }
 
-.form-group label svg {
-  flex-shrink: 0;
-  color: var(--text-muted);
-}
-
 .input-field {
   width: 100%;
   padding: 12px 16px;
@@ -396,11 +289,6 @@ const handleLogin = async () => {
   background: var(--bg-primary);
   color: var(--text-primary);
   transition: all 0.2s ease;
-  font-family: inherit;
-}
-
-.input-field:hover {
-  border-color: var(--primary);
 }
 
 .input-field:focus {
@@ -409,47 +297,26 @@ const handleLogin = async () => {
   box-shadow: 0 0 0 4px var(--primary-light);
 }
 
-.input-field::placeholder {
-  color: var(--text-muted);
-}
-
 .login-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
   width: 100%;
-  padding: 14px 24px;
+  padding: 14px;
   font-size: 16px;
   font-weight: 700;
-  background: linear-gradient(135deg, var(--primary) 0%, #2563eb 100%);
+  background: var(--primary);
   color: white;
   border: none;
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-  font-family: inherit;
 }
 
-.login-btn:hover:not(:disabled) {
+.login-btn:hover {
+  background: var(--primary-hover);
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
-}
-
-.login-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.spinner {
-  width: 20px;
-  height: 20px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
 }
 
 /* Error Alert */
@@ -457,139 +324,93 @@ const handleLogin = async () => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 12px;
   background: var(--danger-light);
   border: 1px solid var(--danger);
   border-radius: 10px;
   margin-bottom: 24px;
-  animation: shake 0.5s ease;
-}
-
-.error-alert svg {
-  flex-shrink: 0;
   color: var(--danger);
-}
-
-.error-alert p {
-  margin: 0;
-  font-size: 14px;
-  color: var(--danger);
-  font-weight: 500;
 }
 
 /* Demo Credentials */
 .demo-credentials {
   padding: 20px;
   background: var(--bg-hover);
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid var(--border-light);
 }
 
 .demo-credentials h4 {
-  margin: 0 0 12px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
+  margin: 0 0 16px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-}
-
-.credential-item {
-  margin-bottom: 8px;
-  font-size: 14px;
-}
-
-.credential-label {
   color: var(--text-secondary);
-  margin-right: 6px;
 }
 
-.credential-item code {
+.demo-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.demo-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
   background: var(--bg-primary);
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-weight: 600;
-  color: var(--primary);
-  border: 1px solid var(--border-light);
-  font-size: 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.demo-user:hover {
+  border-color: var(--primary);
+  transform: translateX(4px);
+}
+
+.role-tag {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  min-width: 55px;
+  text-align: center;
+}
+
+.role-tag.adm { background: rgba(139, 92, 246, 0.2); color: #8b5cf6; }
+.role-tag.gestor { background: rgba(6, 182, 212, 0.2); color: #06b6d4; }
+.role-tag.tecnico { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+
+.demo-user code {
+  font-size: 12px;
+  color: var(--text-primary);
 }
 
 .demo-note {
-  margin: 12px 0 0;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
-  color: var(--text-muted);
-  font-style: normal;
 }
 
-.demo-note svg {
-  flex-shrink: 0;
-}
-
-/* Animations */
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
 
-@keyframes shake {
-  0%, 100% {
-    transform: translateX(0);
-  }
-  25% {
-    transform: translateX(-10px);
-  }
-  75% {
-    transform: translateX(10px);
-  }
+.spinner {
+  animation: spin 1s linear infinite;
 }
 
-/* Responsive */
 @media (max-width: 900px) {
   .login-container {
     grid-template-columns: 1fr;
     max-width: 500px;
   }
-
-  .login-branding {
-    padding: 32px 24px;
-    min-height: auto;
-  }
-
-  .brand-features {
-    display: none;
-  }
-
-  .login-form-section {
-    padding: 32px 24px;
-  }
-
-  .profile-selector {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-  }
-
-  .profile-card {
-    padding: 12px 8px;
-    font-size: 12px;
-  }
-}
-
-@media (max-width: 480px) {
-  .login-page {
-    padding: 0;
-  }
-
-  .login-container {
-    border-radius: 0;
-    min-height: 100vh;
-  }
-
-  .login-header h2 {
-    font-size: 24px;
-  }
+  .login-branding { display: none; }
 }
 </style>

@@ -3,29 +3,29 @@
     <!-- Header Section -->
     <div class="page-header">
       <div>
-        <h2>Aprova&ccedil;&otilde;es do Gestor</h2>
-        <p class="muted">Solicita&ccedil;&otilde;es pendentes de aprova&ccedil;&atilde;o para movimenta&ccedil;&otilde;es e manuten&ccedil;&otilde;es</p>
+        <h2>Aprovações do Gestor</h2>
+        <p class="muted">Solicitações pendentes de aprovação para movimentações e manutenções</p>
       </div>
     </div>
 
     <!-- Stats Cards -->
     <div class="stats-grid">
       <div class="stat-card stat-warning">
-        <Clock size="24" class="stat-icon" />
+        <Clock :size="24" :stroke-width="2.5" class="stat-icon" />
         <div class="stat-content">
           <span class="stat-label">Total pendente</span>
           <span class="stat-value">{{ pending.length }}</span>
         </div>
       </div>
       <div class="stat-card stat-success">
-        <CheckCircle size="24" class="stat-icon" />
+        <CheckCircle :size="24" :stroke-width="2.5" class="stat-icon" />
         <div class="stat-content">
           <span class="stat-label">Aprovadas</span>
           <span class="stat-value">{{ approvedCount }}</span>
         </div>
       </div>
       <div class="stat-card stat-danger">
-        <XCircle size="24" class="stat-icon" />
+        <XCircle :size="24" :stroke-width="2.5" class="stat-icon" />
         <div class="stat-content">
           <span class="stat-label">Reprovadas</span>
           <span class="stat-value">{{ rejectedCount }}</span>
@@ -35,36 +35,16 @@
 
     <!-- Search Bar -->
     <div class="search-bar">
-      <Search size="18" />
-      <input v-model.trim="search" type="text" placeholder="Buscar por tipo, ativo ou descri&ccedil;&atilde;o..." />
+      <Search :size="18" :stroke-width="2" />
+      <input v-model.trim="search" type="text" placeholder="Buscar por tipo, ativo ou descrição..." />
     </div>
 
     <!-- Filter Tabs -->
     <div class="filter-tabs">
-      <button
-        :class="['tab-btn', { active: filter === 'all' }]"
-        @click="filter = 'all'"
-      >
-        Todas
-      </button>
-      <button
-        :class="['tab-btn', { active: filter === 'Pendente' }]"
-        @click="filter = 'Pendente'"
-      >
-        Pendentes
-      </button>
-      <button
-        :class="['tab-btn', { active: filter === 'Aprovada' }]"
-        @click="filter = 'Aprovada'"
-      >
-        Aprovadas
-      </button>
-      <button
-        :class="['tab-btn', { active: filter === 'Reprovada' }]"
-        @click="filter = 'Reprovada'"
-      >
-        Reprovadas
-      </button>
+      <button :class="['tab-btn', { active: filter === 'all' }]" @click="filter = 'all'">Todas</button>
+      <button :class="['tab-btn', { active: filter === 'Pendente' }]" @click="filter = 'Pendente'">Pendentes</button>
+      <button :class="['tab-btn', { active: filter === 'Aprovada' }]" @click="filter = 'Aprovada'">Aprovadas</button>
+      <button :class="['tab-btn', { active: filter === 'Reprovada' }]" @click="filter = 'Reprovada'">Reprovadas</button>
     </div>
 
     <!-- Approvals Grid -->
@@ -73,7 +53,7 @@
         <div class="approval-header">
           <div class="approval-type">
             <span :class="['type-badge', `type-${typeClass(item.type)}`]">
-              <component :is="typeIcon(item.type)" :size="16" />
+              <component :is="typeIcon(item.type)" :size="16" :stroke-width="2.5" />
               {{ item.type }}
             </span>
           </div>
@@ -83,7 +63,7 @@
         </div>
         <div class="approval-body">
           <div class="approval-asset">
-            <Package size="18" />
+            <Package :size="18" :stroke-width="2" />
             <div>
               <h4>{{ item.assetTag }}</h4>
               <p>{{ item.description }}</p>
@@ -92,11 +72,11 @@
         </div>
         <div v-if="item.status === 'Pendente'" class="approval-actions">
           <button class="btn-approve" @click="setStatus(item.id, 'Aprovada')">
-            <CheckCircle size="16" />
+            <CheckCircle :size="16" :stroke-width="2.5" />
             Aprovar
           </button>
           <button class="btn-reject" @click="setStatus(item.id, 'Reprovada')">
-            <XCircle size="16" />
+            <XCircle :size="16" :stroke-width="2.5" />
             Reprovar
           </button>
         </div>
@@ -105,9 +85,9 @@
 
     <!-- Empty State -->
     <div v-if="filteredApprovals.length === 0" class="empty-state">
-      <ClipboardCheck size="64" class="empty-icon" />
-      <h3>Nenhuma aprova&ccedil;&atilde;o encontrada</h3>
-      <p>N&atilde;o h&aacute; solicita&ccedil;&otilde;es pendentes no momento</p>
+      <ClipboardCheck :size="64" :stroke-width="1.5" class="empty-icon" />
+      <h3>Nenhuma aprovação encontrada</h3>
+      <p>Não há solicitações pendentes no momento</p>
     </div>
   </div>
 </template>
@@ -128,16 +108,16 @@ import {
 type ApprovalStatus = 'Pendente' | 'Aprovada' | 'Reprovada'
 type ApprovalItem = {
   id: number
-  type: 'Movimenta&ccedil;&atilde;o' | 'Manuten&ccedil;&atilde;o'
+  type: 'Movimentação' | 'Manutenção'
   assetTag: string
   description: string
   status: ApprovalStatus
 }
 
 const approvals = ref<ApprovalItem[]>([
-  { id: 1, type: 'Movimenta&ccedil;&atilde;o', assetTag: 'AST-001', description: 'Transfer&ecirc;ncia para Financeiro', status: 'Pendente' },
-  { id: 2, type: 'Manuten&ccedil;&atilde;o', assetTag: 'AST-003', description: 'Troca de placa de v&iacute;deo', status: 'Pendente' },
-  { id: 3, type: 'Movimenta&ccedil;&atilde;o', assetTag: 'AST-010', description: 'Retorno para Estoque', status: 'Aprovada' },
+  { id: 1, type: 'Movimentação', assetTag: 'AST-001', description: 'Transferência para Financeiro', status: 'Pendente' },
+  { id: 2, type: 'Manutenção', assetTag: 'AST-003', description: 'Troca de placa de vídeo', status: 'Pendente' },
+  { id: 3, type: 'Movimentação', assetTag: 'AST-010', description: 'Retorno para Estoque', status: 'Aprovada' },
 ])
 
 const search = ref('')
@@ -202,7 +182,6 @@ const typeIcon = (type: string): Component => {
   color: var(--text-secondary);
 }
 
-/* Stats Grid */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -230,17 +209,9 @@ const typeIcon = (type: string): Component => {
   color: var(--primary);
 }
 
-.stat-card.stat-success .stat-icon {
-  color: var(--success);
-}
-
-.stat-card.stat-warning .stat-icon {
-  color: var(--warning);
-}
-
-.stat-card.stat-danger .stat-icon {
-  color: var(--danger);
-}
+.stat-card.stat-success .stat-icon { color: var(--success); }
+.stat-card.stat-warning .stat-icon { color: var(--warning); }
+.stat-card.stat-danger .stat-icon { color: var(--danger); }
 
 .stat-content {
   display: flex;
@@ -261,7 +232,6 @@ const typeIcon = (type: string): Component => {
   color: var(--text-primary);
 }
 
-/* Search Bar */
 .search-bar {
   display: flex;
   align-items: center;
@@ -293,11 +263,6 @@ const typeIcon = (type: string): Component => {
   outline: none;
 }
 
-.search-bar input::placeholder {
-  color: var(--text-muted);
-}
-
-/* Filter Tabs */
 .filter-tabs {
   display: flex;
   gap: 8px;
@@ -328,7 +293,6 @@ const typeIcon = (type: string): Component => {
   border-color: var(--primary);
 }
 
-/* Approvals Grid */
 .approvals-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -368,15 +332,8 @@ const typeIcon = (type: string): Component => {
   letter-spacing: 0.5px;
 }
 
-.type-movitacao {
-  background: rgba(6, 182, 212, 0.15);
-  color: #06b6d4;
-}
-
-.type-manuteno {
-  background: rgba(168, 85, 247, 0.15);
-  color: #a855f7;
-}
+.type-movimentacao { background: rgba(6, 182, 212, 0.15); color: #06b6d4; }
+.type-manutencao { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
 
 .status-badge {
   padding: 4px 12px;
@@ -387,24 +344,11 @@ const typeIcon = (type: string): Component => {
   letter-spacing: 0.5px;
 }
 
-.status-pendente {
-  background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
-}
+.status-pendente { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.status-aprovada { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+.status-reprovada { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
 
-.status-aprovada {
-  background: rgba(34, 197, 94, 0.15);
-  color: #22c55e;
-}
-
-.status-reprovada {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-}
-
-.approval-body {
-  margin-bottom: 16px;
-}
+.approval-body { margin-bottom: 16px; }
 
 .approval-asset {
   display: flex;
@@ -412,10 +356,7 @@ const typeIcon = (type: string): Component => {
   gap: 12px;
 }
 
-.approval-asset svg {
-  color: var(--primary);
-  flex-shrink: 0;
-}
+.approval-asset svg { color: var(--primary); flex-shrink: 0; }
 
 .approval-asset h4 {
   margin: 0;
@@ -444,8 +385,8 @@ const typeIcon = (type: string): Component => {
   gap: 6px;
   flex: 1;
   padding: 10px 16px;
-  background: rgba(34, 197, 94, 0.15);
-  color: #22c55e;
+  background: var(--success-light);
+  color: var(--success);
   border: 1px solid rgba(34, 197, 94, 0.3);
   border-radius: 8px;
   font-size: 13px;
@@ -454,11 +395,7 @@ const typeIcon = (type: string): Component => {
   transition: all 0.2s ease;
 }
 
-.btn-approve:hover {
-  background: #22c55e;
-  color: white;
-  border-color: #22c55e;
-}
+.btn-approve:hover { background: var(--success); color: white; border-color: var(--success); }
 
 .btn-reject {
   display: flex;
@@ -467,8 +404,8 @@ const typeIcon = (type: string): Component => {
   gap: 6px;
   flex: 1;
   padding: 10px 16px;
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: var(--danger-light);
+  color: var(--danger);
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 8px;
   font-size: 13px;
@@ -477,23 +414,15 @@ const typeIcon = (type: string): Component => {
   transition: all 0.2s ease;
 }
 
-.btn-reject:hover {
-  background: #ef4444;
-  color: white;
-  border-color: #ef4444;
-}
+.btn-reject:hover { background: var(--danger); color: white; border-color: var(--danger); }
 
-/* Empty State */
 .empty-state {
   text-align: center;
   padding: 60px 20px;
   color: var(--text-muted);
 }
 
-.empty-icon {
-  margin-bottom: 16px;
-  opacity: 0.3;
-}
+.empty-icon { margin-bottom: 16px; opacity: 0.3; }
 
 .empty-state h3 {
   margin: 0 0 8px;
@@ -502,35 +431,16 @@ const typeIcon = (type: string): Component => {
   color: var(--text-secondary);
 }
 
-.empty-state p {
-  margin: 0;
-  font-size: 14px;
-}
+.empty-state p { margin: 0; font-size: 14px; }
 
 @keyframes fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @media (max-width: 768px) {
-  .page-header {
-    flex-direction: column;
-    gap: 16px;
-    align-items: flex-start;
-  }
-
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .approvals-grid {
-    grid-template-columns: 1fr;
-  }
+  .page-header { flex-direction: column; gap: 16px; align-items: flex-start; }
+  .stats-grid { grid-template-columns: 1fr; }
+  .approvals-grid { grid-template-columns: 1fr; }
 }
 </style>

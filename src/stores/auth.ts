@@ -6,7 +6,7 @@ type AuthUser = {
   id: string
   name: string
   email: string
-  profile: Profile
+  role: Profile
 }
 
 const MOCK_SESSION_KEY = 'assetra-mock-session'
@@ -37,22 +37,36 @@ export const useAuthStore = defineStore('auth', {
     async login(email: string, password: string) {
       this.isLoading = true
       this.error = ''
+      
       try {
         const { data } = await api.post('/auth/login', { email, password })
-        this.user = { ...data.user, profile: 'Administrador' }
+        this.user = { 
+          id: data.user.id,
+          name: data.user.name,
+          email: data.user.email,
+          role: data.user.role as Profile
+        }
         this.clearMockSession()
       } catch (error: any) {
-        // Backend offline - fallback to mock admin login
-        if (email === 'admin@assetra.local' && password === 'Admin@12345') {
-          const mockUser = {
-            id: 'mock-admin',
-            name: 'Kelvin Siqueira',
-            email: 'admin@assetra.local',
-            profile: 'Administrador' as const,
-          }
-          this.mockLogin(mockUser)
+        // FALLBACK: Se o backend estiver offline ou erro, tenta mock login
+        const demoUsers = [
+          { email: 'admin@assetra.com.br', pass: 'Admin@123', name: 'Admin Assetra', role: 'ADM' as Profile },
+          { email: 'gestor@assetra.com.br', pass: 'Gestor@123', name: 'Gestor Assetra', role: 'GESTOR' as Profile },
+          { email: 'tecnico@assetra.com.br', pass: 'Tecnico@123', name: 'Tecnico Assetra', role: 'TECNICO' as Profile }
+        ]
+
+        const matched = demoUsers.find(u => u.email === email && u.pass === password)
+        
+        if (matched) {
+          this.mockLogin({
+            id: `mock-${matched.role.toLowerCase()}`,
+            name: matched.name,
+            email: matched.email,
+            role: matched.role
+          })
           return
         }
+
         this.error = error?.response?.data?.message ?? 'Falha no login. Verifique suas credenciais.'
         throw error
       } finally {
@@ -73,7 +87,12 @@ export const useAuthStore = defineStore('auth', {
 
       try {
         const { data } = await api.get('/auth/me')
-        this.user = { ...data.user, profile: 'Administrador' }
+        this.user = {
+          id: data.user.id,
+          name: data.user.name,
+          email: data.user.email,
+          role: data.user.role as Profile
+        }
       } catch {
         this.user = null
       } finally {
@@ -85,7 +104,7 @@ export const useAuthStore = defineStore('auth', {
       try {
         await api.post('/auth/logout')
       } catch {
-        // Em modo mock o backend pode estar offline.
+        // Backend offline.
       }
       this.user = null
     },

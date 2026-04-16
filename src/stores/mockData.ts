@@ -3,8 +3,8 @@ import { defineStore } from 'pinia'
 export type AssetStatus = 'Em uso' | 'Disponível' | 'Em manutenção'
 export type MaintenanceType = 'Corretiva' | 'Preventiva'
 export type MaintenancePriority = 'Alta' | 'Média' | 'Baixa'
-export type MaintenanceStatus = 'Em andamento' | 'Agendada' | 'Concluída'
-export type Profile = 'Administrador' | 'Gestor' | 'Técnico'
+export type MaintenanceStatus = 'Aberta' | 'Em andamento' | 'Agendada' | 'Concluída'
+export type Profile = 'ADM' | 'GESTOR' | 'TECNICO'
 export type UserStatus = 'Ativo' | 'Inativo'
 
 export type Asset = {
@@ -30,6 +30,7 @@ export type Maintenance = {
   openingDate: string
   priority: MaintenancePriority
   status: MaintenanceStatus
+  description: string
 }
 
 export type User = {
@@ -61,14 +62,38 @@ const defaultState = (): Omit<MockState, 'hydrated'> => ({
     { id: 3, date: '30/03/2026', assetTag: 'AST-010', origin: 'RH', destination: 'Estoque', responsible: 'Kelvin Siqueira' },
   ],
   maintenances: [
-    { id: 1, assetTag: 'AST-003', type: 'Corretiva', openingDate: '10/04/2026', priority: 'Alta', status: 'Em andamento' },
-    { id: 2, assetTag: 'AST-025', type: 'Preventiva', openingDate: '05/04/2026', priority: 'Média', status: 'Agendada' },
-    { id: 3, assetTag: 'AST-007', type: 'Corretiva', openingDate: '28/03/2026', priority: 'Baixa', status: 'Concluída' },
+    {
+      id: 1,
+      assetTag: 'AST-003',
+      type: 'Corretiva',
+      openingDate: '10/04/2026',
+      priority: 'Alta',
+      status: 'Em andamento',
+      description: 'Falha intermitente de vídeo durante o uso',
+    },
+    {
+      id: 2,
+      assetTag: 'AST-025',
+      type: 'Preventiva',
+      openingDate: '05/04/2026',
+      priority: 'Média',
+      status: 'Agendada',
+      description: 'Rotina de verificação e limpeza programada',
+    },
+    {
+      id: 3,
+      assetTag: 'AST-007',
+      type: 'Corretiva',
+      openingDate: '28/03/2026',
+      priority: 'Baixa',
+      status: 'Concluída',
+      description: 'Substituição de teclado após desgaste',
+    },
   ],
   users: [
-    { name: 'Kelvin Siqueira', email: 'admin@assetra.local', profile: 'Administrador', status: 'Ativo' },
-    { name: 'Ana Cordeiro', email: 'ana.cordeiro@assetra.local', profile: 'Gestor', status: 'Ativo' },
-    { name: 'João Melo', email: 'joao.melo@assetra.local', profile: 'Técnico', status: 'Ativo' },
+    { name: 'Kelvin Siqueira', email: 'admin@assetra.local', profile: 'ADM', status: 'Ativo' },
+    { name: 'Ana Cordeiro', email: 'ana.cordeiro@assetra.local', profile: 'GESTOR', status: 'Ativo' },
+    { name: 'João Melo', email: 'joao.melo@assetra.local', profile: 'TECNICO', status: 'Ativo' },
   ],
 })
 
@@ -139,10 +164,9 @@ export const useMockDataStore = defineStore('mock-data', {
       this.movements = this.movements.map((item) => (item.id === id ? { id, ...movement } : item))
       this.persist()
     },
-    addMaintenance(maintenance: Omit<Maintenance, 'id' | 'openingDate'>) {
+    addMaintenance(maintenance: Omit<Maintenance, 'id'>) {
       this.maintenances.unshift({
         id: this.maintenances.length + 1,
-        openingDate: new Date().toLocaleDateString('pt-BR'),
         ...maintenance,
       })
       this.persist()

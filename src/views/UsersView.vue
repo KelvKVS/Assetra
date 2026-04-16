@@ -7,7 +7,7 @@
         <p class="muted">Gestão de acesso por perfil</p>
       </div>
       <button class="btn-primary" @click="showForm = !showForm">
-        <Plus size="18" />
+        <Plus :size="18" :stroke-width="2.5" />
         {{ showForm ? 'Fechar' : 'Novo Usuário' }}
       </button>
     </div>
@@ -27,9 +27,9 @@
         <div class="form-group">
           <label>Perfil</label>
           <select v-model="newUser.profile" required>
-            <option>Administrador</option>
-            <option>Gestor</option>
-            <option>Técnico</option>
+            <option value="ADM">Administrador</option>
+            <option value="GESTOR">Gestor</option>
+            <option value="TECNICO">Técnico</option>
           </select>
         </div>
         <div class="form-group">
@@ -49,7 +49,7 @@
 
     <!-- Search Bar -->
     <div class="search-bar">
-      <Search size="18" />
+      <Search :size="18" :stroke-width="2" />
       <input v-model.trim="search" type="text" placeholder="Buscar por nome, e-mail ou perfil..." />
     </div>
 
@@ -62,11 +62,11 @@
         <div class="user-info">
           <h3 class="user-name">{{ user.name }}</h3>
           <p class="user-email">
-            <Mail size="14" />
+            <Mail :size="14" :stroke-width="2" />
             {{ user.email }}
           </p>
           <div class="user-badges">
-            <span :class="['profile-badge', `profile-${user.profile.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')}`]">
+            <span :class="['profile-badge', `profile-${user.profile.toLowerCase()}`]">
               {{ user.profile }}
             </span>
             <span :class="['status-badge', `status-${user.status.toLowerCase()}`]">
@@ -76,10 +76,10 @@
         </div>
         <div class="user-actions">
           <button class="btn-icon" @click="startUserEdit(user)" title="Editar">
-            <Pencil size="16" />
+            <Edit :size="18" :stroke-width="2.5" color="currentColor" />
           </button>
           <button class="btn-icon btn-danger" @click="removeUser(user.email)" title="Excluir">
-            <Trash2 size="16" />
+            <Trash2 :size="18" :stroke-width="2.5" color="currentColor" />
           </button>
         </div>
       </div>
@@ -87,7 +87,7 @@
 
     <!-- Empty State -->
     <div v-if="filteredUsers.length === 0" class="empty-state">
-      <Users size="64" class="empty-icon" />
+      <Users :size="64" :stroke-width="1.5" class="empty-icon" />
       <h3>Nenhum usuário encontrado</h3>
       <p>Cadastre o primeiro usuário do sistema</p>
     </div>
@@ -98,7 +98,7 @@
         <div class="modal-header">
           <h3>Editar Usuário</h3>
           <button class="btn-close" @click="cancelUserEdit">
-            <X size="20" />
+            <X :size="20" :stroke-width="2.5" />
           </button>
         </div>
         <form @submit.prevent="saveUserEdit(editingEmail)" class="modal-form">
@@ -113,9 +113,9 @@
           <div class="form-group">
             <label>Perfil</label>
             <select v-model="editUser.profile" required>
-              <option>Administrador</option>
-              <option>Gestor</option>
-              <option>Técnico</option>
+              <option value="ADM">Administrador</option>
+              <option value="GESTOR">Gestor</option>
+              <option value="TECNICO">Técnico</option>
             </select>
           </div>
           <div class="form-group">
@@ -143,7 +143,7 @@ import {
   Search,
   Mail,
   Users,
-  Pencil,
+  Edit,
   Trash2,
   X
 } from 'lucide-vue-next'
@@ -156,14 +156,14 @@ const editingEmail = ref<string | null>(null)
 const newUser = reactive<User>({
   name: '',
   email: '',
-  profile: 'Técnico',
+  profile: 'TECNICO',
   status: 'Ativo',
 })
 
 const editUser = reactive<User>({
   name: '',
   email: '',
-  profile: 'Técnico',
+  profile: 'TECNICO',
   status: 'Ativo',
 })
 
@@ -187,7 +187,7 @@ const addUser = () => {
   }
   newUser.name = ''
   newUser.email = ''
-  newUser.profile = 'Técnico'
+  newUser.profile = 'TECNICO'
   newUser.status = 'Ativo'
   showForm.value = false
 }
@@ -288,7 +288,6 @@ const saveUserEdit = (originalEmail: string) => {
   border-color: var(--primary);
 }
 
-/* Form Card */
 .form-card {
   background: var(--bg-card);
   border: 1px solid var(--border-light);
@@ -323,6 +322,14 @@ const saveUserEdit = (originalEmail: string) => {
   color: var(--text-secondary);
 }
 
+.form-group input, .form-group select {
+  padding: 10px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  color: var(--text-primary);
+}
+
 .form-actions {
   display: flex;
   gap: 12px;
@@ -340,7 +347,6 @@ const saveUserEdit = (originalEmail: string) => {
   font-weight: 500;
 }
 
-/* Search Bar */
 .search-bar {
   display: flex;
   align-items: center;
@@ -372,11 +378,6 @@ const saveUserEdit = (originalEmail: string) => {
   outline: none;
 }
 
-.search-bar input::placeholder {
-  color: var(--text-muted);
-}
-
-/* Users Grid */
 .users-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -438,10 +439,6 @@ const saveUserEdit = (originalEmail: string) => {
   gap: 6px;
 }
 
-.user-email svg {
-  flex-shrink: 0;
-}
-
 .user-badges {
   display: flex;
   gap: 8px;
@@ -457,20 +454,9 @@ const saveUserEdit = (originalEmail: string) => {
   letter-spacing: 0.5px;
 }
 
-.profile-administrador {
-  background: rgba(139, 92, 246, 0.15);
-  color: #8b5cf6;
-}
-
-.profile-gestor {
-  background: rgba(6, 182, 212, 0.15);
-  color: #06b6d4;
-}
-
-.profile-tcnico {
-  background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
-}
+.profile-adm { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
+.profile-gestor { background: rgba(6, 182, 212, 0.15); color: #06b6d4; }
+.profile-tecnico { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
 
 .status-badge {
   padding: 4px 10px;
@@ -513,7 +499,7 @@ const saveUserEdit = (originalEmail: string) => {
 
 .btn-icon:hover {
   background: var(--primary);
-  color: white;
+  color: white !important;
   border-color: var(--primary);
 }
 
@@ -522,7 +508,6 @@ const saveUserEdit = (originalEmail: string) => {
   border-color: var(--danger);
 }
 
-/* Empty State */
 .empty-state {
   text-align: center;
   padding: 60px 20px;
@@ -534,19 +519,6 @@ const saveUserEdit = (originalEmail: string) => {
   opacity: 0.3;
 }
 
-.empty-state h3 {
-  margin: 0 0 8px;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 14px;
-}
-
-/* Modal */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -556,7 +528,6 @@ const saveUserEdit = (originalEmail: string) => {
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  animation: fade-in 0.2s ease;
 }
 
 .modal {
@@ -567,7 +538,6 @@ const saveUserEdit = (originalEmail: string) => {
   width: 90%;
   max-width: 500px;
   box-shadow: var(--shadow-2xl);
-  animation: scale-in 0.3s ease;
 }
 
 .modal-header {
@@ -575,13 +545,6 @@ const saveUserEdit = (originalEmail: string) => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text-primary);
 }
 
 .btn-close {
@@ -595,12 +558,6 @@ const saveUserEdit = (originalEmail: string) => {
   border-radius: 8px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-close:hover {
-  background: var(--danger);
-  color: white;
 }
 
 .modal-form {
@@ -623,52 +580,6 @@ const saveUserEdit = (originalEmail: string) => {
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@media (max-width: 768px) {
-  .page-header {
-    flex-direction: column;
-    gap: 16px;
-    align-items: flex-start;
-  }
-
-  .users-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .user-card {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .user-actions {
-    width: 100%;
-    justify-content: flex-end;
-  }
-
-  .user-form {
-    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -14,3 +14,12 @@ export const authMiddleware = (req, res, next) => {
     return res.status(401).json({ message: 'Sessão inválida ou expirada.' })
   }
 }
+
+export const authorize = (allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user || !allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Acesso negado: permissão insuficiente.' })
+    }
+    next()
+  }
+}
