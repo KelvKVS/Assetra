@@ -38,6 +38,21 @@
           <form @submit.prevent="handleLogin" class="login-form">
             <div class="form-group">
               <label>
+                <Building2 :size="16" />
+                Organização
+              </label>
+              <input
+                v-model.trim="tenantSlug"
+                type="text"
+                autocomplete="organization"
+                class="input-field"
+                placeholder="default"
+                spellcheck="false"
+              />
+            </div>
+
+            <div class="form-group">
+              <label>
                 <Mail :size="16" />
                 E-mail
               </label>
@@ -47,7 +62,7 @@
                 autocomplete="username"
                 required
                 class="input-field"
-                placeholder="seu.email@assetra.com.br"
+                placeholder="admin@assetra.local"
               />
             </div>
 
@@ -81,29 +96,39 @@
 
           <!-- Demo Credentials -->
           <div class="demo-credentials">
-            <h4>Credenciais de demonstração:</h4>
-            
+            <h4>Contas de demonstração</h4>
+
             <div class="demo-grid">
-              <div class="demo-user" @click="fillForm('admin@assetra.com.br', 'Admin@123')">
+              <button
+                type="button"
+                class="demo-user"
+                @click="fillForm('admin@assetra.local', 'Admin@12345', 'default')"
+              >
                 <span class="role-tag adm">ADM</span>
-                <code>admin@assetra.com.br</code>
-              </div>
-              
-              <div class="demo-user" @click="fillForm('gestor@assetra.com.br', 'Gestor@123')">
+                <code>admin@assetra.local</code>
+                <span class="demo-slug">default</span>
+              </button>
+
+              <button
+                type="button"
+                class="demo-user"
+                @click="fillForm('gestor@assetra.local', 'Gestor@12345', 'default')"
+              >
                 <span class="role-tag gestor">GESTOR</span>
-                <code>gestor@assetra.com.br</code>
-              </div>
-              
-              <div class="demo-user" @click="fillForm('tecnico@assetra.com.br', 'Tecnico@123')">
+                <code>gestor@assetra.local</code>
+                <span class="demo-slug">default</span>
+              </button>
+
+              <button
+                type="button"
+                class="demo-user"
+                @click="fillForm('tecnico@assetra.local', 'Tecnico@12345', 'default')"
+              >
                 <span class="role-tag tecnico">TÉCNICO</span>
-                <code>tecnico@assetra.com.br</code>
-              </div>
+                <code>tecnico@assetra.local</code>
+                <span class="demo-slug">default</span>
+              </button>
             </div>
-            
-            <p class="demo-note">
-              <Info :size="14" />
-              Clique em um usuário para preencher o formulário.
-            </p>
           </div>
         </div>
       </div>
@@ -112,34 +137,49 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import {
   Box,
   CheckCircle,
+  Building2,
   Mail,
   Lock,
   Loader,
   LogIn,
-  AlertCircle,
-  Info
+  AlertCircle
 } from 'lucide-vue-next'
 
+const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
-const email = ref('admin@assetra.com.br')
-const password = ref('Admin@123')
+const tenantSlug = ref('default')
+const email = ref('admin@assetra.local')
+const password = ref('Admin@12345')
 
-const fillForm = (e: string, p: string) => {
+watch(
+  () => route.params.tenantSlug,
+  (slug) => {
+    if (typeof slug === 'string' && slug.trim()) {
+      tenantSlug.value = slug.trim()
+    } else {
+      tenantSlug.value = 'default'
+    }
+  },
+  { immediate: true },
+)
+
+const fillForm = (e: string, p: string, slug = 'default') => {
   email.value = e
   password.value = p
+  tenantSlug.value = slug
 }
 
 const handleLogin = async () => {
   try {
-    await authStore.login(email.value, password.value)
+    await authStore.login(email.value, password.value, tenantSlug.value || undefined)
     router.push('/dashboard')
   } catch (err) {
     // Erros são tratados no store
@@ -358,17 +398,26 @@ const handleLogin = async () => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
+  padding: 10px 12px;
+  width: 100%;
   background: var(--bg-primary);
+  border: 1px solid transparent;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
-  border: 1px solid transparent;
+  font-family: inherit;
+  text-align: left;
+  color: inherit;
 }
 
 .demo-user:hover {
   border-color: var(--primary);
   transform: translateX(4px);
+}
+
+.demo-user:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .role-tag {
@@ -389,13 +438,24 @@ const handleLogin = async () => {
   color: var(--text-primary);
 }
 
-.demo-note {
-  margin-top: 12px;
-  font-size: 12px;
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.demo-slug {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  text-transform: lowercase;
+  flex-shrink: 0;
+}
+
+.demo-user code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @keyframes spin {
@@ -406,11 +466,26 @@ const handleLogin = async () => {
   animation: spin 1s linear infinite;
 }
 
+/* Responsividade */
 @media (max-width: 900px) {
   .login-container {
     grid-template-columns: 1fr;
-    max-width: 500px;
+    max-width: 520px;
+    min-height: 0;
   }
   .login-branding { display: none; }
+  .login-form-section { padding: 36px 28px; }
+}
+
+@media (max-width: 520px) {
+  .login-page { padding: 12px; }
+  .login-container { border-radius: 14px; }
+  .login-form-section { padding: 28px 20px; }
+  .login-header h2 { font-size: 22px; }
+  .input-field { padding: 11px 14px; font-size: 14px; }
+  .login-btn { padding: 12px; font-size: 15px; }
+  .demo-credentials { padding: 14px; }
+  .demo-user { padding: 8px 10px; gap: 8px; }
+  .demo-user code { font-size: 11px; }
 }
 </style>

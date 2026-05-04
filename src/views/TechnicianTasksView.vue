@@ -78,7 +78,7 @@
           <button
             v-if="item.status !== 'Concluída'"
             class="btn-advance"
-            @click="advanceStatus(item.id)"
+            @click="advanceStatus(String(item.id))"
           >
             <ArrowRight :size="16" :stroke-width="2.5" />
             {{ item.status === 'Aberta' ? 'Iniciar' : 'Finalizar' }}
@@ -97,7 +97,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useInventoryStore } from '../stores/inventory'
+import { useConfirmAction } from '../composables/useConfirmAction'
 import {
   Search,
   ClipboardList,
@@ -108,24 +110,17 @@ import {
   ArrowRight,
 } from 'lucide-vue-next'
 
-type TaskStatus = 'Aberta' | 'Em andamento' | 'Concluída'
-type TaskPriority = 'Alta' | 'Média' | 'Baixa'
+const confirm = useConfirmAction()
 
-type TaskItem = {
-  id: number
-  assetTag: string
-  task: string
-  priority: TaskPriority
-  status: TaskStatus
-}
+const inventory = useInventoryStore()
 
-const tasks = ref<TaskItem[]>([
-  { id: 1, assetTag: 'AST-003', task: 'Diagnóstico de falha de vídeo', priority: 'Alta', status: 'Aberta' },
-  { id: 2, assetTag: 'AST-007', task: 'Limpeza e testes preventivos', priority: 'Média', status: 'Em andamento' },
-  { id: 3, assetTag: 'AST-011', task: 'Troca de teclado', priority: 'Baixa', status: 'Concluída' },
-])
+onMounted(() => {
+  void inventory.fetchTasksSafe()
+})
 
 const search = ref('')
+
+const tasks = computed(() => inventory.tasks)
 
 const filteredTasks = computed(() => {
   const term = search.value.toLowerCase()
@@ -139,13 +134,10 @@ const activeCount = computed(() => tasks.value.filter((item) => item.status !== 
 const completedCount = computed(() => tasks.value.filter((item) => item.status === 'Concluída').length)
 const highPriorityCount = computed(() => tasks.value.filter((item) => item.priority === 'Alta').length)
 
-const advanceStatus = (id: number) => {
-  tasks.value = tasks.value.map((item) => {
-    if (item.id !== id) return item
-    if (item.status === 'Aberta') return { ...item, status: 'Em andamento' }
-    if (item.status === 'Em andamento') return { ...item, status: 'Concluída' }
-    return item
-  })
+const advanceStatus = async (id: string) => {
+  const ok = await confirm.ask('Confirme com a sua senha para avançar o estado da tarefa.')
+  if (!ok) return
+  await inventory.advanceTask(id)
 }
 
 const priorityClass = (priority: string) => {

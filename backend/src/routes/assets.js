@@ -1,12 +1,12 @@
 import { Router } from 'express'
 import { authMiddleware, authorize } from '../middlewares/auth.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
-import { assetCreateSchema, assetStatusSchema } from '../schemas/index.js'
+import { assetCreateSchema, assetUpdateSchema } from '../schemas/index.js'
 import {
   createAssetForTenant,
   deleteAssetForTenant,
   listAssetsByTenant,
-  updateAssetStatus,
+  updateAssetForTenant,
 } from '../services/assetService.js'
 
 const router = Router()
@@ -23,7 +23,7 @@ router.get(
 router.post(
   '/',
   authMiddleware,
-  authorize(['ADM', 'GESTOR']),
+  authorize(['ADM']),
   asyncHandler(async (req, res) => {
     const parsed = assetCreateSchema.safeParse(req.body)
     if (!parsed.success) {
@@ -34,22 +34,16 @@ router.post(
   }),
 )
 
-router.patch(
-  '/:id/status',
+router.put(
+  '/:id',
   authMiddleware,
-  authorize(['ADM', 'GESTOR', 'TECNICO']),
+  authorize(['ADM']),
   asyncHandler(async (req, res) => {
-    const parsed = assetStatusSchema.safeParse(req.body)
+    const parsed = assetUpdateSchema.safeParse(req.body)
     if (!parsed.success) {
       return res.status(400).json({ message: 'Dados inválidos.', issues: parsed.error.flatten() })
     }
-    const asset = await updateAssetStatus(
-      req.user.tenantId,
-      req.user.sub,
-      req.params.id,
-      parsed.data.status,
-      parsed.data.details,
-    )
+    const asset = await updateAssetForTenant(req.user.tenantId, req.user.sub, req.params.id, parsed.data)
     res.json(asset)
   }),
 )

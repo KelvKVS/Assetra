@@ -1,14 +1,14 @@
 import { Router } from 'express'
 import { authMiddleware, authorize } from '../middlewares/auth.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
-import { taskCompleteSchema } from '../schemas/index.js'
-import { completeTechnicalTask, listTechnicalTasks } from '../services/taskService.js'
+import { advanceTechnicalTask, listTechnicalTasks } from '../services/taskService.js'
 
 const router = Router()
 
 router.get(
   '/',
   authMiddleware,
+  authorize(['TECNICO', 'ADM']),
   asyncHandler(async (req, res) => {
     const tasks = await listTechnicalTasks(req.user.tenantId)
     res.json(tasks)
@@ -16,16 +16,12 @@ router.get(
 )
 
 router.post(
-  '/:id/complete',
+  '/:id/advance',
   authMiddleware,
   authorize(['TECNICO', 'ADM']),
   asyncHandler(async (req, res) => {
-    const parsed = taskCompleteSchema.safeParse(req.body)
-    if (!parsed.success) {
-      return res.status(400).json({ message: 'Dados inválidos.', issues: parsed.error.flatten() })
-    }
-    await completeTechnicalTask(req.user.tenantId, req.user.sub, req.params.id, parsed.data.notes)
-    res.json({ message: 'Tarefa concluída e ativo liberado' })
+    const row = await advanceTechnicalTask(req.user.tenantId, req.user.sub, req.params.id)
+    res.json(row)
   }),
 )
 

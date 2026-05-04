@@ -55,7 +55,7 @@
 
     <!-- Users Grid -->
     <div class="users-grid">
-      <div v-for="user in filteredUsers" :key="user.email" class="user-card">
+      <div v-for="user in filteredUsers" :key="user.id" class="user-card">
         <div class="user-avatar">
           {{ user.name.charAt(0).toUpperCase() }}
         </div>
@@ -66,8 +66,8 @@
             {{ user.email }}
           </p>
           <div class="user-badges">
-            <span :class="['profile-badge', `profile-${user.profile.toLowerCase()}`]">
-              {{ user.profile }}
+            <span :class="['profile-badge', `profile-${user.role.toLowerCase()}`]">
+              {{ roleLabelPt(user.role) }}
             </span>
             <span :class="['status-badge', `status-${user.status.toLowerCase()}`]">
               {{ user.status }}
@@ -76,10 +76,10 @@
         </div>
         <div class="user-actions">
           <button class="btn-icon" @click="startUserEdit(user)" title="Editar">
-            <Edit :size="18" :stroke-width="2.5" color="currentColor" />
+            <Edit :size="18" :stroke-width="2.5" />
           </button>
-          <button class="btn-icon btn-danger" @click="removeUser(user.email)" title="Excluir">
-            <Trash2 :size="18" :stroke-width="2.5" color="currentColor" />
+          <button class="btn-icon btn-danger" @click="removeUser(user.id)" title="Excluir">
+            <Trash2 :size="18" :stroke-width="2.5" />
           </button>
         </div>
       </div>
@@ -93,7 +93,7 @@
     </div>
 
     <!-- Edit Modal -->
-    <div v-if="editingEmail" class="modal-overlay" @click="cancelUserEdit">
+    <div v-if="editingUserId" class="modal-overlay" @click="cancelUserEdit">
       <div class="modal" @click.stop>
         <div class="modal-header">
           <h3>Editar Usuário</h3>
@@ -101,7 +101,7 @@
             <X :size="20" :stroke-width="2.5" />
           </button>
         </div>
-        <form @submit.prevent="saveUserEdit(editingEmail)" class="modal-form">
+        <form @submit.prevent="saveUserEdit()" class="modal-form">
           <div class="form-group">
             <label>Nome</label>
             <input v-model.trim="editUser.name" type="text" required />
@@ -136,8 +136,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
-import { type User, useMockDataStore } from '../stores/mockData'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { type DirectoryUser, useInventoryStore } from '../stores/inventory'
+import { roleLabelPt } from '../utils/roleLabels'
+import { useConfirmAction } from '../composables/useConfirmAction'
 import {
   Plus,
   Search,
@@ -148,77 +150,102 @@ import {
   X
 } from 'lucide-vue-next'
 
+const confirm = useConfirmAction()
+
 const showForm = ref(false)
 const search = ref('')
 const formError = ref('')
-const editingEmail = ref<string | null>(null)
+const editingUserId = ref<string | null>(null)
 
-const newUser = reactive<User>({
+const newUser = reactive({
   name: '',
   email: '',
   profile: 'TECNICO',
   status: 'Ativo',
 })
 
-const editUser = reactive<User>({
+const editUser = reactive({
   name: '',
   email: '',
   profile: 'TECNICO',
   status: 'Ativo',
 })
 
-const mockStore = useMockDataStore()
-mockStore.hydrate()
+const inventory = useInventoryStore()
+
+onMounted(() => {
+  void inventory.fetchUsers()
+})
 
 const filteredUsers = computed(() => {
   const term = search.value.toLowerCase()
-  if (!term) return mockStore.users
-  return mockStore.users.filter((user) =>
-    [user.name, user.email, user.profile, user.status].some((value) => value.toLowerCase().includes(term)),
+  if (!term) return inventory.users
+  return inventory.users.filter((user) =>
+    [user.name, user.email, user.role, user.status].some((value) => value.toLowerCase().includes(term)),
   )
 })
 
-const addUser = () => {
+const addUser = async () => {
   formError.value = ''
-  const added = mockStore.addUser({ ...newUser })
-  if (!added) {
-    formError.value = 'Já existe um usuário com este e-mail.'
-    return
-  }
-  newUser.name = ''
-  newUser.email = ''
-  newUser.profile = 'TECNICO'
-  newUser.status = 'Ativo'
-  showForm.value = false
-}
-
-const removeUser = (email: string) => {
-  if (confirm('Tem certeza que deseja excluir este usuário?')) {
-    mockStore.removeUser(email)
+  const ok = await confirm.ask('Confirme com a sua senha para cadastrar este utilizador.')
+  if (!ok) return
+  try {
+    await inventory.createUser({ ...newUser })
+    newUser.name = ''
+    newUser.email = ''
+    newUser.profile = 'TECNICO'
+    newUser.status = 'Ativo'
+    showForm.value = false
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: { message?: string } } }
+    formError.value = ax?.response?.data?.message ?? 'Erro ao cadastrar usuário.'
   }
 }
 
-const startUserEdit = (user: User) => {
+const removeUser = async (id: string) => {
+  const ok = await confirm.ask(
+    'Confirme com a sua senha para excluir este utilizador.',
+    'Confirmar exclusão',
+  )
+  if (!ok) return
+  try {
+    await inventory.deleteUser(id)
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: { message?: string } } }
+    formError.value = ax?.response?.data?.message ?? 'Erro ao excluir.'
+  }
+}
+
+const startUserEdit = (user: DirectoryUser) => {
   formError.value = ''
-  editingEmail.value = user.email
+  editingUserId.value = user.id
   editUser.name = user.name
   editUser.email = user.email
-  editUser.profile = user.profile
-  editUser.status = user.status
+  editUser.profile = user.role
+  editUser.status = user.status as typeof editUser.status
 }
 
 const cancelUserEdit = () => {
-  editingEmail.value = null
+  editingUserId.value = null
 }
 
-const saveUserEdit = (originalEmail: string) => {
+const saveUserEdit = async () => {
   formError.value = ''
-  const updated = mockStore.updateUser(originalEmail, { ...editUser })
-  if (!updated) {
-    formError.value = 'Não foi possível salvar: o novo e-mail já existe.'
-    return
+  if (!editingUserId.value) return
+  const ok = await confirm.ask('Confirme com a sua senha para guardar as alterações.')
+  if (!ok) return
+  try {
+    await inventory.updateUser(editingUserId.value, {
+      name: editUser.name,
+      email: editUser.email,
+      profile: editUser.profile,
+      status: editUser.status,
+    })
+    editingUserId.value = null
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: { message?: string } } }
+    formError.value = ax?.response?.data?.message ?? 'Não foi possível salvar.'
   }
-  editingEmail.value = null
 }
 </script>
 
@@ -495,6 +522,11 @@ const saveUserEdit = (originalEmail: string) => {
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+.btn-icon :deep(svg) {
+  display: block;
+  stroke: currentColor;
 }
 
 .btn-icon:hover {

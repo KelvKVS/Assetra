@@ -4,16 +4,19 @@
     <div class="page-header">
       <div>
         <h2>Ativos de TI</h2>
-        <p class="muted">Cadastro e acompanhamento de equipamentos</p>
+        <p class="muted">
+          Cadastro e acompanhamento de equipamentos
+          <template v-if="!canManageAssets"> · Apenas administradores podem criar, editar ou excluir.</template>
+        </p>
       </div>
-      <button class="btn-primary" @click="showForm = !showForm">
+      <button v-if="canManageAssets" class="btn-primary" @click="showForm = !showForm">
         <Plus :size="18" :stroke-width="2.5" />
         {{ showForm ? 'Fechar' : 'Novo Ativo' }}
       </button>
     </div>
 
     <!-- Add Asset Form -->
-    <div v-if="showForm" class="form-card">
+    <div v-if="canManageAssets && showForm" class="form-card">
       <h3>Cadastrar novo ativo</h3>
       <form @submit.prevent="addAsset" class="asset-form">
         <div class="form-group">
@@ -35,6 +38,15 @@
             <option>Disponível</option>
             <option>Em manutenção</option>
           </select>
+        </div>
+        <div class="form-group">
+          <label>Responsável (e-mail)</label>
+          <input
+            v-model.trim="newAsset.assignedTo"
+            type="email"
+            autocomplete="off"
+            placeholder="ex.: gestor@assetra.local (opcional)"
+          />
         </div>
         <div class="form-actions">
           <button type="submit" class="btn-primary">Cadastrar</button>
@@ -79,12 +91,12 @@
     <!-- Search Bar -->
     <div class="search-bar">
       <Search :size="18" :stroke-width="2" />
-      <input v-model.trim="search" type="text" placeholder="Buscar por tag, descrição ou setor..." />
+      <input v-model.trim="search" type="text" placeholder="Buscar por tag, descrição, setor ou responsável..." />
     </div>
 
     <!-- Assets Grid -->
     <div class="assets-grid">
-      <div v-for="asset in filteredAssets" :key="asset.tag" class="asset-card">
+      <div v-for="asset in filteredAssets" :key="asset.id ?? asset.tag" class="asset-card">
         <div class="asset-header">
           <div class="asset-icon">
             <Monitor :size="24" :stroke-width="2" />
@@ -103,21 +115,25 @@
               <MapPin :size="14" :stroke-width="2.5" />
               <span>{{ asset.sector }}</span>
             </div>
+            <div v-if="asset.assignedTo" class="detail-item">
+              <span class="detail-label">Resp.</span>
+              <span>{{ asset.assignedTo }}</span>
+            </div>
           </div>
         </div>
-        <div class="asset-actions">
+        <div v-if="canManageAssets" class="asset-actions">
           <button class="btn-icon" @click="startAssetEdit(asset)" title="Editar">
-            <Edit :size="18" :stroke-width="2.5" color="currentColor" />
+            <Edit :size="18" :stroke-width="2.5" />
           </button>
-          <button class="btn-icon btn-danger" @click="removeAsset(asset.tag)" title="Excluir">
-            <Trash2 :size="18" :stroke-width="2.5" color="currentColor" />
+          <button class="btn-icon btn-danger" @click="removeAsset(asset)" title="Excluir">
+            <Trash2 :size="18" :stroke-width="2.5" />
           </button>
         </div>
       </div>
     </div>
 
     <!-- Edit Modal -->
-    <div v-if="editingTag" class="modal-overlay" @click="cancelAssetEdit">
+    <div v-if="editingAssetId" class="modal-overlay" @click="cancelAssetEdit">
       <div class="modal" @click.stop>
         <div class="modal-header">
           <h3>Editar Ativo</h3>
@@ -125,7 +141,7 @@
             <X :size="20" :stroke-width="2.5" />
           </button>
         </div>
-        <form @submit.prevent="saveAssetEdit(editingTag)" class="modal-form">
+        <form @submit.prevent="saveAssetEdit()" class="modal-form">
           <div class="form-group">
             <label>Tag</label>
             <input v-model.trim="editAsset.tag" type="text" required />
@@ -146,6 +162,15 @@
               <option>Em manutenção</option>
             </select>
           </div>
+          <div class="form-group">
+            <label>Responsável (e-mail)</label>
+            <input
+              v-model.trim="editAsset.assignedTo"
+              type="email"
+              autocomplete="off"
+              placeholder="Opcional — deixe vazio para limpar"
+            />
+          </div>
           <div class="modal-actions">
             <button type="submit" class="btn-primary">Salvar</button>
             <button type="button" class="btn-secondary" @click="cancelAssetEdit">Cancelar</button>
@@ -157,86 +182,132 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
-import { type Asset, useMockDataStore } from '../stores/mockData'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { type Asset, type AssetStatus } from '../types/assetra'
+import { useAuthStore } from '../stores/auth'
+import { useInventoryStore } from '../stores/inventory'
+import { useConfirmAction } from '../composables/useConfirmAction'
 import { Plus, Search, Monitor, CheckCircle, Package, Wrench, MapPin, Edit, Trash2, X } from 'lucide-vue-next'
+
+const confirm = useConfirmAction()
+
+const authStore = useAuthStore()
+const canManageAssets = computed(() => authStore.user?.role === 'ADM')
 
 const showForm = ref(false)
 const search = ref('')
 const formError = ref('')
-const editingTag = ref<string | null>(null)
+const editingAssetId = ref<string | null>(null)
 const editAsset = reactive<Asset>({
   tag: '',
   description: '',
   sector: '',
   status: 'Disponível',
+  assignedTo: '',
 })
-const mockStore = useMockDataStore()
-mockStore.hydrate()
+const inventory = useInventoryStore()
 
-const assets = computed(() => mockStore.assets)
+const assets = computed(() => inventory.assets)
 const newAsset = reactive<Asset>({
   tag: '',
   description: '',
   sector: '',
   status: 'Disponível',
+  assignedTo: '',
 })
 
 const filteredAssets = computed(() => {
   const term = search.value.toLowerCase()
-  if (!term) return mockStore.assets
+  if (!term) return inventory.assets
   return assets.value.filter((asset) =>
-    [asset.tag, asset.description, asset.sector, asset.status].some((value) => value.toLowerCase().includes(term)),
+    [asset.tag, asset.description, asset.sector, asset.status, asset.assignedTo ?? ''].some((value) =>
+      String(value).toLowerCase().includes(term),
+    ),
   )
 })
 
 const usageStats = computed(() => ({
-  inUse: mockStore.assets.filter((item) => item.status === 'Em uso').length,
-  available: mockStore.assets.filter((item) => item.status === 'Disponível').length,
-  maintenance: mockStore.assets.filter((item) => item.status === 'Em manutenção').length,
+  inUse: inventory.assets.filter((item) => item.status === 'Em uso').length,
+  available: inventory.assets.filter((item) => item.status === 'Disponível').length,
+  maintenance: inventory.assets.filter((item) => item.status === 'Em manutenção').length,
 }))
 
-const addAsset = () => {
-  formError.value = ''
-  const added = mockStore.addAsset({ ...newAsset })
-  if (!added) {
-    formError.value = 'Já existe um ativo com esta tag.'
-    return
+onMounted(async () => {
+  try {
+    await inventory.fetchAssets()
+  } catch {
+    formError.value = inventory.error || 'Não foi possível carregar os ativos.'
   }
-  newAsset.tag = ''
-  newAsset.description = ''
-  newAsset.sector = ''
-  newAsset.status = 'Disponível'
-  showForm.value = false
+})
+
+const addAsset = async () => {
+  formError.value = ''
+  const ok = await confirm.ask('Confirme com a sua senha para cadastrar este ativo.')
+  if (!ok) return
+  try {
+    const assigned = newAsset.assignedTo?.trim()
+    await inventory.createAsset({
+      ...newAsset,
+      assignedTo: assigned || undefined,
+    })
+    newAsset.tag = ''
+    newAsset.description = ''
+    newAsset.sector = ''
+    newAsset.status = 'Disponível'
+    newAsset.assignedTo = ''
+    showForm.value = false
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: { message?: string } } }
+    formError.value = ax?.response?.data?.message ?? 'Erro ao cadastrar ativo.'
+  }
 }
 
-const removeAsset = (tag: string) => {
-  if (confirm('Tem certeza que deseja excluir este ativo?')) {
-    mockStore.removeAsset(tag)
+const removeAsset = async (asset: Asset & { id?: string }) => {
+  if (!asset.id) return
+  const ok = await confirm.ask(
+    `Confirme com a sua senha para excluir o ativo ${asset.tag}.`,
+    'Confirmar exclusão',
+  )
+  if (!ok) return
+  try {
+    await inventory.deleteAsset(asset.id)
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: { message?: string } } }
+    formError.value = ax?.response?.data?.message ?? 'Erro ao excluir.'
   }
 }
 
-const startAssetEdit = (asset: Asset) => {
+const startAssetEdit = (asset: Asset & { id?: string }) => {
   formError.value = ''
-  editingTag.value = asset.tag
+  if (!asset.id) return
+  editingAssetId.value = asset.id
   editAsset.tag = asset.tag
   editAsset.description = asset.description
   editAsset.sector = asset.sector
-  editAsset.status = asset.status
+  editAsset.status = asset.status as AssetStatus
+  editAsset.assignedTo = asset.assignedTo ?? ''
 }
 
 const cancelAssetEdit = () => {
-  editingTag.value = null
+  editingAssetId.value = null
 }
 
-const saveAssetEdit = (originalTag: string) => {
+const saveAssetEdit = async () => {
   formError.value = ''
-  const updated = mockStore.updateAsset(originalTag, { ...editAsset })
-  if (!updated) {
-    formError.value = 'Não foi possível salvar: a nova tag já existe.'
-    return
+  if (!editingAssetId.value) return
+  const ok = await confirm.ask('Confirme com a sua senha para guardar as alterações.')
+  if (!ok) return
+  try {
+    const assigned = editAsset.assignedTo?.trim()
+    await inventory.updateAsset(editingAssetId.value, {
+      ...editAsset,
+      assignedTo: assigned ? assigned : null,
+    })
+    editingAssetId.value = null
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: { message?: string } } }
+    formError.value = ax?.response?.data?.message ?? 'Não foi possível salvar.'
   }
-  editingTag.value = null
 }
 </script>
 
@@ -548,6 +619,14 @@ const saveAssetEdit = (originalTag: string) => {
   color: var(--text-muted);
 }
 
+.detail-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
 .asset-actions {
   display: flex;
   gap: 8px;
@@ -568,6 +647,11 @@ const saveAssetEdit = (originalTag: string) => {
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+.btn-icon :deep(svg) {
+  display: block;
+  stroke: currentColor;
 }
 
 .btn-icon:hover {

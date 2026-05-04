@@ -1,8 +1,13 @@
 import { Router } from 'express'
 import { authMiddleware } from '../middlewares/auth.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
-import { movementCreateSchema } from '../schemas/index.js'
-import { listMovementsForTenant, registerMovement } from '../services/movementService.js'
+import { movementCreateSchema, movementUpdateSchema } from '../schemas/index.js'
+import {
+  createMovement,
+  deleteMovement,
+  listMovementsForTenant,
+  updateMovement,
+} from '../services/movementService.js'
 
 const router = Router()
 
@@ -23,8 +28,30 @@ router.post(
     if (!parsed.success) {
       return res.status(400).json({ message: 'Dados inválidos.', issues: parsed.error.flatten() })
     }
-    const asset = await registerMovement(req.user.tenantId, req.user.sub, parsed.data)
-    res.status(201).json(asset)
+    const row = await createMovement(req.user.tenantId, req.user.sub, parsed.data)
+    res.status(201).json(row)
+  }),
+)
+
+router.patch(
+  '/:id',
+  authMiddleware,
+  asyncHandler(async (req, res) => {
+    const parsed = movementUpdateSchema.safeParse(req.body)
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Dados inválidos.', issues: parsed.error.flatten() })
+    }
+    const row = await updateMovement(req.user.tenantId, req.params.id, parsed.data)
+    res.json(row)
+  }),
+)
+
+router.delete(
+  '/:id',
+  authMiddleware,
+  asyncHandler(async (req, res) => {
+    await deleteMovement(req.user.tenantId, req.params.id)
+    res.status(204).send()
   }),
 )
 

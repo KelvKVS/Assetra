@@ -1,6 +1,14 @@
 <template>
   <header class="topbar">
     <div class="topbar-left">
+      <button
+        class="menu-btn"
+        type="button"
+        aria-label="Abrir menu"
+        @click="sidebar.toggle"
+      >
+        <Menu :size="22" :stroke-width="2.5" />
+      </button>
       <h1 class="page-title">{{ title }}</h1>
     </div>
     <div class="topbar-right">
@@ -12,7 +20,7 @@
         <div class="user-avatar">{{ userInitial }}</div>
         <div class="user-info">
           <strong>{{ authStore.user.name }}</strong>
-          <small>{{ roleLabel }}</small>
+          <small class="user-meta">{{ roleLabel }}<template v-if="authStore.user.tenant"> · {{ authStore.user.tenant.name }}</template></small>
         </div>
         <button class="logout-btn" @click="handleLogout" title="Sair">
           <LogOut :size="18" />
@@ -26,7 +34,11 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { Search, LogOut } from 'lucide-vue-next'
+import { roleLabelPt } from '../utils/roleLabels'
+import { useSidebar } from '../composables/useSidebar'
+import { Search, LogOut, Menu } from 'lucide-vue-next'
+
+const sidebar = useSidebar()
 
 defineProps<{
   title: string
@@ -37,14 +49,7 @@ const router = useRouter()
 
 const userInitial = computed(() => authStore.user?.name?.charAt(0).toUpperCase() ?? 'U')
 
-const roleLabel = computed(() => {
-  const roles: Record<string, string> = {
-    'ADM': 'Administrador',
-    'GESTOR': 'Gestor',
-    'TECNICO': 'Técnico'
-  }
-  return roles[authStore.user?.role || ''] || 'Usuário'
-})
+const roleLabel = computed(() => roleLabelPt(authStore.user?.role))
 
 const handleLogout = async () => {
   await authStore.logout()
@@ -65,11 +70,37 @@ const handleLogout = async () => {
   z-index: 50;
 }
 
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.menu-btn {
+  display: none;
+  background: #1f2937;
+  border: 1px solid #374151;
+  color: #fff;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  flex-shrink: 0;
+}
+.menu-btn:hover { background: #374151; }
+
 .page-title {
   margin: 0;
   font-size: 28px;
   font-weight: 700;
   color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .topbar-right {
@@ -145,7 +176,8 @@ const handleLogout = async () => {
   color: #fff;
 }
 
-.user-info small {
+.user-info small,
+.user-meta {
   font-size: 12px;
   color: #9ca3af;
 }
@@ -170,25 +202,21 @@ const handleLogout = async () => {
   color: #fff;
 }
 
-@media (max-width: 768px) {
-  .topbar {
-    padding: 16px 20px;
-    flex-direction: column;
-    gap: 16px;
-    align-items: flex-start;
-  }
-  
-  .topbar-right {
-    width: 100%;
-    justify-content: space-between;
-  }
-  
-  .search-input {
-    width: 100%;
-  }
-  
-  .user-info {
-    display: none;
-  }
+@media (max-width: 1024px) {
+  .menu-btn { display: flex; }
+}
+
+@media (max-width: 900px) {
+  .topbar { padding: 14px 18px; gap: 12px; }
+  .page-title { font-size: 20px; }
+  .search-box { display: none; }
+  .user-profile { padding: 6px 10px; gap: 8px; }
+  .user-avatar { width: 36px; height: 36px; font-size: 14px; }
+}
+
+@media (max-width: 560px) {
+  .topbar { padding: 12px 14px; }
+  .page-title { font-size: 18px; }
+  .user-info { display: none; }
 }
 </style>

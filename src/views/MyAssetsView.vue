@@ -4,7 +4,7 @@
     <div class="page-header">
       <div>
         <h2>Meus Ativos</h2>
-        <p class="muted">Ativos sob responsabilidade do seu perfil</p>
+        <p class="muted">Ativos com o seu e-mail em <strong>Responsável</strong> (definido pelo administrador na ficha do ativo).</p>
       </div>
     </div>
 
@@ -48,7 +48,7 @@
 
     <!-- Assets Grid -->
     <div class="assets-grid">
-      <div v-for="asset in filteredAssets" :key="asset.tag" class="asset-card">
+      <div v-for="asset in filteredAssets" :key="asset.id ?? asset.tag" class="asset-card">
         <div class="asset-header">
           <div class="asset-icon">
             <Monitor :size="24" :stroke-width="2" />
@@ -75,35 +75,29 @@
     <!-- Empty State -->
     <div v-if="filteredAssets.length === 0" class="empty-state">
       <Monitor :size="64" :stroke-width="1.5" class="empty-icon" />
-      <h3>Nenhum ativo encontrado</h3>
-      <p>Você não possui ativos sob responsabilidade no momento</p>
+      <h3>Nenhum ativo atribuído</h3>
+      <p>Não há ativos com o seu e-mail no campo responsável. Peça a um administrador para associar o seu e-mail na ficha do ativo.</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useAuthStore } from '../stores/auth'
-import { useMockDataStore } from '../stores/mockData'
+import { useInventoryStore } from '../stores/inventory'
+import { assetsAssignedToEmail } from '../utils/userScope'
 import { Monitor, Search, CheckCircle, Wrench, Shield, MapPin } from 'lucide-vue-next'
 
 const authStore = useAuthStore()
-const mockStore = useMockDataStore()
-mockStore.hydrate()
+const inventory = useInventoryStore()
 
 const search = ref('')
 
-const sectorByEmail: Record<string, string[]> = {
-  'gestor@assetra.com.br': ['Financeiro', 'Compras'],
-  'tecnico@assetra.com.br': ['TI', 'RH'],
-}
-
-const myAssets = computed(() => {
-  const email = authStore.user?.email ?? ''
-  const sectors = sectorByEmail[email] ?? []
-  if (!sectors.length) return mockStore.assets.slice(0, 2)
-  return mockStore.assets.filter((asset) => sectors.includes(asset.sector))
+onMounted(() => {
+  void inventory.fetchAssets()
 })
+
+const myAssets = computed(() => assetsAssignedToEmail(inventory.assets, authStore.user?.email))
 
 const filteredAssets = computed(() => {
   const term = search.value.toLowerCase()

@@ -69,10 +69,10 @@
             </div>
             <div class="timeline-actions">
               <button class="btn-icon" @click="startMovementEdit(movement)" title="Editar">
-                <Edit :size="16" :stroke-width="2.5" color="currentColor" />
+                <Edit :size="16" :stroke-width="2.5" />
               </button>
-              <button class="btn-icon btn-danger" @click="removeMovement(movement.id)" title="Excluir">
-                <Trash2 :size="16" :stroke-width="2.5" color="currentColor" />
+              <button class="btn-icon btn-danger" @click="removeMovement(String(movement.id))" title="Excluir">
+                <Trash2 :size="16" :stroke-width="2.5" />
               </button>
             </div>
           </div>
@@ -96,7 +96,7 @@
             <X :size="20" :stroke-width="2.5" />
           </button>
         </div>
-        <form @submit.prevent="saveMovementEdit(editingMovementId)" class="modal-form">
+        <form @submit.prevent="saveMovementEdit()" class="modal-form">
           <div class="form-group">
             <label>Data</label>
             <input v-model.trim="editMovement.date" type="text" required />
@@ -128,8 +128,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
-import { type Movement, useMockDataStore } from '../stores/mockData'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { type MovementRow, useInventoryStore } from '../stores/inventory'
+import { useConfirmAction } from '../composables/useConfirmAction'
 import {
   Plus,
   Search,
@@ -141,9 +142,11 @@ import {
   X
 } from 'lucide-vue-next'
 
+const confirm = useConfirmAction()
+
 const showForm = ref(false)
 const search = ref('')
-const editingMovementId = ref<number | null>(null)
+const editingMovementId = ref<string | null>(null)
 
 const newMovement = reactive({
   assetTag: '',
@@ -160,21 +163,26 @@ const editMovement = reactive({
   responsible: '',
 })
 
-const mockStore = useMockDataStore()
-mockStore.hydrate()
+const inventory = useInventoryStore()
+
+onMounted(() => {
+  void inventory.fetchMovements()
+})
 
 const filteredMovements = computed(() => {
   const term = search.value.toLowerCase()
-  if (!term) return mockStore.movements
-  return mockStore.movements.filter((movement) =>
+  if (!term) return inventory.movements
+  return inventory.movements.filter((movement) =>
     [movement.assetTag, movement.origin, movement.destination, movement.responsible].some((value) =>
       value.toLowerCase().includes(term),
     ),
   )
 })
 
-const addMovement = () => {
-  mockStore.addMovement({ ...newMovement })
+const addMovement = async () => {
+  const ok = await confirm.ask('Confirme com a sua senha para registar esta movimentação.')
+  if (!ok) return
+  await inventory.createMovement({ ...newMovement })
   newMovement.assetTag = ''
   newMovement.origin = ''
   newMovement.destination = ''
@@ -182,13 +190,13 @@ const addMovement = () => {
   showForm.value = false
 }
 
-const removeMovement = (id: number) => {
-  if (confirm('Tem certeza que deseja excluir esta movimentação?')) {
-    mockStore.removeMovement(id)
-  }
+const removeMovement = async (id: string) => {
+  const ok = await confirm.ask('Confirme com a sua senha para excluir esta movimentação.', 'Confirmar exclusão')
+  if (!ok) return
+  await inventory.deleteMovement(id)
 }
 
-const startMovementEdit = (movement: Movement) => {
+const startMovementEdit = (movement: MovementRow) => {
   editingMovementId.value = movement.id
   editMovement.date = movement.date
   editMovement.assetTag = movement.assetTag
@@ -201,8 +209,11 @@ const cancelMovementEdit = () => {
   editingMovementId.value = null
 }
 
-const saveMovementEdit = (id: number) => {
-  mockStore.updateMovement(id, { ...editMovement })
+const saveMovementEdit = async () => {
+  if (!editingMovementId.value) return
+  const ok = await confirm.ask('Confirme com a sua senha para guardar as alterações.')
+  if (!ok) return
+  await inventory.updateMovement(editingMovementId.value, { ...editMovement })
   editingMovementId.value = null
 }
 </script>
@@ -329,6 +340,11 @@ const saveMovementEdit = (id: number) => {
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+.btn-icon :deep(svg) {
+  display: block;
+  stroke: currentColor;
 }
 
 .btn-icon:hover { background: var(--primary); color: white !important; border-color: var(--primary); }

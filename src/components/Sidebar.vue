@@ -1,11 +1,25 @@
 <template>
-  <aside class="sidebar">
+  <div
+    v-if="sidebar.state.open"
+    class="sidebar-backdrop"
+    @click="sidebar.close"
+    aria-hidden="true"
+  ></div>
+  <aside :class="['sidebar', { 'is-open': sidebar.state.open }]">
     <div class="sidebar-header">
       <div class="logo">
         <div class="logo-icon-wrapper">
           <Box :size="28" :stroke-width="2.5" color="#3b82f6" />
         </div>
         <span class="logo-text">Assetra</span>
+        <button
+          class="sidebar-close"
+          type="button"
+          aria-label="Fechar menu"
+          @click="sidebar.close"
+        >
+          <X :size="20" :stroke-width="2.5" />
+        </button>
       </div>
       <p class="logo-subtitle">Gestão de Ativos</p>
     </div>
@@ -17,11 +31,11 @@
           <LayoutDashboard :size="20" :stroke-width="2" />
           <span>Dashboard</span>
         </RouterLink>
-        <RouterLink v-if="isAdmin" to="/ativos" class="nav-item">
+        <RouterLink v-if="isAdmin || isManager" to="/ativos" class="nav-item">
           <Monitor :size="20" :stroke-width="2" />
           <span>Ativos</span>
         </RouterLink>
-        <RouterLink v-else-if="!isAdmin && !isManager && !isTechnician" to="/meus-ativos" class="nav-item">
+        <RouterLink v-if="isManager || isTechnician" to="/meus-ativos" class="nav-item">
           <Package :size="20" :stroke-width="2" />
           <span>Meus Ativos</span>
         </RouterLink>
@@ -37,6 +51,10 @@
 
       <div class="nav-section" v-if="isManager || isTechnician || isAdmin">
         <span class="nav-section-title">Gestão</span>
+        <RouterLink to="/solicitacoes" class="nav-item">
+          <Send :size="20" :stroke-width="2" />
+          <span>Minhas Solicitações</span>
+        </RouterLink>
         <RouterLink v-if="isManager || isAdmin" to="/aprovacoes" class="nav-item">
           <CheckCircle :size="20" :stroke-width="2" />
           <span>Aprovações</span>
@@ -70,9 +88,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { RouterLink } from 'vue-router'
+import { computed, watch } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useSidebar } from '../composables/useSidebar'
 import {
   LayoutDashboard,
   Monitor,
@@ -80,12 +99,14 @@ import {
   Repeat,
   Wrench,
   CheckCircle,
+  Send,
   Settings,
   Users,
   BarChart3,
   Sun,
   Moon,
-  Box
+  Box,
+  X
 } from 'lucide-vue-next'
 
 defineProps<{
@@ -95,10 +116,19 @@ defineProps<{
 defineEmits(['toggle-theme'])
 
 const authStore = useAuthStore()
+const sidebar = useSidebar()
+const route = useRoute()
 
 const isAdmin = computed(() => authStore.user?.role === 'ADM')
 const isManager = computed(() => authStore.user?.role === 'GESTOR')
 const isTechnician = computed(() => authStore.user?.role === 'TECNICO')
+
+watch(
+  () => route.fullPath,
+  () => {
+    sidebar.close()
+  },
+)
 </script>
 
 <style scoped>
@@ -127,6 +157,26 @@ const isTechnician = computed(() => authStore.user?.role === 'TECNICO')
   align-items: center;
   gap: 12px;
   margin-bottom: 4px;
+}
+
+.sidebar-close {
+  display: none;
+  margin-left: auto;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid #374151;
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.sidebar-close:hover { background: rgba(255, 255, 255, 0.1); }
+
+.sidebar-backdrop {
+  display: none;
 }
 
 .logo-icon-wrapper {
@@ -230,6 +280,27 @@ const isTechnician = computed(() => authStore.user?.role === 'TECNICO')
 @media (max-width: 1024px) {
   .sidebar {
     transform: translateX(-100%);
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
   }
+  .sidebar.is-open {
+    transform: translateX(0);
+  }
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(2px);
+    z-index: 99;
+    animation: backdrop-in 0.18s ease-out;
+  }
+  .sidebar-close {
+    display: flex;
+  }
+}
+
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 </style>

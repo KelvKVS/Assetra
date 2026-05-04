@@ -1,0 +1,19 @@
+# PostgreSQL local para desenvolvimento (Prisma).
+# Uso: na pasta backend → docker compose up -d
+# DATABASE_URL sugerida em .env.example (utilizador/senha postgres).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: assetra-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: assetra
+    ports:
+      - '5432:5432'
+    volumes:
+      - assetra_pgdata:/var/lib/postgresql/data
+
+volumes:
+  assetra_pgdata:

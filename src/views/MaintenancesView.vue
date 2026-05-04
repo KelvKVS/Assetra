@@ -81,10 +81,10 @@
         <div class="maintenance-footer">
           <div class="maintenance-actions">
             <button class="btn-icon" @click="startMaintenanceEdit(maintenance)" title="Editar">
-              <Edit :size="18" :stroke-width="2.5" color="currentColor" />
+              <Edit :size="18" :stroke-width="2.5" />
             </button>
-            <button class="btn-icon btn-danger" @click="removeMaintenance(maintenance.id)" title="Excluir">
-              <Trash2 :size="18" :stroke-width="2.5" color="currentColor" />
+              <button class="btn-icon btn-danger" @click="removeMaintenance(String(maintenance.id))" title="Excluir">
+              <Trash2 :size="18" :stroke-width="2.5" />
             </button>
           </div>
         </div>
@@ -107,7 +107,7 @@
             <X :size="20" :stroke-width="2.5" />
           </button>
         </div>
-        <form @submit.prevent="saveMaintenanceEdit(editingId)" class="modal-form">
+        <form @submit.prevent="saveMaintenanceEdit()" class="modal-form">
           <div class="form-group">
             <label>Tag do ativo</label>
             <input v-model.trim="editMaintenance.assetTag" type="text" required />
@@ -139,8 +139,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
-import { type Maintenance, useMockDataStore } from '../stores/mockData'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { type MaintenanceRow, useInventoryStore } from '../stores/inventory'
+import { useConfirmAction } from '../composables/useConfirmAction'
 import {
   Plus,
   Search,
@@ -152,41 +153,55 @@ import {
   X
 } from 'lucide-vue-next'
 
+const confirm = useConfirmAction()
+
 const showForm = ref(false)
 const search = ref('')
-const editingId = ref<number | null>(null)
+const editingId = ref<string | null>(null)
 
-const newMaintenance = reactive<Omit<Maintenance, 'id'>>({
+const newMaintenance = reactive({
   assetTag: '',
   type: 'Corretiva',
   description: '',
-  status: 'Aberta',
+  status: 'Aberta' as const,
   openingDate: new Date().toISOString().split('T')[0],
-  priority: 'Média',
+  priority: 'Média' as const,
 })
 
-const editMaintenance = reactive<Omit<Maintenance, 'id'>>({
+const editMaintenance = reactive({
   assetTag: '',
   type: 'Corretiva',
   description: '',
-  status: 'Aberta',
-  openingDate: new Date().toISOString().split('T')[0],
-  priority: 'Média',
+  status: 'Aberta' as const,
+  openingDate: '',
+  priority: 'Média' as const,
 })
 
-const mockStore = useMockDataStore()
-mockStore.hydrate()
+const inventory = useInventoryStore()
+
+onMounted(() => {
+  void inventory.fetchMaintenances()
+})
 
 const filteredMaintenances = computed(() => {
   const term = search.value.toLowerCase()
-  if (!term) return mockStore.maintenances
-  return mockStore.maintenances.filter((item) =>
-    [item.assetTag, item.type, item.description, item.status].some((value) => value.toLowerCase().includes(term)),
+  if (!term) return inventory.maintenances
+  return inventory.maintenances.filter((item) =>
+    [item.assetTag, item.type, item.description, item.status].some((value) => String(value).toLowerCase().includes(term)),
   )
 })
 
-const addMaintenance = () => {
-  mockStore.addMaintenance({ ...newMaintenance })
+const addMaintenance = async () => {
+  const ok = await confirm.ask('Confirme com a sua senha para abrir este chamado de manutenção.')
+  if (!ok) return
+  await inventory.createMaintenance({
+    assetTag: newMaintenance.assetTag,
+    type: newMaintenance.type,
+    description: newMaintenance.description,
+    priority: newMaintenance.priority,
+    status: newMaintenance.status,
+    openingDate: newMaintenance.openingDate,
+  })
   newMaintenance.assetTag = ''
   newMaintenance.type = 'Corretiva'
   newMaintenance.description = ''
@@ -196,28 +211,31 @@ const addMaintenance = () => {
   showForm.value = false
 }
 
-const removeMaintenance = (id: number) => {
-  if (confirm('Tem certeza que deseja excluir este chamado?')) {
-    mockStore.removeMaintenance(id)
-  }
+const removeMaintenance = async (id: string) => {
+  const ok = await confirm.ask('Confirme com a sua senha para excluir este chamado.', 'Confirmar exclusão')
+  if (!ok) return
+  await inventory.deleteMaintenance(id)
 }
 
-const startMaintenanceEdit = (maintenance: Maintenance) => {
+const startMaintenanceEdit = (maintenance: MaintenanceRow) => {
   editingId.value = maintenance.id
   editMaintenance.assetTag = maintenance.assetTag
   editMaintenance.type = maintenance.type
   editMaintenance.description = maintenance.description
-  editMaintenance.status = maintenance.status
+  editMaintenance.status = maintenance.status as typeof editMaintenance.status
   editMaintenance.openingDate = maintenance.openingDate
-  editMaintenance.priority = maintenance.priority
+  editMaintenance.priority = maintenance.priority as typeof editMaintenance.priority
 }
 
 const cancelMaintenanceEdit = () => {
   editingId.value = null
 }
 
-const saveMaintenanceEdit = (id: number) => {
-  mockStore.updateMaintenance(id, { ...editMaintenance })
+const saveMaintenanceEdit = async () => {
+  if (!editingId.value) return
+  const ok = await confirm.ask('Confirme com a sua senha para guardar as alterações.')
+  if (!ok) return
+  await inventory.updateMaintenance(editingId.value, { ...editMaintenance })
   editingId.value = null
 }
 
@@ -367,6 +385,11 @@ const statusClass = (status: string) => {
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+.btn-icon :deep(svg) {
+  display: block;
+  stroke: currentColor;
 }
 
 .btn-icon:hover { background: var(--primary); color: white !important; border-color: var(--primary); }

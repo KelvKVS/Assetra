@@ -103,7 +103,7 @@
         </div>
         <div class="donut-container">
           <div class="donut" :style="maintenanceDonutStyle">
-            <span>{{ mockStore.maintenances.length }}</span>
+            <span>{{ inventory.maintenances.length }}</span>
           </div>
           <ul class="legend-list">
             <li>
@@ -166,8 +166,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
-import { useMockDataStore } from '../stores/mockData'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useInventoryStore } from '../stores/inventory'
 import {
   SlidersHorizontal,
   Search,
@@ -185,8 +185,11 @@ import {
   Download,
 } from 'lucide-vue-next'
 
-const mockStore = useMockDataStore()
-mockStore.hydrate()
+const inventory = useInventoryStore()
+
+onMounted(() => {
+  void inventory.reloadDashboardData()
+})
 
 const showFilters = ref(false)
 const filters = reactive({
@@ -195,7 +198,7 @@ const filters = reactive({
   sector: '',
 })
 
-const sectors = computed(() => [...new Set(mockStore.assets.map((asset) => asset.sector))])
+const sectors = computed(() => [...new Set(inventory.assets.map((asset) => asset.sector))])
 
 const applyFilters = () => {
   showFilters.value = false
@@ -207,27 +210,59 @@ const resetFilters = () => {
   filters.sector = ''
 }
 
-const downloadReport = (_type: string) => {
-  alert('Relatório sendo gerado...')
+function triggerJsonDownload(filename: string, data: unknown) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
-const sectorCount = computed(() => new Set(mockStore.assets.map((asset) => asset.sector)).size)
+const downloadReport = async (type: string) => {
+  const stamp = new Date().toISOString().slice(0, 10)
+  try {
+    if (type === 'location') {
+      triggerJsonDownload(`assetra-ativos-${stamp}.json`, inventory.assets)
+      return
+    }
+    if (type === 'movements') {
+      await inventory.fetchMovements()
+      triggerJsonDownload(`assetra-movimentacoes-${stamp}.json`, inventory.movements)
+      return
+    }
+    if (type === 'maintenance-costs') {
+      await inventory.fetchMaintenances()
+      triggerJsonDownload(`assetra-manutencoes-${stamp}.json`, inventory.maintenances)
+      return
+    }
+    if (type === 'users') {
+      await inventory.fetchUsers()
+      triggerJsonDownload(`assetra-usuarios-${stamp}.json`, inventory.users)
+    }
+  } catch {
+    window.alert('Não foi possível exportar. Confirme que está autenticado e que a API está a responder.')
+  }
+}
+
+const sectorCount = computed(() => new Set(inventory.assets.map((asset) => asset.sector)).size)
 const maintenanceRate = computed(() => {
-  if (!mockStore.assets.length) return '0.0'
-  const rate = (mockStore.maintenances.length / mockStore.assets.length) * 100
+  if (!inventory.assets.length) return '0.0'
+  const rate = (inventory.maintenances.length / inventory.assets.length) * 100
   return rate.toFixed(1)
 })
 
-const depreciatedAssets = computed(() => mockStore.assets.filter((asset) => asset.status === 'Em manutenção').length)
+const depreciatedAssets = computed(() => inventory.assets.filter((asset) => asset.status === 'Em manutenção').length)
 const inventoryCompliance = computed(() => {
-  if (!mockStore.assets.length) return 0
-  const compliant = mockStore.assets.filter((asset) => asset.status !== 'Em manutenção').length
-  return Math.round((compliant / mockStore.assets.length) * 100)
+  if (!inventory.assets.length) return 0
+  const compliant = inventory.assets.filter((asset) => asset.status !== 'Em manutenção').length
+  return Math.round((compliant / inventory.assets.length) * 100)
 })
 
 const assetsBySector = computed(() => {
   const map = new Map<string, number>()
-  mockStore.assets.forEach((asset) => {
+  inventory.assets.forEach((asset) => {
     const current = map.get(asset.sector) ?? 0
     map.set(asset.sector, current + 1)
   })
@@ -243,14 +278,14 @@ const assetsBySector = computed(() => {
 })
 
 const concludedMaintenances = computed(
-  () => mockStore.maintenances.filter((maintenance) => maintenance.status === 'Concluída').length,
+  () => inventory.maintenances.filter((maintenance) => maintenance.status === 'Concluída').length,
 )
 const pendingMaintenances = computed(
-  () => mockStore.maintenances.filter((maintenance) => maintenance.status !== 'Concluída').length,
+  () => inventory.maintenances.filter((maintenance) => maintenance.status !== 'Concluída').length,
 )
 
 const maintenanceDonutStyle = computed(() => {
-  const total = mockStore.maintenances.length || 1
+  const total = inventory.maintenances.length || 1
   const concluded = (concludedMaintenances.value / total) * 100
   return {
     background: `conic-gradient(#22c55e 0% ${concluded}%, #f59e0b ${concluded}% 100%)`,

@@ -2,8 +2,13 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { authMiddleware, authorize } from '../middlewares/auth.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
-import { userCreateSchema } from '../schemas/index.js'
-import { createUserInTenant, deleteUserInTenant, listUsersByTenant } from '../services/userService.js'
+import { userCreateSchema, userUpdateSchema } from '../schemas/index.js'
+import {
+  createUserInTenant,
+  deleteUserInTenant,
+  listUsersByTenant,
+  updateUserInTenant,
+} from '../services/userService.js'
 
 const router = Router()
 
@@ -26,6 +31,18 @@ router.post(
     }
     const user = await createUserInTenant(prisma, req.user.tenantId, parsed.data)
     res.status(201).json(user)
+  }),
+)
+
+router.patch(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const parsed = userUpdateSchema.safeParse(req.body)
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Dados inválidos.', issues: parsed.error.flatten() })
+    }
+    const user = await updateUserInTenant(prisma, req.user.tenantId, req.params.id, parsed.data)
+    res.json(user)
   }),
 )
 

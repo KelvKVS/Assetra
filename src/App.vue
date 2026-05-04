@@ -20,6 +20,15 @@
         <RouterView />
       </main>
     </div>
+
+    <!-- Modal global de confirmação por senha -->
+    <PasswordConfirmModal
+      :open="confirm.state.open"
+      :title="confirm.state.title"
+      :message="confirm.state.message"
+      @confirmed="confirm.onConfirmed"
+      @cancel="confirm.onCancel"
+    />
   </div>
 </template>
 
@@ -29,6 +38,10 @@ import { RouterView, useRoute } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import Sidebar from './components/Sidebar.vue'
 import Topbar from './components/Topbar.vue'
+import PasswordConfirmModal from './components/PasswordConfirmModal.vue'
+import { useConfirmAction } from './composables/useConfirmAction'
+
+const confirm = useConfirmAction()
 
 const authStore = useAuthStore()
 const route = useRoute()
@@ -43,6 +56,7 @@ const currentPageTitle = computed(() => {
     '/movimentacoes': 'Movimentações',
     '/manutencoes': 'Manutenções',
     '/aprovacoes': 'Aprovações',
+    '/solicitacoes': 'Minhas Solicitações',
     '/execucao-tecnica': 'Execução Técnica',
     '/usuarios': 'Usuários',
     '/relatorios': 'Relatórios',
@@ -169,5 +183,10 @@ body {
   .app-shell:has(.sidebar) .main-wrapper {
     margin-left: 0;
   }
+  .content { padding: 24px 20px; }
+}
+
+@media (max-width: 560px) {
+  .content { padding: 18px 14px; }
 }
 </style>

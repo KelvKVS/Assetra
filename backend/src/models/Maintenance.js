@@ -4,12 +4,13 @@ const maintenanceSchema = new mongoose.Schema(
   {
     tenantId: { type: String, required: true, index: true },
     assetTag: { type: String, required: true },
-    type: { type: String, enum: ['Corretiva', 'Preventiva'], required: true },
+    type: { type: String, required: true, maxlength: 80 },
+    description: { type: String, default: '' },
     priority: { type: String, enum: ['Alta', 'Média', 'Baixa'], default: 'Média' },
     status: {
       type: String,
-      enum: ['Em andamento', 'Agendada', 'Concluída'],
-      default: 'Agendada',
+      enum: ['Aberta', 'Em andamento', 'Concluída'],
+      default: 'Aberta',
     },
     openingDate: { type: Date, default: Date.now },
   },
