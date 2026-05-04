@@ -16,12 +16,27 @@ enum Role {
   TECNICO
 }
 
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique // Identificador único na URL (ex: 'empresa-a')
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
+
+  @@map("tenants")
+}
+
 model User {
   id           String   @id @default(uuid())
   name         String
   email        String   @unique
   passwordHash String
   role         Role     @default(TECNICO)
+  active       Boolean  @default(true)
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

@@ -1,47 +1,67 @@
 import { Router } from 'express'
-import Asset from '../models/Asset.js'
 import { authMiddleware, authorize } from '../middlewares/auth.js'
+import { asyncHandler } from '../utils/asyncHandler.js'
+import { assetCreateSchema, assetStatusSchema } from '../schemas/index.js'
+import {
+  createAssetForTenant,
+  deleteAssetForTenant,
+  listAssetsByTenant,
+  updateAssetStatus,
+} from '../services/assetService.js'
 
 const router = Router()
 
-// Todos os autenticados podem ver ativos
-router.get('/', authMiddleware, async (req, res) => {
-  const assets = await Asset.find().sort({ updatedAt: -1 })
-  res.json(assets)
-})
+router.get(
+  '/',
+  authMiddleware,
+  asyncHandler(async (req, res) => {
+    const assets = await listAssetsByTenant(req.user.tenantId)
+    res.json(assets)
+  }),
+)
 
-// ADM e GESTOR podem criar ativos
-router.post('/', authMiddleware, authorize(['ADM', 'GESTOR']), async (req, res) => {
-  try {
-    const asset = new Asset({
-      ...req.body,
-      history: [{ action: 'CRIAÇÃO', userId: req.user.sub, details: 'Ativo cadastrado no sistema' }]
-    })
-    await asset.save()
+router.post(
+  '/',
+  authMiddleware,
+  authorize(['ADM', 'GESTOR']),
+  asyncHandler(async (req, res) => {
+    const parsed = assetCreateSchema.safeParse(req.body)
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Dados inválidos.', issues: parsed.error.flatten() })
+    }
+    const asset = await createAssetForTenant(req.user.tenantId, req.user.sub, parsed.data)
     res.status(201).json(asset)
-  } catch (e) {
-    res.status(400).json({ message: 'Erro ao criar ativo (Tag duplicada?)' })
-  }
-})
+  }),
+)
 
-// TECNICO pode atualizar status (ex: para manutenção)
-router.patch('/:id/status', authMiddleware, authorize(['ADM', 'GESTOR', 'TECNICO']), async (req, res) => {
-  const { status, details } = req.body
-  const asset = await Asset.findById(req.params.id)
-  
-  if (!asset) return res.status(404).json({ message: 'Ativo não encontrado' })
+router.patch(
+  '/:id/status',
+  authMiddleware,
+  authorize(['ADM', 'GESTOR', 'TECNICO']),
+  asyncHandler(async (req, res) => {
+    const parsed = assetStatusSchema.safeParse(req.body)
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Dados inválidos.', issues: parsed.error.flatten() })
+    }
+    const asset = await updateAssetStatus(
+      req.user.tenantId,
+      req.user.sub,
+      req.params.id,
+      parsed.data.status,
+      parsed.data.details,
+    )
+    res.json(asset)
+  }),
+)
 
-  asset.status = status
-  asset.history.push({ action: 'STATUS_UPDATE', userId: req.user.sub, details: details || `Status alterado para ${status}` })
-  
-  await asset.save()
-  res.json(asset)
-})
-
-// Apenas ADM pode deletar
-router.delete('/:id', authMiddleware, authorize(['ADM']), async (req, res) => {
-  await Asset.findByIdAndDelete(req.params.id)
-  res.status(204).send()
-})
+router.delete(
+  '/:id',
+  authMiddleware,
+  authorize(['ADM']),
+  asyncHandler(async (req, res) => {
+    await deleteAssetForTenant(req.user.tenantId, req.params.id)
+    res.status(204).send()
+  }),
+)
 
 export default router

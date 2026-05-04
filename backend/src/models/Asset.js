@@ -1,18 +1,27 @@
 import mongoose from 'mongoose'
 
-const assetSchema = new mongoose.Schema({
-  tag: { type: String, required: true, unique: true },
-  name: { type: String, required: true },
-  type: { type: String, required: true },
-  status: { type: String, enum: ['ATIVO', 'MANUTENCAO', 'DESCARTE'], default: 'ATIVO' },
-  location: { type: String },
-  assignedTo: { type: String }, // ID do usuário do SQL
-  history: [{
-    action: String,
-    date: { type: Date, default: Date.now },
-    userId: String,
-    details: String
-  }]
-}, { timestamps: true })
+const ASSET_STATUSES = ['Em uso', 'Disponível', 'Em manutenção']
+
+const assetSchema = new mongoose.Schema(
+  {
+    tenantId: { type: String, required: true, index: true },
+    tag: { type: String, required: true },
+    description: { type: String, required: true },
+    sector: { type: String, required: true },
+    status: { type: String, enum: ASSET_STATUSES, default: 'Disponível' },
+    assignedTo: { type: String },
+    history: [
+      {
+        action: String,
+        date: { type: Date, default: Date.now },
+        userId: String,
+        details: String,
+      },
+    ],
+  },
+  { timestamps: true },
+)
+
+assetSchema.index({ tenantId: 1, tag: 1 }, { unique: true })
 
 export default mongoose.model('Asset', assetSchema)
