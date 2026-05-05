@@ -59,6 +59,11 @@ export async function listMaintenancesForTenant(tenantId) {
   return rows.map(toDto)
 }
 
+/**
+ * Abre chamado de manutenção. O `dto` deve coincidir com `maintenanceCreateSchema`:
+ * `{ assetTag, type, description?, priority, status, openingDate? }`.
+ * O texto livre fica em `description` (não existe campo `details` no modelo).
+ */
 export async function createMaintenance(tenantId, userId, dto) {
   const asset = await Asset.findOne({ tenantId, tag: dto.assetTag.trim() })
   if (!asset) {

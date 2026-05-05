@@ -24,6 +24,11 @@ export async function listMovementsForTenant(tenantId) {
   return rows.map(toDto)
 }
 
+/**
+ * Cria registo de movimentação. O `dto` deve coincidir com `movementCreateSchema`:
+ * `{ assetTag, origin, destination, responsible }`.
+ * (Não existe `registerMovement` nem campos `newLocation`/`assignedTo` neste fluxo.)
+ */
 export async function createMovement(tenantId, userId, dto) {
   const m = new Movement({
     tenantId,
