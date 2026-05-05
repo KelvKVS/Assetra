@@ -13,16 +13,23 @@ import Movement from './src/models/Movement.js'
 import Maintenance from './src/models/Maintenance.js'
 import Approval from './src/models/Approval.js'
 
+const shouldResetMongo = String(process.env.SEED_RESET_MONGO || '')
+  .trim()
+  .toLowerCase() === 'true'
+
 async function seedMongo(tenantId) {
   const uri = process.env.MONGODB_URL || 'mongodb://127.0.0.1:27017/assetra'
   await mongoose.connect(uri)
 
-  await Asset.deleteMany({ tenantId })
-  await Movement.deleteMany({ tenantId })
-  await Maintenance.deleteMany({ tenantId })
-  await Approval.deleteMany({ tenantId })
+  if (shouldResetMongo) {
+    await Asset.deleteMany({ tenantId })
+    await Movement.deleteMany({ tenantId })
+    await Maintenance.deleteMany({ tenantId })
+    await Approval.deleteMany({ tenantId })
+    console.log('MongoDB: limpeza habilitada por SEED_RESET_MONGO=true.')
+  }
 
-  await Asset.insertMany([
+  const assets = [
     {
       tenantId,
       tag: 'AST-001',
@@ -50,75 +57,87 @@ async function seedMongo(tenantId) {
       assignedTo: 'gestor@assetra.local',
       history: [],
     },
-  ])
+  ]
+  for (const asset of assets) {
+    await Asset.updateOne({ tenantId: asset.tenantId, tag: asset.tag }, { $setOnInsert: asset }, { upsert: true })
+  }
 
-  await Movement.insertMany([
-    {
-      tenantId,
-      assetTag: 'AST-001',
-      origin: 'Estoque',
-      destination: 'Financeiro',
-      responsible: 'Gestor Assetra',
-      occurredAt: new Date(2026, 3, 8),
-    },
-    {
-      tenantId,
-      assetTag: 'AST-002',
-      origin: 'Compras',
-      destination: 'TI',
-      responsible: 'Técnico Assetra',
-      occurredAt: new Date(2026, 3, 2),
-    },
-  ])
+  const movementCount = await Movement.countDocuments({ tenantId })
+  if (movementCount === 0) {
+    await Movement.insertMany([
+      {
+        tenantId,
+        assetTag: 'AST-001',
+        origin: 'Estoque',
+        destination: 'Financeiro',
+        responsible: 'Gestor Assetra',
+        occurredAt: new Date(2026, 3, 8),
+      },
+      {
+        tenantId,
+        assetTag: 'AST-002',
+        origin: 'Compras',
+        destination: 'TI',
+        responsible: 'Técnico Assetra',
+        occurredAt: new Date(2026, 3, 2),
+      },
+    ])
+  }
 
-  await Maintenance.insertMany([
-    {
-      tenantId,
-      assetTag: 'AST-003',
-      type: 'Corretiva',
-      description: 'Falha intermitente de vídeo durante o uso',
-      priority: 'Alta',
-      status: 'Em andamento',
-      openingDate: new Date(2026, 3, 10),
-    },
-    {
-      tenantId,
-      assetTag: 'AST-002',
-      type: 'Preventiva',
-      description: 'Rotina de verificação e limpeza programada',
-      priority: 'Média',
-      status: 'Aberta',
-      openingDate: new Date(2026, 3, 5),
-    },
-  ])
+  const maintenanceCount = await Maintenance.countDocuments({ tenantId })
+  if (maintenanceCount === 0) {
+    await Maintenance.insertMany([
+      {
+        tenantId,
+        assetTag: 'AST-003',
+        type: 'Corretiva',
+        description: 'Falha intermitente de vídeo durante o uso',
+        priority: 'Alta',
+        status: 'Em andamento',
+        openingDate: new Date(2026, 3, 10),
+      },
+      {
+        tenantId,
+        assetTag: 'AST-002',
+        type: 'Preventiva',
+        description: 'Rotina de verificação e limpeza programada',
+        priority: 'Média',
+        status: 'Aberta',
+        openingDate: new Date(2026, 3, 5),
+      },
+    ])
+  }
 
-  await Approval.insertMany([
-    {
-      tenantId,
-      type: 'Movimentação',
-      assetTag: 'AST-001',
-      description: 'Transferência para Financeiro',
-      status: 'Pendente',
-    },
-    {
-      tenantId,
-      type: 'Manutenção',
-      assetTag: 'AST-003',
-      description: 'Troca de placa de vídeo',
-      status: 'Pendente',
-    },
-    {
-      tenantId,
-      type: 'Movimentação',
-      assetTag: 'AST-002',
-      description: 'Retorno para Estoque',
-      status: 'Aprovada',
-      decidedAt: new Date(),
-    },
-  ])
+  const approvalCount = await Approval.countDocuments({ tenantId })
+  if (approvalCount === 0) {
+    await Approval.insertMany([
+      {
+        tenantId,
+        type: 'Movimentação',
+        assetTag: 'AST-001',
+        description: 'Transferência para Financeiro',
+        status: 'Pendente',
+      },
+      {
+        tenantId,
+        type: 'Manutenção',
+        assetTag: 'AST-003',
+        description: 'Troca de placa de vídeo',
+        status: 'Pendente',
+      },
+      {
+        tenantId,
+        type: 'Movimentação',
+        assetTag: 'AST-002',
+        description: 'Retorno para Estoque',
+        status: 'Aprovada',
+        decidedAt: new Date(),
+      },
+    ])
+  }
 
   await mongoose.disconnect()
-  console.log('MongoDB: dados de demonstração inseridos para o tenant.')
+  console.log('MongoDB: seed seguro concluído (sem sobrescrever dados existentes).')
 }
 
 async function seed() {

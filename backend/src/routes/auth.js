@@ -31,7 +31,7 @@ router.post(
 
     res.cookie('token', token, getCookieOptions())
 
-    return res.json({ user })
+    return res.json({ user, token })
   }),
 )
 
@@ -45,7 +45,7 @@ router.post(
 
     const { token, user } = await authenticateGoogleUser(prisma, parsed.data)
     res.cookie('token', token, getCookieOptions())
-    return res.json({ user })
+    return res.json({ user, token })
   }),
 )
 

@@ -1,9 +1,11 @@
 import { defineStore } from 'pinia'
 import api from '../services/api'
+import { setSessionToken } from '../services/api'
 import type { Profile } from '../types/assetra'
 
 const LEGACY_MOCK_SESSION = 'assetra-mock-session'
 const LEGACY_MOCK_DATA = 'assetra-mock-data-v1'
+const AUTH_TOKEN_KEY = 'assetra-auth-token'
 
 export type TenantInfo = {
   slug: string
@@ -25,6 +27,26 @@ function clearLegacyMockStorage() {
     localStorage.removeItem(LEGACY_MOCK_DATA)
   } catch {
     /* ignore */
+  }
+}
+
+function persistToken(token?: string) {
+  const value = token?.trim() || ''
+  setSessionToken(value)
+  try {
+    if (value) localStorage.setItem(AUTH_TOKEN_KEY, value)
+    else localStorage.removeItem(AUTH_TOKEN_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadPersistedToken() {
+  try {
+    const token = localStorage.getItem(AUTH_TOKEN_KEY) || ''
+    setSessionToken(token)
+  } catch {
+    setSessionToken('')
   }
 }
 
@@ -58,6 +80,7 @@ export const useAuthStore = defineStore('auth', {
           tenantId: data.user.tenantId,
           tenant: data.user.tenant,
         }
+        persistToken(data.token)
         clearLegacyMockStorage()
       } catch (error: unknown) {
         const ax = error as { response?: { data?: { message?: string } } }
@@ -84,6 +107,7 @@ export const useAuthStore = defineStore('auth', {
           tenantId: data.user.tenantId,
           tenant: data.user.tenant,
         }
+        persistToken(data.token)
         clearLegacyMockStorage()
       } catch (error: unknown) {
         const ax = error as { response?: { data?: { message?: string } } }
@@ -94,6 +118,7 @@ export const useAuthStore = defineStore('auth', {
       }
     },
     async fetchMe() {
+      loadPersistedToken()
       try {
         const res = await api.get('/auth/me', { silent401: true } as Record<string, unknown>)
         if (res?.status === 200 && res.data?.user) {
@@ -108,9 +133,11 @@ export const useAuthStore = defineStore('auth', {
           clearLegacyMockStorage()
         } else {
           this.user = null
+          persistToken('')
         }
       } catch {
         this.user = null
+        persistToken('')
       } finally {
         this.bootstrapped = true
       }
@@ -123,6 +150,7 @@ export const useAuthStore = defineStore('auth', {
         /* API offline */
       }
       this.user = null
+      persistToken('')
     },
   },
 })

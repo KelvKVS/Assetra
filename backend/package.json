@@ -8,6 +8,8 @@
     "start": "node src/server.js",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
+    "seed": "node seed.js",
+    "seed:safe": "node seed.js",
     "test": "node --test src/services/authService.test.js"
   },
   "keywords": [],

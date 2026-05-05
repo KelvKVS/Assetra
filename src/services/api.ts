@@ -3,12 +3,25 @@ import axios, { type InternalAxiosRequestConfig } from 'axios'
 type AxiosConfigWithSilent = InternalAxiosRequestConfig & { silent401?: boolean }
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || '/api'
+let sessionToken = ''
+
+export function setSessionToken(token?: string) {
+  sessionToken = token?.trim() || ''
+}
 
 const api = axios.create({
   baseURL: apiBaseUrl,
   withCredentials: true,
   timeout: 15_000,
   validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
+})
+
+api.interceptors.request.use((config) => {
+  if (sessionToken) {
+    config.headers = config.headers ?? {}
+    config.headers.Authorization = `Bearer ${sessionToken}`
+  }
+  return config
 })
 
 /**
@@ -28,6 +41,9 @@ api.interceptors.response.use(
         headers: {},
         config: cfg,
       })
+    }
+    if (error?.response?.status === 401) {
+      setSessionToken('')
     }
     return Promise.reject(error)
   },
