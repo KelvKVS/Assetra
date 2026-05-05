@@ -86,6 +86,21 @@
               <LogIn v-else :size="20" />
               {{ authStore.isLoading ? 'Entrando...' : 'Entrar' }}
             </button>
+
+            <button
+              type="button"
+              class="google-btn"
+              :disabled="authStore.isLoading"
+              @click="handleGoogleLogin"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.2 1.2-1.4 3.6-5.5 3.6-3.3 0-6-2.8-6-6.2s2.7-6.2 6-6.2c1.9 0 3.1.8 3.8 1.5l2.6-2.6C16.9 2.8 14.7 2 12 2 6.9 2 2.8 6.2 2.8 11.4s4.1 9.4 9.2 9.4c5.3 0 8.8-3.7 8.8-8.9 0-.6-.1-1.1-.2-1.6H12z"/>
+              </svg>
+              {{ authStore.isLoading ? 'Aguarde...' : 'Entrar / Cadastrar com Google' }}
+            </button>
+            <p v-if="!googleReady" class="google-hint">
+              Configure <code>VITE_GOOGLE_CLIENT_ID</code> no frontend para ativar o Google.
+            </p>
           </form>
 
           <!-- Error Alert -->
@@ -137,7 +152,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import {
@@ -156,8 +171,30 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const tenantSlug = ref('default')
-const email = ref('admin@assetra.local')
-const password = ref('Admin@12345')
+const email = ref('')
+const password = ref('')
+const googleReady = ref(false)
+
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
+const hasValidGoogleClientId = Boolean(
+  googleClientId?.trim() && !googleClientId.toLowerCase().includes('seu-client-id'),
+)
+
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (cfg: {
+            client_id: string
+            callback: (response: { credential?: string }) => void
+          }) => void
+          prompt: () => void
+        }
+      }
+    }
+  }
+}
 
 watch(
   () => route.params.tenantSlug,
@@ -185,6 +222,78 @@ const handleLogin = async () => {
     // Erros são tratados no store
   }
 }
+
+const onGoogleCredential = async (response: { credential?: string }) => {
+  const token = response?.credential
+  if (!token) {
+    authStore.error = 'Não foi possível obter credencial do Google.'
+    return
+  }
+  try {
+    await authStore.loginWithGoogle(token, tenantSlug.value || undefined)
+    router.push('/dashboard')
+  } catch {
+    // mensagem já tratada no store
+  }
+}
+
+function loadGoogleScript() {
+  return new Promise<void>((resolve, reject) => {
+    if (window.google?.accounts?.id) {
+      resolve()
+      return
+    }
+    const existing = document.getElementById('google-identity-script')
+    if (existing) {
+      existing.addEventListener('load', () => resolve(), { once: true })
+      existing.addEventListener('error', () => reject(new Error('Erro ao carregar Google script')), { once: true })
+      return
+    }
+    const script = document.createElement('script')
+    script.id = 'google-identity-script'
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.async = true
+    script.defer = true
+    script.onload = () => resolve()
+    script.onerror = () => reject(new Error('Erro ao carregar Google script'))
+    document.head.appendChild(script)
+  })
+}
+
+const handleGoogleLogin = () => {
+  if (!hasValidGoogleClientId) {
+    authStore.error = 'Login Google indisponível: configure VITE_GOOGLE_CLIENT_ID no frontend.'
+    return
+  }
+  if (!googleReady.value || !window.google?.accounts?.id) {
+    authStore.error = 'Login Google ainda não inicializado. Recarregue a página e tente novamente.'
+    return
+  }
+  window.google.accounts.id.prompt()
+}
+
+onMounted(async () => {
+  if (!hasValidGoogleClientId) {
+    googleReady.value = false
+    return
+  }
+  try {
+    await loadGoogleScript()
+    if (!window.google?.accounts?.id) return
+    window.google.accounts.id.initialize({
+      client_id: googleClientId,
+      callback: onGoogleCredential,
+    })
+    googleReady.value = true
+  } catch {
+    googleReady.value = false
+  }
+})
+
+onBeforeUnmount(() => {
+  // Mantemos script global carregado; apenas limpamos estado local.
+  googleReady.value = false
+})
 </script>
 
 <style scoped>
@@ -352,6 +461,44 @@ const handleLogin = async () => {
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.3s ease;
+}
+
+.google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.google-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.google-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.google-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.google-hint {
+  margin: -10px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .login-btn:hover {

@@ -67,6 +67,32 @@ export const useAuthStore = defineStore('auth', {
         this.isLoading = false
       }
     },
+    async loginWithGoogle(credential: string, tenantSlug?: string) {
+      this.isLoading = true
+      this.error = ''
+      try {
+        const slug = tenantSlug?.trim()
+        const { data } = await api.post('/auth/google', {
+          credential,
+          ...(slug ? { tenantSlug: slug } : {}),
+        })
+        this.user = {
+          id: data.user.id,
+          name: data.user.name,
+          email: data.user.email,
+          role: data.user.role as Profile,
+          tenantId: data.user.tenantId,
+          tenant: data.user.tenant,
+        }
+        clearLegacyMockStorage()
+      } catch (error: unknown) {
+        const ax = error as { response?: { data?: { message?: string } } }
+        this.error = ax?.response?.data?.message ?? 'Falha no login com Google.'
+        throw error
+      } finally {
+        this.isLoading = false
+      }
+    },
     async fetchMe() {
       try {
         const res = await api.get('/auth/me', { silent401: true } as Record<string, unknown>)

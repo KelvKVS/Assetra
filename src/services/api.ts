@@ -2,8 +2,10 @@ import axios, { type InternalAxiosRequestConfig } from 'axios'
 
 type AxiosConfigWithSilent = InternalAxiosRequestConfig & { silent401?: boolean }
 
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || '/api'
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: apiBaseUrl,
   withCredentials: true,
   timeout: 15_000,
   validateStatus: (status) => (status >= 200 && status < 300) || status === 304,

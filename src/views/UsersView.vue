@@ -39,6 +39,26 @@
             <option>Inativo</option>
           </select>
         </div>
+        <div class="form-group">
+          <label>Senha inicial</label>
+          <input
+            v-model="newUser.password"
+            type="password"
+            minlength="8"
+            placeholder="Mínimo 8 caracteres"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label>Confirmar senha</label>
+          <input
+            v-model="newUser.confirmPassword"
+            type="password"
+            minlength="8"
+            placeholder="Repita a senha"
+            required
+          />
+        </div>
         <div class="form-actions">
           <button type="submit" class="btn-primary">Cadastrar</button>
           <button type="button" class="btn-secondary" @click="showForm = false">Cancelar</button>
@@ -125,6 +145,24 @@
               <option>Inativo</option>
             </select>
           </div>
+          <div class="form-group">
+            <label>Nova senha (opcional)</label>
+            <input
+              v-model="editUser.password"
+              type="password"
+              minlength="8"
+              placeholder="Deixe vazio para não alterar"
+            />
+          </div>
+          <div class="form-group">
+            <label>Confirmar nova senha</label>
+            <input
+              v-model="editUser.confirmPassword"
+              type="password"
+              minlength="8"
+              placeholder="Repita a nova senha"
+            />
+          </div>
           <div class="modal-actions">
             <button type="submit" class="btn-primary">Salvar</button>
             <button type="button" class="btn-secondary" @click="cancelUserEdit">Cancelar</button>
@@ -162,6 +200,8 @@ const newUser = reactive({
   email: '',
   profile: 'TECNICO',
   status: 'Ativo',
+  password: '',
+  confirmPassword: '',
 })
 
 const editUser = reactive({
@@ -169,6 +209,8 @@ const editUser = reactive({
   email: '',
   profile: 'TECNICO',
   status: 'Ativo',
+  password: '',
+  confirmPassword: '',
 })
 
 const inventory = useInventoryStore()
@@ -187,14 +229,30 @@ const filteredUsers = computed(() => {
 
 const addUser = async () => {
   formError.value = ''
+  if (newUser.password.length < 8) {
+    formError.value = 'A senha deve ter pelo menos 8 caracteres.'
+    return
+  }
+  if (newUser.password !== newUser.confirmPassword) {
+    formError.value = 'A confirmação de senha não corresponde.'
+    return
+  }
   const ok = await confirm.ask('Confirme com a sua senha para cadastrar este utilizador.')
   if (!ok) return
   try {
-    await inventory.createUser({ ...newUser })
+    await inventory.createUser({
+      name: newUser.name,
+      email: newUser.email,
+      profile: newUser.profile,
+      status: newUser.status,
+      password: newUser.password,
+    })
     newUser.name = ''
     newUser.email = ''
     newUser.profile = 'TECNICO'
     newUser.status = 'Ativo'
+    newUser.password = ''
+    newUser.confirmPassword = ''
     showForm.value = false
   } catch (e: unknown) {
     const ax = e as { response?: { data?: { message?: string } } }
@@ -223,6 +281,8 @@ const startUserEdit = (user: DirectoryUser) => {
   editUser.email = user.email
   editUser.profile = user.role
   editUser.status = user.status as typeof editUser.status
+  editUser.password = ''
+  editUser.confirmPassword = ''
 }
 
 const cancelUserEdit = () => {
@@ -232,15 +292,33 @@ const cancelUserEdit = () => {
 const saveUserEdit = async () => {
   formError.value = ''
   if (!editingUserId.value) return
+  if (editUser.password && editUser.password.length < 8) {
+    formError.value = 'A nova senha deve ter pelo menos 8 caracteres.'
+    return
+  }
+  if (editUser.password || editUser.confirmPassword) {
+    if (editUser.password !== editUser.confirmPassword) {
+      formError.value = 'A confirmação da nova senha não corresponde.'
+      return
+    }
+  }
   const ok = await confirm.ask('Confirme com a sua senha para guardar as alterações.')
   if (!ok) return
   try {
-    await inventory.updateUser(editingUserId.value, {
+    const payload: {
+      name: string
+      email: string
+      profile: string
+      status: string
+      password?: string
+    } = {
       name: editUser.name,
       email: editUser.email,
       profile: editUser.profile,
       status: editUser.status,
-    })
+    }
+    if (editUser.password) payload.password = editUser.password
+    await inventory.updateUser(editingUserId.value, payload)
     editingUserId.value = null
   } catch (e: unknown) {
     const ax = e as { response?: { data?: { message?: string } } }

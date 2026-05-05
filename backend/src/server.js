@@ -32,12 +32,19 @@ connectNoSQL() // Conexão MongoDB
 
 const app = express()
 const port = Number(process.env.PORT) || 3000
-const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173'
+const allowedOrigins = String(process.env.CORS_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
 
 app.use(helmet())
 app.use(
   cors({
-    origin: corsOrigin,
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true)
+      if (allowedOrigins.includes(origin)) return callback(null, true)
+      return callback(new AppError(403, `Origem não permitida por CORS: ${origin}`))
+    },
     credentials: true,
   }),
 )

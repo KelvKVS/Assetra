@@ -7,6 +7,11 @@ export const loginSchema = z.object({
   tenantSlug: z.string().trim().max(64).nullish(),
 })
 
+export const googleAuthSchema = z.object({
+  credential: z.string().min(1).max(4000),
+  tenantSlug: z.string().trim().max(64).nullish(),
+})
+
 const profileEnum = z.enum(['Administrador', 'Gestor', 'Técnico', 'ADM', 'GESTOR', 'TECNICO'])
 const userStatusEnum = z.enum(['Ativo', 'Inativo'])
 

@@ -3,10 +3,21 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { authMiddleware } from '../middlewares/auth.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
-import { loginSchema, passwordVerifySchema } from '../schemas/index.js'
-import { authenticateUser } from '../services/authService.js'
+import { googleAuthSchema, loginSchema, passwordVerifySchema } from '../schemas/index.js'
+import { authenticateGoogleUser, authenticateUser } from '../services/authService.js'
 
 const router = Router()
+const isProd = process.env.NODE_ENV === 'production'
+
+function getCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: isProd,
+    // Render (API) + Vercel (frontend) precisam de cookie cross-site em produção.
+    sameSite: isProd ? 'none' : 'lax',
+    maxAge: 60 * 60 * 1000,
+  }
+}
 
 router.post(
   '/login',
@@ -18,19 +29,28 @@ router.post(
 
     const { token, user } = await authenticateUser(prisma, parsed.data)
 
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 1000,
-    })
+    res.cookie('token', token, getCookieOptions())
 
     return res.json({ user })
   }),
 )
 
+router.post(
+  '/google',
+  asyncHandler(async (req, res) => {
+    const parsed = googleAuthSchema.safeParse(req.body)
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Dados de autenticação Google inválidos.' })
+    }
+
+    const { token, user } = await authenticateGoogleUser(prisma, parsed.data)
+    res.cookie('token', token, getCookieOptions())
+    return res.json({ user })
+  }),
+)
+
 router.post('/logout', (_req, res) => {
-  res.clearCookie('token')
+  res.clearCookie('token', getCookieOptions())
   return res.status(204).send()
 })
 
