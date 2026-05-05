@@ -117,7 +117,7 @@
               <button
                 type="button"
                 class="demo-user"
-                @click="fillForm('admin@assetra.local', 'Admin@12345', 'default')"
+                @click="fillForm('admin@assetra.local', 'senha123', 'default')"
               >
                 <span class="role-tag adm">ADM</span>
                 <code>admin@assetra.local</code>
@@ -127,7 +127,7 @@
               <button
                 type="button"
                 class="demo-user"
-                @click="fillForm('gestor@assetra.local', 'Gestor@12345', 'default')"
+                @click="fillForm('gestor@assetra.local', 'senha123', 'default')"
               >
                 <span class="role-tag gestor">GESTOR</span>
                 <code>gestor@assetra.local</code>
@@ -137,7 +137,7 @@
               <button
                 type="button"
                 class="demo-user"
-                @click="fillForm('tecnico@assetra.local', 'Tecnico@12345', 'default')"
+                @click="fillForm('tecnico@assetra.local', 'senha123', 'default')"
               >
                 <span class="role-tag tecnico">TÉCNICO</span>
                 <code>tecnico@assetra.local</code>

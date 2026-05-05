@@ -17,6 +17,37 @@
         <Search class="search-icon" :size="16" />
       </div>
       <div v-if="authStore.user" class="user-profile">
+        <div class="notifications" ref="notificationsRef">
+          <button
+            class="notif-btn"
+            type="button"
+            @click="toggleNotifications"
+            aria-label="Abrir notificações"
+          >
+            <Bell :size="18" />
+            <span v-if="unreadCount > 0" class="notif-badge">{{ unreadCount }}</span>
+          </button>
+          <div v-if="notificationsOpen" class="notif-dropdown">
+            <div class="notif-header">
+              <strong>Notificações</strong>
+              <small>{{ unreadCount }} novas</small>
+            </div>
+            <button
+              v-for="notification in notifications"
+              :key="notification.id"
+              class="notif-item"
+              type="button"
+              @click="openNotification(notification)"
+            >
+              <div class="notif-title">{{ notification.title }}</div>
+              <div class="notif-meta">
+                <span>De: {{ notification.sender }}</span>
+                <span>{{ notification.timeLabel }}</span>
+              </div>
+            </button>
+            <p v-if="notifications.length === 0" class="notif-empty">Sem novidades no momento.</p>
+          </div>
+        </div>
         <div class="user-avatar">{{ userInitial }}</div>
         <div class="user-info">
           <strong>{{ authStore.user.name }}</strong>
@@ -31,12 +62,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useInventoryStore } from '../stores/inventory'
 import { roleLabelPt } from '../utils/roleLabels'
 import { useSidebar } from '../composables/useSidebar'
-import { Search, LogOut, Menu } from 'lucide-vue-next'
+import { Search, LogOut, Menu, Bell } from 'lucide-vue-next'
 
 const sidebar = useSidebar()
 
@@ -45,11 +77,114 @@ defineProps<{
 }>()
 
 const authStore = useAuthStore()
+const inventoryStore = useInventoryStore()
 const router = useRouter()
+const notificationsOpen = ref(false)
+const notificationsRef = ref<HTMLElement | null>(null)
+let notificationsTimer: ReturnType<typeof setInterval> | null = null
+
+type UiNotification = {
+  id: string
+  title: string
+  sender: string
+  timeLabel: string
+  timestamp: number
+  route: string
+}
 
 const userInitial = computed(() => authStore.user?.name?.charAt(0).toUpperCase() ?? 'U')
 
 const roleLabel = computed(() => roleLabelPt(authStore.user?.role))
+
+const notifications = computed<UiNotification[]>(() => {
+  const items: UiNotification[] = []
+  const role = authStore.user?.role
+
+  if (role === 'ADM' || role === 'GESTOR') {
+    for (const approval of inventoryStore.approvals.filter((a) => a.status === 'Pendente')) {
+      items.push({
+        id: `approval-pending-${approval.id}`,
+        title: `${approval.type} pendente: ${approval.assetTag}`,
+        sender: approval.requestedByName || 'Utilizador',
+        timeLabel: formatDateTime(approval.createdAt),
+        timestamp: parseDate(approval.createdAt),
+        route: '/aprovacoes',
+      })
+    }
+  }
+
+  for (const approval of inventoryStore.myApprovals.filter((a) => a.status !== 'Pendente')) {
+    items.push({
+      id: `approval-mine-${approval.id}`,
+      title: `Solicitação ${approval.status.toLowerCase()}: ${approval.assetTag}`,
+      sender: approval.decidedByName || 'Gestão',
+      timeLabel: formatDateTime(approval.decidedAt || approval.createdAt),
+      timestamp: parseDate(approval.decidedAt || approval.createdAt),
+      route: '/solicitacoes',
+    })
+  }
+
+  return items
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, 20)
+})
+
+const unreadCount = computed(() => notifications.value.length)
+
+function formatDateTime(raw?: string | null) {
+  if (!raw) return 'agora'
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return 'agora'
+  return d.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function parseDate(raw?: string | null) {
+  if (!raw) return Date.now()
+  const d = new Date(raw)
+  return Number.isNaN(d.getTime()) ? Date.now() : d.getTime()
+}
+
+function toggleNotifications() {
+  notificationsOpen.value = !notificationsOpen.value
+}
+
+function openNotification(notification: UiNotification) {
+  notificationsOpen.value = false
+  router.push(notification.route)
+}
+
+function onClickOutside(event: MouseEvent) {
+  if (!notificationsRef.value) return
+  const target = event.target as Node | null
+  if (target && !notificationsRef.value.contains(target)) {
+    notificationsOpen.value = false
+  }
+}
+
+onMounted(async () => {
+  document.addEventListener('click', onClickOutside)
+  if (!authStore.isAuthenticated) return
+  const refreshNotifications = async () => {
+    await Promise.allSettled([
+      inventoryStore.fetchApprovalsSafe(),
+      inventoryStore.fetchMyApprovalsSafe(),
+    ])
+  }
+  await refreshNotifications()
+  notificationsTimer = setInterval(() => {
+    void refreshNotifications()
+  }, 45_000)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onClickOutside)
+  if (notificationsTimer) clearInterval(notificationsTimer)
+})
 
 const handleLogout = async () => {
   await authStore.logout()
@@ -78,7 +213,7 @@ const handleLogout = async () => {
 }
 
 .menu-btn {
-  display: none;
+  display: flex;
   background: #1f2937;
   border: 1px solid #374151;
   color: #fff;
@@ -165,6 +300,102 @@ const handleLogout = async () => {
   color: #fff;
 }
 
+.notifications {
+  position: relative;
+}
+
+.notif-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  color: #fff;
+  position: relative;
+  cursor: pointer;
+}
+
+.notif-btn:hover {
+  background: #374151;
+}
+
+.notif-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+.notif-dropdown {
+  position: absolute;
+  top: 44px;
+  right: 0;
+  width: 320px;
+  max-height: 380px;
+  overflow-y: auto;
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+  z-index: 30;
+}
+
+.notif-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid #1f2937;
+  color: #e5e7eb;
+}
+
+.notif-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #e5e7eb;
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #1f2937;
+  cursor: pointer;
+}
+
+.notif-item:hover {
+  background: #1f2937;
+}
+
+.notif-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.notif-meta {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #9ca3af;
+  display: flex;
+  justify-content: space-between;
+}
+
+.notif-empty {
+  margin: 0;
+  padding: 14px 12px;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
 .user-info {
   display: flex;
   flex-direction: column;
@@ -202,10 +433,6 @@ const handleLogout = async () => {
   color: #fff;
 }
 
-@media (max-width: 1024px) {
-  .menu-btn { display: flex; }
-}
-
 @media (max-width: 900px) {
   .topbar { padding: 14px 18px; gap: 12px; }
   .page-title { font-size: 20px; }
@@ -218,5 +445,9 @@ const handleLogout = async () => {
   .topbar { padding: 12px 14px; }
   .page-title { font-size: 18px; }
   .user-info { display: none; }
+  .notif-dropdown {
+    right: -40px;
+    width: min(92vw, 320px);
+  }
 }
 </style>

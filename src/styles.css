@@ -120,6 +120,18 @@ body {
   transition: background-color var(--transition-slow), color var(--transition-slow);
 }
 
+/* Garante render consistente dos ícones Lucide em todas as telas */
+.lucide {
+  width: 1em;
+  height: 1em;
+  display: block;
+  flex-shrink: 0;
+  stroke: currentColor;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* Focus styles */
 :focus-visible {
   outline: none;

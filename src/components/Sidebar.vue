@@ -11,7 +11,7 @@
         <div class="logo-icon-wrapper">
           <Box :size="28" :stroke-width="2.5" color="#3b82f6" />
         </div>
-        <span class="logo-text">Assetra</span>
+        <RouterLink to="/dashboard" class="logo-text">Assetra</RouterLink>
         <button
           class="sidebar-close"
           type="button"
@@ -194,6 +194,11 @@ watch(
   font-weight: 800;
   color: #fff;
   letter-spacing: -0.5px;
+  text-decoration: none;
+}
+
+.logo-text:hover {
+  color: #bfdbfe;
 }
 
 .logo-subtitle {

@@ -154,19 +154,19 @@ async function seed() {
     {
       email: 'admin@assetra.local',
       name: 'Administrador Assetra',
-      password: 'Admin@12345',
+      password: 'senha123',
       role: 'ADM',
     },
     {
       email: 'gestor@assetra.local',
       name: 'Gestor Assetra',
-      password: 'Gestor@12345',
+      password: 'senha123',
       role: 'GESTOR',
     },
     {
       email: 'tecnico@assetra.local',
       name: 'Técnico Assetra',
-      password: 'Tecnico@12345',
+      password: 'senha123',
       role: 'TECNICO',
     },
   ]
