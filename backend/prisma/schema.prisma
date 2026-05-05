@@ -1,12 +1,11 @@
-// Prisma schema (SQLite por padrão para desenvolvimento sem dependências externas).
-// Para PostgreSQL, troque o provider para "postgresql" e ajuste DATABASE_URL.
+// Prisma schema para PostgreSQL (produção no Render).
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -22,7 +21,7 @@ model Tenant {
   @@map("tenants")
 }
 
-/// Papel do utilizador. SQLite não suporta enum nativo; o serviço valida ADM | GESTOR | TECNICO.
+/// Papel do utilizador. O serviço valida ADM | GESTOR | TECNICO.
 model User {
   id           String   @id @default(uuid())
   name         String
