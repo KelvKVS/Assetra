@@ -82,6 +82,7 @@ const router = useRouter()
 const notificationsOpen = ref(false)
 const notificationsRef = ref<HTMLElement | null>(null)
 let notificationsTimer: ReturnType<typeof setInterval> | null = null
+const readNotificationIds = ref<string[]>([])
 
 type UiNotification = {
   id: string
@@ -129,7 +130,11 @@ const notifications = computed<UiNotification[]>(() => {
     .slice(0, 20)
 })
 
-const unreadCount = computed(() => notifications.value.length)
+const unreadCount = computed(
+  () => notifications.value.filter((n) => !readNotificationIds.value.includes(n.id)).length,
+)
+
+const readStorageKey = computed(() => `assetra-read-notifications:${authStore.user?.id ?? 'guest'}`)
 
 function formatDateTime(raw?: string | null) {
   if (!raw) return 'agora'
@@ -151,6 +156,7 @@ function parseDate(raw?: string | null) {
 
 function toggleNotifications() {
   notificationsOpen.value = !notificationsOpen.value
+  if (notificationsOpen.value) markAllAsRead()
 }
 
 function openNotification(notification: UiNotification) {
@@ -166,9 +172,38 @@ function onClickOutside(event: MouseEvent) {
   }
 }
 
+function persistReadState() {
+  try {
+    localStorage.setItem(readStorageKey.value, JSON.stringify(readNotificationIds.value))
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadReadState() {
+  try {
+    const raw = localStorage.getItem(readStorageKey.value)
+    if (!raw) {
+      readNotificationIds.value = []
+      return
+    }
+    const parsed = JSON.parse(raw)
+    readNotificationIds.value = Array.isArray(parsed) ? parsed : []
+  } catch {
+    readNotificationIds.value = []
+  }
+}
+
+function markAllAsRead() {
+  const allIds = notifications.value.map((n) => n.id)
+  readNotificationIds.value = Array.from(new Set([...readNotificationIds.value, ...allIds]))
+  persistReadState()
+}
+
 onMounted(async () => {
   document.addEventListener('click', onClickOutside)
   if (!authStore.isAuthenticated) return
+  loadReadState()
   const refreshNotifications = async () => {
     await Promise.allSettled([
       inventoryStore.fetchApprovalsSafe(),

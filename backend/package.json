@@ -10,6 +10,7 @@
     "prisma:push": "prisma db push",
     "seed": "node seed.js",
     "seed:safe": "node seed.js",
+    "seed:if-enabled": "node scripts/seed-if-enabled.js",
     "test": "node --test src/services/authService.test.js"
   },
   "keywords": [],
