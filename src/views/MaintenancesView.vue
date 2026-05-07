@@ -405,7 +405,7 @@ const scopedMaintenances = computed(() =>
 
 const pageSubtitle = computed(() =>
   isTechnician.value
-    ? 'Ordens de serviço que envolvem os ativos atribuídos a você'
+    ? 'Ordens de serviço atribuídas a você ou relacionadas aos seus ativos'
     : 'Gestão de chamados e ordens de serviço',
 )
 const assetOptions = computed(() => inventory.assets)
@@ -421,14 +421,14 @@ const filteredCreateTechnicianSuggestions = computed(() => {
   const q = newMaintenance.assignedTechnicianEmail.trim().toLowerCase()
   if (!q) return technicianUsers.value.slice(0, 8)
   return technicianUsers.value
-    .filter((tech) => `${tech.name} ${tech.email}`.toLowerCase().includes(q))
+    .filter((tech) => `${tech.name} ${String(tech.email ?? '').trim()}`.toLowerCase().includes(q))
     .slice(0, 6)
 })
 const filteredEditTechnicianSuggestions = computed(() => {
   const q = editMaintenance.assignedTechnicianEmail.trim().toLowerCase()
   if (!q) return technicianUsers.value.slice(0, 8)
   return technicianUsers.value
-    .filter((tech) => `${tech.name} ${tech.email}`.toLowerCase().includes(q))
+    .filter((tech) => `${tech.name} ${String(tech.email ?? '').trim()}`.toLowerCase().includes(q))
     .slice(0, 6)
 })
 const showCreateAssetSuggestions = computed(() => isCreateAssetFocused.value && filteredCreateAssetSuggestions.value.length > 0)

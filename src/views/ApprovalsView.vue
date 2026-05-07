@@ -51,6 +51,9 @@
             <component :is="typeIcon(item.type)" :size="16" :stroke-width="2.5" />
             {{ item.type }}
           </span>
+          <span v-if="item.type === 'Manutenção' && item.maintenanceId" class="reassignable-badge">
+            Realocável
+          </span>
           <span :class="['status-badge', `status-${statusClass(item.status)}`]">
             {{ item.status }}
           </span>
@@ -111,6 +114,24 @@
             Reprovar
           </button>
         </div>
+        <div v-if="canReassignApproval(item)" class="reassign-box">
+          <label>Não ficou bom? Reprovar e realocar:</label>
+          <div class="reassign-row">
+            <select v-model="reassignmentTargetByApprovalId[item.id]">
+              <option value="">Selecione outro técnico</option>
+              <option v-for="tech in technicianUsers" :key="`tech-${tech.id}`" :value="tech.email">
+                {{ tech.name }} ({{ tech.email }})
+              </option>
+            </select>
+            <button
+              class="btn-reassign"
+              :disabled="!reassignmentTargetByApprovalId[item.id]"
+              @click="reassignMaintenance(item)"
+            >
+              Reprovar e realocar
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -123,7 +144,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, type Component } from 'vue'
+import { computed, onMounted, reactive, ref, type Component } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useInventoryStore, type ApprovalRow } from '../stores/inventory'
 import { useConfirmAction } from '../composables/useConfirmAction'
@@ -153,13 +174,15 @@ const role = computed(() => authStore.user?.role)
 const canApprove = computed(() => role.value === 'ADM' || role.value === 'GESTOR')
 
 onMounted(async () => {
-  await Promise.allSettled([inventory.fetchApprovalsSafe(), inventory.fetchAssets()])
+  await Promise.allSettled([inventory.fetchApprovalsSafe(), inventory.fetchAssets(), inventory.fetchUsers()])
 })
 
 const search = ref('')
 const filter = ref<'all' | ApprovalStatus>('all')
+const reassignmentTargetByApprovalId = reactive<Record<string, string>>({})
 
 const approvals = computed(() => inventory.approvals)
+const technicianUsers = computed(() => inventory.users.filter((u) => u.role === 'TECNICO' && u.status === 'Ativo'))
 const pending = computed(() => approvals.value.filter((item) => item.status === 'Pendente'))
 const approvedCount = computed(() => approvals.value.filter((item) => item.status === 'Aprovada').length)
 const rejectedCount = computed(() => approvals.value.filter((item) => item.status === 'Reprovada').length)
@@ -191,6 +214,33 @@ const setStatus = async (item: ApprovalRow, decision: 'APPROVED' | 'REJECTED') =
   )
   if (!ok) return
   await inventory.respondApproval(item.id, decision)
+}
+
+const canReassignApproval = (item: ApprovalRow) =>
+  canApprove.value && item.status === 'Pendente' && item.type === 'Manutenção' && Boolean(item.maintenanceId)
+
+const reassignMaintenance = async (item: ApprovalRow) => {
+  if (!item.maintenanceId) return
+  const targetEmail = String(reassignmentTargetByApprovalId[item.id] ?? '')
+    .trim()
+    .toLowerCase()
+  if (!targetEmail) return
+  const selectedTech = technicianUsers.value.find((tech) => tech.email.trim().toLowerCase() === targetEmail)
+  const ok = await confirm.ask(
+    `A solicitação será reprovada e a ordem será realocada para ${selectedTech?.name ?? targetEmail}. Confirme com a sua senha.`,
+    'Reprovar e realocar',
+  )
+  if (!ok) return
+  await inventory.respondApproval(
+    item.id,
+    'REJECTED',
+    `Reprovada e realocada para ${selectedTech?.name ?? targetEmail} (${targetEmail}).`,
+  )
+  await inventory.updateMaintenance(item.maintenanceId, {
+    assignedTechnicianEmail: targetEmail,
+    status: 'Em andamento',
+  })
+  reassignmentTargetByApprovalId[item.id] = ''
 }
 
 const typeClass = (type: string) =>
@@ -301,6 +351,19 @@ const isImage = (mime?: string) => Boolean(mime && mime.startsWith('image/'))
 }
 .type-movimentacao { background: rgba(6, 182, 212, 0.15); color: #06b6d4; }
 .type-manutencao { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+.reassignable-badge {
+  margin-left: auto;
+  margin-right: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(245, 158, 11, 0.14);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
 
 .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
 .status-pendente { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
@@ -339,6 +402,48 @@ const isImage = (mime?: string) => Boolean(mime && mime.startsWith('image/'))
 .approval-meta span { display: inline-flex; gap: 6px; align-items: center; }
 
 .approval-actions { display: flex; gap: 10px; padding-top: 12px; border-top: 1px solid var(--border-light); }
+
+.reassign-box {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-light);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.reassign-box label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+.reassign-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+.reassign-row select {
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+.btn-reassign {
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.14);
+  color: #f59e0b;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-reassign:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
 .btn-approve, .btn-reject {
   display: flex; align-items: center; justify-content: center; gap: 6px; flex: 1;

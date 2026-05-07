@@ -15,6 +15,7 @@ const approvalSchema = new mongoose.Schema(
   {
     tenantId: { type: String, required: true, index: true },
     type: { type: String, enum: ['Movimentação', 'Manutenção'], required: true },
+    maintenanceId: { type: String, default: '' },
     assetTag: { type: String, required: true },
     description: { type: String, required: true },
     /** Justificativa / contexto adicional do solicitante. */

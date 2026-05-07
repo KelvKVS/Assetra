@@ -196,7 +196,7 @@ const reportForm = reactive({
 
 const tasks = computed(() => inventory.tasks)
 const pendingValidationAssetTags = computed(() => {
-  const me = authStore.user?.sub
+  const me = authStore.user?.id
   if (!me) return new Set<string>()
   return new Set(
     inventory.myApprovals
@@ -280,11 +280,16 @@ const sendReportForValidation = async () => {
 
   sendingReport.value = true
   try {
+    const shortTaskTitle = String(reportModal.task.task ?? '')
+      .trim()
+      .slice(0, 420)
+    const approvalDescription = `Validação de execução técnica - ${shortTaskTitle}`.slice(0, 500)
     const attachments: AttachmentRef[] = await inventory.uploadAttachments(reportFiles.value)
     await inventory.createApproval({
       type: 'Manutenção',
+      maintenanceId: String(reportModal.task.id),
       assetTag: reportModal.task.assetTag,
-      description: `Validação de execução técnica - ${reportModal.task.task}`,
+      description: approvalDescription,
       feedback: reportForm.description.trim(),
       attachments,
     })

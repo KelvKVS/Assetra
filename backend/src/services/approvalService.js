@@ -1,5 +1,7 @@
 import Approval from '../models/Approval.js'
+import Maintenance from '../models/Maintenance.js'
 import { AppError } from '../utils/AppError.js'
+import { refreshAssetStatusForTag } from './maintenanceService.js'
 
 function resolveRequiredApproverRole(requestedByRole) {
   if (requestedByRole === 'TECNICO') return 'GESTOR'
@@ -7,11 +9,27 @@ function resolveRequiredApproverRole(requestedByRole) {
   return 'ADM'
 }
 
+function normalizeRole(raw) {
+  return String(raw ?? '')
+    .trim()
+    .toUpperCase()
+}
+
+function canUserDecideApproval(requiredRole, userRole) {
+  if (!requiredRole || !userRole) return false
+  if (userRole === 'ADM') {
+    // ADM pode atuar como fallback da cadeia de aprovação.
+    return requiredRole === 'ADM' || requiredRole === 'GESTOR'
+  }
+  return requiredRole === userRole
+}
+
 function toDto(doc) {
   const o = doc.toObject ? doc.toObject() : doc
   return {
     id: String(o._id),
     type: o.type,
+    maintenanceId: o.maintenanceId ?? '',
     assetTag: o.assetTag,
     description: o.description,
     feedback: o.feedback ?? '',
@@ -35,7 +53,12 @@ export async function listApprovalsForTenant(tenantId) {
 }
 
 export async function listApprovalsForApprover(tenantId, approverRole) {
-  const rows = await Approval.find({ tenantId, requiredApproverRole: approverRole }).sort({ createdAt: -1 })
+  const role = normalizeRole(approverRole)
+  const filter =
+    role === 'ADM'
+      ? { tenantId, requiredApproverRole: { $in: ['ADM', 'GESTOR'] } }
+      : { tenantId, requiredApproverRole: role }
+  const rows = await Approval.find(filter).sort({ createdAt: -1 })
   return rows.map(toDto)
 }
 
@@ -50,9 +73,28 @@ export async function createApproval(tenantId, user, dto) {
     throw new AppError(403, 'Perfil sem permissão para solicitar aprovação.')
   }
 
+  const normalizedType = String(dto.type ?? '').trim()
+  const normalizedMaintenanceId = String(dto.maintenanceId ?? '').trim()
+  if (normalizedType === 'Manutenção') {
+    const duplicateQuery = normalizedMaintenanceId
+      ? { tenantId, type: 'Manutenção', maintenanceId: normalizedMaintenanceId, status: 'Pendente' }
+      : {
+          tenantId,
+          type: 'Manutenção',
+          assetTag: String(dto.assetTag ?? '').trim(),
+          requestedBy: user?.sub,
+          status: 'Pendente',
+        }
+    const existingPending = await Approval.findOne(duplicateQuery)
+    if (existingPending) {
+      throw new AppError(409, 'Já existe uma validação pendente para esta ordem. Aguarde a decisão do gestor.')
+    }
+  }
+
   const a = new Approval({
     tenantId,
-    type: dto.type,
+    type: normalizedType,
+    maintenanceId: normalizedMaintenanceId,
     assetTag: dto.assetTag.trim(),
     description: dto.description.trim(),
     feedback: dto.feedback?.trim() || undefined,
@@ -78,7 +120,9 @@ export async function respondToApproval(tenantId, user, approvalId, decision, no
   if (String(a.requestedBy ?? '') === String(user?.sub ?? '')) {
     throw new AppError(403, 'Não é permitido aprovar a própria solicitação.')
   }
-  if (String(a.requiredApproverRole) !== String(user?.role)) {
+  const requiredRole = normalizeRole(a.requiredApproverRole)
+  const userRole = normalizeRole(user?.role)
+  if (!canUserDecideApproval(requiredRole, userRole)) {
     throw new AppError(403, 'Esta solicitação deve ser decidida por outro perfil.')
   }
   a.status = decision === 'APPROVED' ? 'Aprovada' : 'Reprovada'
@@ -87,5 +131,14 @@ export async function respondToApproval(tenantId, user, approvalId, decision, no
   a.decidedAt = new Date()
   a.notes = notes ?? ''
   await a.save()
+
+  if (String(a.type) === 'Manutenção' && String(a.maintenanceId ?? '').trim()) {
+    const maintenance = await Maintenance.findOne({ _id: String(a.maintenanceId).trim(), tenantId })
+    if (maintenance) {
+      maintenance.status = decision === 'APPROVED' ? 'Concluída' : 'Em andamento'
+      await maintenance.save()
+      await refreshAssetStatusForTag(tenantId, maintenance.assetTag)
+    }
+  }
   return toDto(a)
 }

@@ -32,17 +32,22 @@ export function movementsInvolvingUser<T extends { responsible?: string | null }
 }
 
 export function maintenancesInvolvingUserByAssets<
-  TMaintenance extends { assetTag?: string | null },
+  TMaintenance extends { assetTag?: string | null; assignedTechnicianEmail?: string | null },
   TAsset extends { tag?: string | null; assignedTo?: string | null },
 >(
   maintenances: TMaintenance[],
   assets: TAsset[],
   email: string | undefined | null,
 ): TMaintenance[] {
+  const normalizedEmail = email?.trim().toLowerCase() ?? ''
   const myAssetTags = new Set(
     assetsAssignedToEmail(assets, email)
       .map((asset) => (asset.tag ?? '').trim())
       .filter(Boolean),
   )
-  return maintenances.filter((m) => myAssetTags.has((m.assetTag ?? '').trim()))
+  return maintenances.filter((m) => {
+    const assignedTechEmail = (m.assignedTechnicianEmail ?? '').trim().toLowerCase()
+    if (normalizedEmail && assignedTechEmail === normalizedEmail) return true
+    return myAssetTags.has((m.assetTag ?? '').trim())
+  })
 }

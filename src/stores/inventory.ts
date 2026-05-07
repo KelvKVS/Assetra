@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import api from '../services/api'
 import type { Asset, AssetStatus } from '../types/assetra'
+import { useAuthStore } from './auth'
 
 export type AssetWithId = Asset & { id: string }
 
@@ -37,6 +38,7 @@ export type AttachmentRef = {
 export type ApprovalRow = {
   id: string
   type: string
+  maintenanceId?: string
   assetTag: string
   description: string
   feedback?: string
@@ -221,13 +223,20 @@ export const useInventoryStore = defineStore('inventory', {
     },
     async createApproval(payload: {
       type: 'Movimentação' | 'Manutenção'
+      maintenanceId?: string
       assetTag: string
       description: string
       feedback?: string
       attachments?: AttachmentRef[]
     }) {
       await api.post('/approvals', payload)
-      await Promise.allSettled([this.fetchApprovalsSafe(), this.fetchMyApprovalsSafe()])
+      const authStore = useAuthStore()
+      const canApprove = ['ADM', 'GESTOR'].includes(String(authStore.user?.role ?? '').trim().toUpperCase())
+      if (canApprove) {
+        await Promise.allSettled([this.fetchApprovalsSafe(), this.fetchMyApprovalsSafe()])
+      } else {
+        await this.fetchMyApprovalsSafe()
+      }
     },
     async respondApproval(id: string, decision: 'APPROVED' | 'REJECTED', notes?: string) {
       await api.post(`/approvals/${id}/respond`, { decision, notes })

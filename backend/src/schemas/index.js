@@ -104,6 +104,7 @@ export const maintenanceUpdateSchema = z.object({
 
 export const approvalCreateSchema = z.object({
   type: z.enum(['Movimentação', 'Manutenção']),
+  maintenanceId: z.string().min(1).max(64).optional(),
   assetTag: z.string().min(1).max(40),
   description: z.string().min(1).max(500),
   feedback: z.string().max(2000).optional(),

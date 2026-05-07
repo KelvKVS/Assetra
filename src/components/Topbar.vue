@@ -96,6 +96,7 @@ type UiNotification = {
 const userInitial = computed(() => authStore.user?.name?.charAt(0).toUpperCase() ?? 'U')
 
 const roleLabel = computed(() => roleLabelPt(authStore.user?.role))
+const canApprove = computed(() => ['ADM', 'GESTOR'].includes(String(authStore.user?.role ?? '').trim().toUpperCase()))
 
 const notifications = computed<UiNotification[]>(() => {
   const items: UiNotification[] = []
@@ -205,10 +206,11 @@ onMounted(async () => {
   if (!authStore.isAuthenticated) return
   loadReadState()
   const refreshNotifications = async () => {
-    await Promise.allSettled([
-      inventoryStore.fetchApprovalsSafe(),
-      inventoryStore.fetchMyApprovalsSafe(),
-    ])
+    if (canApprove.value) {
+      await Promise.allSettled([inventoryStore.fetchApprovalsSafe(), inventoryStore.fetchMyApprovalsSafe()])
+      return
+    }
+    await inventoryStore.fetchMyApprovalsSafe()
   }
   await refreshNotifications()
   notificationsTimer = setInterval(() => {

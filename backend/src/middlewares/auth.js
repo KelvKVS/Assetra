@@ -19,7 +19,15 @@ export const authMiddleware = (req, res, next) => {
 
 export const authorize = (allowedRoles) => {
   return (req, res, next) => {
-    if (!req.user || !allowedRoles.includes(req.user.role)) {
+    const userRole = String(req.user?.role ?? '')
+      .trim()
+      .toUpperCase()
+    const normalizedAllowedRoles = (allowedRoles ?? []).map((role) =>
+      String(role ?? '')
+        .trim()
+        .toUpperCase(),
+    )
+    if (!req.user || !userRole || !normalizedAllowedRoles.includes(userRole)) {
       return res.status(403).json({ message: 'Acesso negado: permissão insuficiente.' })
     }
     next()

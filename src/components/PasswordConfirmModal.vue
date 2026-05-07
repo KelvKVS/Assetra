@@ -3,7 +3,9 @@
     <div v-if="open" class="pcm-overlay" @click.self="cancel">
       <div class="pcm-modal" role="dialog" aria-modal="true">
         <header class="pcm-header">
-          <ShieldCheck :size="22" :stroke-width="2.5" />
+          <div class="pcm-icon-shell">
+            <ShieldCheck :size="20" :stroke-width="2.5" />
+          </div>
           <div>
             <h3>{{ title }}</h3>
             <p class="pcm-subtitle">{{ message }}</p>
@@ -37,6 +39,7 @@
             :disabled="loading"
             required
           />
+          <small class="pcm-helper">A confirmação é necessária para continuar com segurança.</small>
           <p v-if="error" class="pcm-error">{{ error }}</p>
 
           <div class="pcm-actions">
@@ -142,11 +145,13 @@ const confirm = async () => {
 
 .pcm-modal {
   width: min(420px, 92%);
-  background: var(--bg-card);
+  background:
+    radial-gradient(circle at top right, rgba(59,130,246,0.14), transparent 60%),
+    var(--bg-card);
   border: 1px solid var(--border-light);
-  border-radius: 14px;
+  border-radius: 16px;
   padding: 22px;
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45);
   animation: pcm-pop 0.22s ease-out;
 }
 
@@ -158,9 +163,16 @@ const confirm = async () => {
   margin-bottom: 16px;
 }
 
-.pcm-header > svg {
+.pcm-icon-shell {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--primary);
-  margin-top: 4px;
+  background: var(--primary-light);
+  border: 1px solid rgba(59, 130, 246, 0.25);
 }
 
 .pcm-header h3 {
@@ -233,6 +245,12 @@ const confirm = async () => {
   box-shadow: 0 0 0 3px var(--primary-light);
 }
 
+.pcm-helper {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .pcm-error {
   margin: 0;
   padding: 8px 12px;
@@ -274,6 +292,9 @@ const confirm = async () => {
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
+}
+.pcm-btn-primary:hover:not(:disabled) {
+  background: var(--primary-hover);
 }
 
 .pcm-btn-primary:disabled,
