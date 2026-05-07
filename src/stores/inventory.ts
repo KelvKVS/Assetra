@@ -20,6 +20,9 @@ export type MaintenanceRow = {
   description: string
   priority: string
   status: string
+  assignedTechnicianEmail?: string
+  assignedTechnicianName?: string
+  attachments?: AttachmentRef[]
   openingDate: string
 }
 
@@ -41,6 +44,8 @@ export type ApprovalRow = {
   status: string
   requestedBy?: string
   requestedByName?: string
+  requestedByRole?: string
+  requiredApproverRole?: string
   decidedBy?: string
   decidedByName?: string
   decidedAt?: string | null
@@ -54,6 +59,8 @@ export type TaskRow = {
   task: string
   priority: string
   status: string
+  assignedTechnicianEmail?: string
+  assignedTechnicianName?: string
 }
 
 export type DirectoryUser = {
@@ -154,6 +161,8 @@ export const useInventoryStore = defineStore('inventory', {
       description?: string
       priority: string
       status: string
+      assignedTechnicianEmail?: string
+      attachments?: AttachmentRef[]
       openingDate?: string
     }) {
       await api.post('/maintenances', payload)
@@ -162,6 +171,19 @@ export const useInventoryStore = defineStore('inventory', {
     },
     async updateMaintenance(id: string, payload: Partial<Omit<MaintenanceRow, 'id'>>) {
       await api.patch(`/maintenances/${id}`, payload)
+      await this.fetchMaintenances()
+      await this.fetchAssets()
+    },
+    async bulkAssignMaintenances(maintenanceIds: string[], assignedTechnicianEmail: string) {
+      const ids = maintenanceIds.filter(Boolean)
+      if (!ids.length) return
+      await Promise.all(
+        ids.map((id) =>
+          api.patch(`/maintenances/${id}`, {
+            assignedTechnicianEmail,
+          }),
+        ),
+      )
       await this.fetchMaintenances()
       await this.fetchAssets()
     },

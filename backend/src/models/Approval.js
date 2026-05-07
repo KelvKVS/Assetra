@@ -23,6 +23,8 @@ const approvalSchema = new mongoose.Schema(
     attachments: { type: [attachmentSchema], default: [] },
     requestedBy: { type: String },
     requestedByName: { type: String },
+    requestedByRole: { type: String, enum: ['ADM', 'GESTOR', 'TECNICO'] },
+    requiredApproverRole: { type: String, enum: ['ADM', 'GESTOR'], required: true },
     status: { type: String, enum: ['Pendente', 'Aprovada', 'Reprovada'], default: 'Pendente' },
     decidedBy: { type: String },
     decidedByName: { type: String },

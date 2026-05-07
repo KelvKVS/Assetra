@@ -23,7 +23,7 @@ router.get(
 router.post(
   '/',
   authMiddleware,
-  authorize(['ADM']),
+  authorize(['ADM', 'GESTOR']),
   asyncHandler(async (req, res) => {
     const parsed = assetCreateSchema.safeParse(req.body)
     if (!parsed.success) {
@@ -37,7 +37,7 @@ router.post(
 router.put(
   '/:id',
   authMiddleware,
-  authorize(['ADM']),
+  authorize(['ADM', 'GESTOR']),
   asyncHandler(async (req, res) => {
     const parsed = assetUpdateSchema.safeParse(req.body)
     if (!parsed.success) {
@@ -51,7 +51,7 @@ router.put(
 router.delete(
   '/:id',
   authMiddleware,
-  authorize(['ADM']),
+  authorize(['ADM', 'GESTOR']),
   asyncHandler(async (req, res) => {
     await deleteAssetForTenant(req.user.tenantId, req.params.id)
     res.status(204).send()

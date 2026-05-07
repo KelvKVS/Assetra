@@ -10,7 +10,7 @@ router.get(
   authMiddleware,
   authorize(['TECNICO', 'ADM']),
   asyncHandler(async (req, res) => {
-    const tasks = await listTechnicalTasks(req.user.tenantId)
+    const tasks = await listTechnicalTasks(req.user.tenantId, req.user)
     res.json(tasks)
   }),
 )
@@ -20,7 +20,7 @@ router.post(
   authMiddleware,
   authorize(['TECNICO', 'ADM']),
   asyncHandler(async (req, res) => {
-    const row = await advanceTechnicalTask(req.user.tenantId, req.user.sub, req.params.id)
+    const row = await advanceTechnicalTask(req.user.tenantId, req.user, req.params.id)
     res.json(row)
   }),
 )

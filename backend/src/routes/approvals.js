@@ -4,7 +4,7 @@ import { asyncHandler } from '../utils/asyncHandler.js'
 import { approvalCreateSchema, approvalRespondSchema } from '../schemas/index.js'
 import {
   createApproval,
-  listApprovalsForTenant,
+  listApprovalsForApprover,
   listApprovalsByRequester,
   respondToApproval,
 } from '../services/approvalService.js'
@@ -16,7 +16,7 @@ router.get(
   authMiddleware,
   authorize(['ADM', 'GESTOR']),
   asyncHandler(async (req, res) => {
-    const rows = await listApprovalsForTenant(req.user.tenantId)
+    const rows = await listApprovalsForApprover(req.user.tenantId, req.user.role)
     res.json(rows)
   }),
 )

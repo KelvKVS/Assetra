@@ -8,8 +8,8 @@
         <p>
           Envie uma solicitação de <strong>manutenção</strong> de um ativo ou de
           <strong>movimentação entre setores</strong>. Pode anexar
-          <strong>fotos / prints</strong> e a sua justificativa — o gestor recebe na
-          tela de Aprovações.
+          <strong>fotos / prints</strong> e a sua justificativa — o aprovador é
+          definido automaticamente pela hierarquia (Técnico → Gestor, Gestor → ADM).
         </p>
       </div>
       <div class="hero-stats">
@@ -89,15 +89,23 @@
             <input
               v-model.trim="form.assetTag"
               type="text"
-              list="tags-list"
               placeholder="ex.: AST-001"
               required
+              @focus="isAssetTagFocused = true"
+              @blur="hideAssetTagSuggestions"
             />
-            <datalist id="tags-list">
-              <option v-for="a in inventory.assets" :key="a.id" :value="a.tag">
-                {{ a.description }}
-              </option>
-            </datalist>
+            <div v-if="showAssetTagSuggestions" class="suggestion-panel">
+              <button
+                v-for="a in filteredAssetTagSuggestions"
+                :key="`req-asset-${a.id}`"
+                type="button"
+                class="suggestion-item"
+                @mousedown.prevent="pickAssetTag(a.tag)"
+              >
+                <strong>{{ a.tag }}</strong>
+                <span>{{ a.description }}</span>
+              </button>
+            </div>
             <p v-if="selectedAsset" class="field-hint">
               {{ selectedAsset.description }} · setor atual: <strong>{{ selectedAsset.sector }}</strong>
             </p>
@@ -441,6 +449,7 @@ const submitting = ref(false)
 const formError = ref('')
 const isDragging = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
+const isAssetTagFocused = ref(false)
 
 const severities: { value: Severity; label: string; icon: Component }[] = [
   { value: 'baixa', label: 'Baixa', icon: Activity },
@@ -463,6 +472,12 @@ const previews = ref<Preview[]>([])
 const selectedAsset = computed(() =>
   inventory.assets.find((a) => a.tag.toLowerCase() === form.assetTag.toLowerCase()),
 )
+const filteredAssetTagSuggestions = computed(() => {
+  const q = form.assetTag.trim().toLowerCase()
+  if (!q) return inventory.assets.slice(0, 8)
+  return inventory.assets.filter((a) => `${a.tag} ${a.description}`.toLowerCase().includes(q)).slice(0, 6)
+})
+const showAssetTagSuggestions = computed(() => isAssetTagFocused.value && filteredAssetTagSuggestions.value.length > 0)
 
 const severityLabel = computed(() => severities.find((s) => s.value === form.severity)?.label ?? '—')
 
@@ -496,6 +511,15 @@ const openForm = (type: RequestType) => {
   step.value = 1
   formError.value = ''
   isFormOpen.value = true
+}
+const pickAssetTag = (tag: string) => {
+  form.assetTag = tag
+  isAssetTagFocused.value = false
+}
+const hideAssetTagSuggestions = () => {
+  window.setTimeout(() => {
+    isAssetTagFocused.value = false
+  }, 120)
 }
 
 const closeForm = () => {
@@ -567,7 +591,7 @@ const onSubmit = async () => {
   formError.value = ''
 
   const ok = await confirm.ask(
-    'Confirme com a sua senha para enviar esta solicitação ao gestor.',
+    'Confirme com a sua senha para enviar esta solicitação ao fluxo de aprovação.',
     'Confirmar envio',
   )
   if (!ok) return
@@ -708,6 +732,30 @@ const onSubmit = async () => {
   border-radius: 10px; color: var(--text-primary); font-size: 14px; font-family: inherit;
   transition: all 0.15s ease;
 }
+.suggestion-panel {
+  margin-top: 4px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-card);
+  border-radius: 10px;
+  box-shadow: var(--shadow-md);
+  max-height: 220px;
+  overflow-y: auto;
+  display: grid;
+}
+.suggestion-item {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+.suggestion-item + .suggestion-item { border-top: 1px solid var(--border-light); }
+.suggestion-item span { font-size: 12px; color: var(--text-muted); }
+.suggestion-item:hover { background: var(--bg-hover); }
 .field input:focus, .field textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
 .field textarea { resize: vertical; min-height: 90px; }
 .field-hint { margin: 0; font-size: 12px; color: var(--text-muted); font-weight: 500; text-transform: none; letter-spacing: 0; }

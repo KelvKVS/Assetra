@@ -3,98 +3,8 @@
     <div class="page-header">
       <div>
         <h2>Aprovações</h2>
-        <p class="muted">
-          {{
-            canApprove
-              ? 'Revise solicitações pendentes e tome decisão. Toda decisão exige confirmação por senha.'
-              : 'Envie solicitações de movimentação ou manutenção com fotos e justificativa.'
-          }}
-        </p>
+        <p class="muted">Revise solicitações pendentes e tome decisão. Toda decisão exige confirmação por senha.</p>
       </div>
-      <button v-if="canRequest" class="btn-primary" @click="toggleForm">
-        <Plus :size="18" :stroke-width="2.5" />
-        {{ showForm ? 'Fechar' : 'Nova solicitação' }}
-      </button>
-    </div>
-
-    <!-- Formulário de criação -->
-    <div v-if="showForm" class="form-card">
-      <h3>Solicitar aprovação</h3>
-      <form class="approval-form" @submit.prevent="onSubmit">
-        <div class="form-row">
-          <div class="form-group">
-            <label>Tipo</label>
-            <select v-model="newApproval.type" required>
-              <option value="Movimentação">Movimentação</option>
-              <option value="Manutenção">Manutenção</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Tag do ativo</label>
-            <input
-              v-model.trim="newApproval.assetTag"
-              type="text"
-              list="approval-asset-tags"
-              placeholder="AST-001"
-              required
-            />
-            <datalist id="approval-asset-tags">
-              <option v-for="a in inventory.assets" :key="a.id" :value="a.tag">{{ a.description }}</option>
-            </datalist>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Descrição da solicitação</label>
-          <input
-            v-model.trim="newApproval.description"
-            type="text"
-            placeholder="Ex.: Transferir para o Financeiro"
-            required
-          />
-        </div>
-        <div class="form-group">
-          <label>Justificativa / feedback</label>
-          <textarea
-            v-model.trim="newApproval.feedback"
-            rows="3"
-            placeholder="Explique a razão da solicitação. Quanto mais contexto, mais rápida será a decisão."
-          ></textarea>
-        </div>
-        <div class="form-group">
-          <label>
-            Anexos (fotos, prints, PDF)
-            <span class="hint">Até 6 ficheiros · 8 MB cada</span>
-          </label>
-          <input
-            ref="fileInput"
-            type="file"
-            multiple
-            accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"
-            @change="onFilePick"
-          />
-          <ul v-if="selectedFiles.length" class="picked-list">
-            <li v-for="(f, i) in selectedFiles" :key="i">
-              <Paperclip :size="14" />
-              <span class="picked-name">{{ f.name }}</span>
-              <small>{{ formatSize(f.size) }}</small>
-              <button type="button" class="picked-remove" @click="removeFile(i)" aria-label="Remover">
-                <X :size="14" />
-              </button>
-            </li>
-          </ul>
-        </div>
-
-        <p v-if="formError" class="form-error">{{ formError }}</p>
-
-        <div class="form-actions">
-          <button type="submit" class="btn-primary" :disabled="submitting">
-            <Loader v-if="submitting" class="spinner" :size="16" />
-            <Send v-else :size="16" :stroke-width="2.5" />
-            Enviar para aprovação
-          </button>
-          <button type="button" class="btn-secondary" @click="toggleForm">Cancelar</button>
-        </div>
-      </form>
     </div>
 
     <!-- Stats Cards -->
@@ -180,6 +90,10 @@
 
           <div class="approval-meta">
             <span v-if="item.requestedByName"><User :size="12" /> {{ item.requestedByName }}</span>
+            <span v-if="item.requiredApproverRole">
+              <ShieldCheck :size="12" />
+              Aprovação: {{ item.requiredApproverRole }}
+            </span>
             <span v-if="item.decidedByName">
               <ShieldCheck :size="12" />
               {{ item.status }} por {{ item.decidedByName }}
@@ -203,18 +117,17 @@
     <div v-if="filteredApprovals.length === 0" class="empty-state">
       <ClipboardCheck :size="64" :stroke-width="1.5" class="empty-icon" />
       <h3>Nenhuma aprovação encontrada</h3>
-      <p>{{ canRequest ? 'Crie uma nova solicitação para começar.' : 'Nada para revisar no momento.' }}</p>
+      <p>Nada para revisar no momento.</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, type Component } from 'vue'
+import { computed, onMounted, ref, type Component } from 'vue'
 import { useAuthStore } from '../stores/auth'
-import { useInventoryStore, type AttachmentRef, type ApprovalRow } from '../stores/inventory'
+import { useInventoryStore, type ApprovalRow } from '../stores/inventory'
 import { useConfirmAction } from '../composables/useConfirmAction'
 import {
-  Plus,
   Search,
   Clock,
   CheckCircle,
@@ -226,11 +139,8 @@ import {
   Paperclip,
   MessageSquare,
   FileText,
-  Send,
-  Loader,
   User,
   ShieldCheck,
-  X,
 } from 'lucide-vue-next'
 
 type ApprovalStatus = 'Pendente' | 'Aprovada' | 'Reprovada'
@@ -241,7 +151,6 @@ const confirm = useConfirmAction()
 
 const role = computed(() => authStore.user?.role)
 const canApprove = computed(() => role.value === 'ADM' || role.value === 'GESTOR')
-const canRequest = computed(() => Boolean(role.value))
 
 onMounted(async () => {
   await Promise.allSettled([inventory.fetchApprovalsSafe(), inventory.fetchAssets()])
@@ -249,19 +158,6 @@ onMounted(async () => {
 
 const search = ref('')
 const filter = ref<'all' | ApprovalStatus>('all')
-
-const showForm = ref(false)
-const submitting = ref(false)
-const formError = ref('')
-const fileInput = ref<HTMLInputElement | null>(null)
-const selectedFiles = ref<File[]>([])
-
-const newApproval = reactive({
-  type: 'Movimentação' as 'Movimentação' | 'Manutenção',
-  assetTag: '',
-  description: '',
-  feedback: '',
-})
 
 const approvals = computed(() => inventory.approvals)
 const pending = computed(() => approvals.value.filter((item) => item.status === 'Pendente'))
@@ -286,64 +182,6 @@ const filteredApprovals = computed(() => {
     ].some((value) => String(value).toLowerCase().includes(term)),
   )
 })
-
-const toggleForm = () => {
-  showForm.value = !showForm.value
-  formError.value = ''
-}
-
-const onFilePick = (ev: Event) => {
-  const input = ev.target as HTMLInputElement
-  if (!input.files) return
-  selectedFiles.value = Array.from(input.files).slice(0, 6)
-}
-
-const removeFile = (i: number) => {
-  selectedFiles.value.splice(i, 1)
-}
-
-const formatSize = (bytes: number) => {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-const onSubmit = async () => {
-  if (submitting.value) return
-  formError.value = ''
-
-  const ok = await confirm.ask(
-    'Para enviar uma solicitação para aprovação confirme com a sua senha atual.',
-    'Confirmar envio',
-  )
-  if (!ok) return
-
-  submitting.value = true
-  try {
-    let attachments: AttachmentRef[] = []
-    if (selectedFiles.value.length) {
-      attachments = await inventory.uploadAttachments(selectedFiles.value)
-    }
-    await inventory.createApproval({
-      type: newApproval.type,
-      assetTag: newApproval.assetTag,
-      description: newApproval.description,
-      feedback: newApproval.feedback || undefined,
-      attachments,
-    })
-    newApproval.assetTag = ''
-    newApproval.description = ''
-    newApproval.feedback = ''
-    selectedFiles.value = []
-    if (fileInput.value) fileInput.value.value = ''
-    showForm.value = false
-  } catch (e: unknown) {
-    const ax = e as { response?: { data?: { message?: string } } }
-    formError.value = ax?.response?.data?.message ?? 'Não foi possível criar a solicitação.'
-  } finally {
-    submitting.value = false
-  }
-}
 
 const setStatus = async (item: ApprovalRow, decision: 'APPROVED' | 'REJECTED') => {
   const action = decision === 'APPROVED' ? 'aprovar' : 'reprovar'

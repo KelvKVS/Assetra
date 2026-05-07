@@ -6,7 +6,7 @@
         <h2>Ativos de TI</h2>
         <p class="muted">
           Cadastro e acompanhamento de equipamentos
-          <template v-if="!canManageAssets"> · Apenas administradores podem criar, editar ou excluir.</template>
+          <template v-if="!canManageAssets"> · Apenas gestores e administradores podem criar, editar ou excluir.</template>
         </p>
       </div>
       <button v-if="canManageAssets" class="btn-primary" @click="showForm = !showForm">
@@ -46,7 +46,21 @@
             type="email"
             autocomplete="off"
             placeholder="ex.: gestor@assetra.local (opcional)"
+            @focus="isCreateResponsibleFocused = true"
+            @blur="hideCreateResponsibleSuggestions"
           />
+          <div v-if="showCreateResponsibleSuggestions" class="suggestion-panel">
+            <button
+              v-for="user in filteredCreateResponsibleSuggestions"
+              :key="`create-user-${user.id}`"
+              type="button"
+              class="suggestion-item"
+              @mousedown.prevent="pickCreateResponsible(user.email)"
+            >
+              <strong>{{ user.name }}</strong>
+              <span>{{ user.email }}</span>
+            </button>
+          </div>
         </div>
         <div class="form-actions">
           <button type="submit" class="btn-primary">Cadastrar</button>
@@ -169,7 +183,21 @@
               type="email"
               autocomplete="off"
               placeholder="Opcional — deixe vazio para limpar"
+              @focus="isEditResponsibleFocused = true"
+              @blur="hideEditResponsibleSuggestions"
             />
+            <div v-if="showEditResponsibleSuggestions" class="suggestion-panel">
+              <button
+                v-for="user in filteredEditResponsibleSuggestions"
+                :key="`edit-user-${user.id}`"
+                type="button"
+                class="suggestion-item"
+                @mousedown.prevent="pickEditResponsible(user.email)"
+              >
+                <strong>{{ user.name }}</strong>
+                <span>{{ user.email }}</span>
+              </button>
+            </div>
           </div>
           <div class="modal-actions">
             <button type="submit" class="btn-primary">Salvar</button>
@@ -192,12 +220,14 @@ import { Plus, Search, Monitor, CheckCircle, Package, Wrench, MapPin, Edit, Tras
 const confirm = useConfirmAction()
 
 const authStore = useAuthStore()
-const canManageAssets = computed(() => authStore.user?.role === 'ADM')
+const canManageAssets = computed(() => ['ADM', 'GESTOR'].includes(authStore.user?.role ?? ''))
 
 const showForm = ref(false)
 const search = ref('')
 const formError = ref('')
 const editingAssetId = ref<string | null>(null)
+const isCreateResponsibleFocused = ref(false)
+const isEditResponsibleFocused = ref(false)
 const editAsset = reactive<Asset>({
   tag: '',
   description: '',
@@ -225,6 +255,23 @@ const filteredAssets = computed(() => {
     ),
   )
 })
+const availableUsers = computed(() => inventory.users.filter((u) => u.status === 'Ativo'))
+const filteredCreateResponsibleSuggestions = computed(() => {
+  const q = String(newAsset.assignedTo ?? '').trim().toLowerCase()
+  if (!q) return availableUsers.value.slice(0, 8)
+  return availableUsers.value.filter((u) => `${u.name} ${u.email}`.toLowerCase().includes(q)).slice(0, 6)
+})
+const filteredEditResponsibleSuggestions = computed(() => {
+  const q = String(editAsset.assignedTo ?? '').trim().toLowerCase()
+  if (!q) return availableUsers.value.slice(0, 8)
+  return availableUsers.value.filter((u) => `${u.name} ${u.email}`.toLowerCase().includes(q)).slice(0, 6)
+})
+const showCreateResponsibleSuggestions = computed(
+  () => isCreateResponsibleFocused.value && filteredCreateResponsibleSuggestions.value.length > 0,
+)
+const showEditResponsibleSuggestions = computed(
+  () => isEditResponsibleFocused.value && filteredEditResponsibleSuggestions.value.length > 0,
+)
 
 const usageStats = computed(() => ({
   inUse: inventory.assets.filter((item) => item.status === 'Em uso').length,
@@ -234,11 +281,29 @@ const usageStats = computed(() => ({
 
 onMounted(async () => {
   try {
-    await inventory.fetchAssets()
+    await Promise.all([inventory.fetchAssets(), inventory.fetchUsers()])
   } catch {
     formError.value = inventory.error || 'Não foi possível carregar os ativos.'
   }
 })
+const pickCreateResponsible = (email: string) => {
+  newAsset.assignedTo = email
+  isCreateResponsibleFocused.value = false
+}
+const pickEditResponsible = (email: string) => {
+  editAsset.assignedTo = email
+  isEditResponsibleFocused.value = false
+}
+const hideCreateResponsibleSuggestions = () => {
+  window.setTimeout(() => {
+    isCreateResponsibleFocused.value = false
+  }, 120)
+}
+const hideEditResponsibleSuggestions = () => {
+  window.setTimeout(() => {
+    isEditResponsibleFocused.value = false
+  }, 120)
+}
 
 const addAsset = async () => {
   formError.value = ''
@@ -419,6 +484,30 @@ const saveAssetEdit = async () => {
   border-radius: 8px;
   color: var(--text-primary);
 }
+.suggestion-panel {
+  margin-top: 4px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-card);
+  border-radius: 10px;
+  box-shadow: var(--shadow-md);
+  max-height: 220px;
+  overflow-y: auto;
+  display: grid;
+}
+.suggestion-item {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+.suggestion-item + .suggestion-item { border-top: 1px solid var(--border-light); }
+.suggestion-item span { font-size: 12px; color: var(--text-muted); }
+.suggestion-item:hover { background: var(--bg-hover); }
 
 .form-actions {
   display: flex;

@@ -1,5 +1,16 @@
 import mongoose from 'mongoose'
 
+const attachmentSchema = new mongoose.Schema(
+  {
+    filename: { type: String, required: true },
+    originalName: { type: String },
+    mimetype: { type: String },
+    size: { type: Number },
+    url: { type: String, required: true },
+  },
+  { _id: false },
+)
+
 const maintenanceSchema = new mongoose.Schema(
   {
     tenantId: { type: String, required: true, index: true },
@@ -12,6 +23,9 @@ const maintenanceSchema = new mongoose.Schema(
       enum: ['Aberta', 'Em andamento', 'Concluída'],
       default: 'Aberta',
     },
+    assignedTechnicianEmail: { type: String, default: '' },
+    assignedTechnicianName: { type: String, default: '' },
+    attachments: { type: [attachmentSchema], default: [] },
     openingDate: { type: Date, default: Date.now },
   },
   { timestamps: true },

@@ -59,7 +59,7 @@
           <CheckCircle :size="20" :stroke-width="2" />
           <span>Aprovações</span>
         </RouterLink>
-        <RouterLink v-if="isTechnician || isAdmin" to="/execucao-tecnica" class="nav-item">
+        <RouterLink v-if="isTechnician" to="/execucao-tecnica" class="nav-item">
           <Settings :size="20" :stroke-width="2" />
           <span>Execução Técnica</span>
         </RouterLink>

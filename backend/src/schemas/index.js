@@ -72,12 +72,22 @@ export const movementUpdateSchema = z.object({
   date: z.string().max(40).optional(),
 })
 
+const attachmentRefSchema = z.object({
+  filename: z.string().min(1).max(200),
+  originalName: z.string().max(200).optional(),
+  mimetype: z.string().max(120).optional(),
+  size: z.number().nonnegative().optional(),
+  url: z.string().min(1).max(400),
+})
+
 export const maintenanceCreateSchema = z.object({
   assetTag: z.string().min(1).max(40),
   type: z.string().min(1).max(80),
   description: z.string().max(2000).optional(),
   priority: z.enum(['Alta', 'Média', 'Baixa']),
   status: z.enum(['Aberta', 'Em andamento', 'Concluída']),
+  assignedTechnicianEmail: z.string().email().max(120).optional(),
+  attachments: z.array(attachmentRefSchema).max(6).optional(),
   openingDate: z.string().optional(),
 })
 
@@ -87,15 +97,9 @@ export const maintenanceUpdateSchema = z.object({
   description: z.string().max(2000).optional(),
   priority: z.enum(['Alta', 'Média', 'Baixa']).optional(),
   status: z.enum(['Aberta', 'Em andamento', 'Concluída']).optional(),
+  assignedTechnicianEmail: z.string().email().max(120).optional().nullable(),
+  attachments: z.array(attachmentRefSchema).max(6).optional(),
   openingDate: z.string().optional(),
-})
-
-const attachmentRefSchema = z.object({
-  filename: z.string().min(1).max(200),
-  originalName: z.string().max(200).optional(),
-  mimetype: z.string().max(120).optional(),
-  size: z.number().nonnegative().optional(),
-  url: z.string().min(1).max(400),
 })
 
 export const approvalCreateSchema = z.object({

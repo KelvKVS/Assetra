@@ -1,5 +1,6 @@
 import Maintenance from '../models/Maintenance.js'
 import Asset from '../models/Asset.js'
+import prisma from '../lib/prisma.js'
 import { AppError } from '../utils/AppError.js'
 
 function parseOpeningInput(s) {
@@ -31,7 +32,30 @@ function toDto(doc) {
     description: o.description ?? '',
     priority: o.priority,
     status: o.status,
+    assignedTechnicianEmail: o.assignedTechnicianEmail ?? '',
+    assignedTechnicianName: o.assignedTechnicianName ?? '',
+    attachments: Array.isArray(o.attachments) ? o.attachments : [],
     openingDate: formatOpening(o.openingDate),
+  }
+}
+
+async function resolveTechnicianAssignment(tenantId, assignedTechnicianEmail) {
+  const raw = String(assignedTechnicianEmail ?? '').trim().toLowerCase()
+  if (!raw) return { email: '', name: '' }
+  const technician = await prisma.user.findFirst({
+    where: {
+      tenantId,
+      email: raw,
+      role: 'TECNICO',
+      active: true,
+    },
+  })
+  if (!technician) {
+    throw new AppError(400, 'Técnico responsável inválido para este tenant.')
+  }
+  return {
+    email: technician.email,
+    name: technician.name,
   }
 }
 
@@ -69,6 +93,7 @@ export async function createMaintenance(tenantId, userId, dto) {
   if (!asset) {
     throw new AppError(404, 'Ativo não encontrado para este tenant.')
   }
+  const assignedTechnician = await resolveTechnicianAssignment(tenantId, dto.assignedTechnicianEmail)
   let openingDate = new Date()
   if (dto.openingDate) {
     const dt = parseOpeningInput(dto.openingDate)
@@ -81,6 +106,9 @@ export async function createMaintenance(tenantId, userId, dto) {
     description: (dto.description ?? '').trim(),
     priority: dto.priority,
     status: dto.status,
+    assignedTechnicianEmail: assignedTechnician.email,
+    assignedTechnicianName: assignedTechnician.name,
+    attachments: Array.isArray(dto.attachments) ? dto.attachments : [],
     openingDate,
   })
   await m.save()
@@ -99,6 +127,14 @@ export async function updateMaintenance(tenantId, maintenanceId, dto) {
   if (dto.description != null) m.description = dto.description.trim()
   if (dto.priority != null) m.priority = dto.priority
   if (dto.status != null) m.status = dto.status
+  if (dto.assignedTechnicianEmail !== undefined) {
+    const assignedTechnician = await resolveTechnicianAssignment(tenantId, dto.assignedTechnicianEmail)
+    m.assignedTechnicianEmail = assignedTechnician.email
+    m.assignedTechnicianName = assignedTechnician.name
+  }
+  if (dto.attachments !== undefined) {
+    m.attachments = Array.isArray(dto.attachments) ? dto.attachments : []
+  }
   if (dto.openingDate) {
     const dt = parseOpeningInput(dto.openingDate)
     if (dt) m.openingDate = dt

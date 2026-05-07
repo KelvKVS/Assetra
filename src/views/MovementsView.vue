@@ -4,35 +4,88 @@
     <div class="page-header">
       <div>
         <h2>Movimentações</h2>
-        <p class="muted">Histórico de transferências e alocações de ativos</p>
+        <p class="muted">{{ pageSubtitle }}</p>
       </div>
-      <button class="btn-primary" @click="showForm = !showForm">
+      <button v-if="canManageMovements" class="btn-primary" @click="showForm = !showForm">
         <Plus :size="18" :stroke-width="2.5" />
         {{ showForm ? 'Fechar' : 'Nova Movimentação' }}
       </button>
     </div>
 
     <!-- Add Movement Form -->
-    <div v-if="showForm" class="form-card">
-      <h3>Registrar movimentação</h3>
-      <form @submit.prevent="addMovement" class="movement-form">
-        <div class="form-group">
+    <div v-if="showForm && canManageMovements" class="form-card form-card-elevated">
+      <div class="form-head">
+        <span class="form-eyebrow">Nova movimentação</span>
+        <h3>Registrar movimentação</h3>
+      </div>
+      <form @submit.prevent="addMovement" class="movement-form modern-form">
+        <div class="form-group field">
           <label>Tag do ativo</label>
-          <input v-model.trim="newMovement.assetTag" type="text" placeholder="Ex: AST-200" required />
+          <input
+            v-model.trim="newMovement.assetTag"
+            type="text"
+            placeholder="Ex.: AST-200"
+            required
+            @focus="isAssetInputFocused = true"
+            @blur="hideAssetSuggestions"
+          />
+          <div v-if="showAssetSuggestions" class="suggestion-panel">
+            <button
+              v-for="asset in filteredAssetSuggestions"
+              :key="`asset-${asset.id}`"
+              type="button"
+              class="suggestion-item"
+              @mousedown.prevent="pickMovementAsset(asset.tag)"
+            >
+              <strong>{{ asset.tag }}</strong>
+              <span>{{ asset.description }}</span>
+            </button>
+          </div>
         </div>
-        <div class="form-group">
+        <div class="form-group field">
           <label>Origem</label>
-          <input v-model.trim="newMovement.origin" type="text" placeholder="Local de origem" required />
+          <input v-model.trim="newMovement.origin" type="text" list="origin-suggestions" placeholder="Local de origem" required />
+          <datalist id="origin-suggestions">
+            <option v-for="sector in sectorSuggestions" :key="`origin-${sector}`" :value="sector"></option>
+          </datalist>
         </div>
-        <div class="form-group">
+        <div class="form-group field">
           <label>Destino</label>
-          <input v-model.trim="newMovement.destination" type="text" placeholder="Local de destino" required />
+          <input
+            v-model.trim="newMovement.destination"
+            type="text"
+            list="destination-suggestions"
+            placeholder="Local de destino"
+            required
+          />
+          <datalist id="destination-suggestions">
+            <option v-for="sector in sectorSuggestions" :key="`destination-${sector}`" :value="sector"></option>
+          </datalist>
         </div>
-        <div class="form-group">
+        <div class="form-group field">
           <label>Responsável</label>
-          <input v-model.trim="newMovement.responsible" type="text" placeholder="Nome do responsável" required />
+          <input
+            v-model.trim="newMovement.responsible"
+            type="text"
+            placeholder="Nome ou email"
+            required
+            @focus="isResponsibleInputFocused = true"
+            @blur="hideResponsibleSuggestions"
+          />
+          <div v-if="showResponsibleSuggestions" class="suggestion-panel">
+            <button
+              v-for="user in filteredResponsibleSuggestions"
+              :key="`responsible-${user.id}`"
+              type="button"
+              class="suggestion-item"
+              @mousedown.prevent="pickResponsible(user.email)"
+            >
+              <strong>{{ user.name }}</strong>
+              <span>{{ user.email }}</span>
+            </button>
+          </div>
         </div>
-        <div class="form-actions">
+        <div class="form-actions field-wide">
           <button type="submit" class="btn-primary">Registrar</button>
           <button type="button" class="btn-secondary" @click="showForm = false">Cancelar</button>
         </div>
@@ -67,7 +120,7 @@
               <User :size="14" :stroke-width="2" />
               <span>{{ movement.responsible }}</span>
             </div>
-            <div class="timeline-actions">
+            <div v-if="canManageMovements" class="timeline-actions">
               <button class="btn-icon" @click="startMovementEdit(movement)" title="Editar">
                 <Edit :size="16" :stroke-width="2.5" />
               </button>
@@ -88,7 +141,7 @@
     </div>
 
     <!-- Edit Modal -->
-    <div v-if="editingMovementId !== null" class="modal-overlay" @click="cancelMovementEdit">
+    <div v-if="editingMovementId !== null && canManageMovements" class="modal-overlay" @click="cancelMovementEdit">
       <div class="modal" @click.stop>
         <div class="modal-header">
           <h3>Editar Movimentação</h3>
@@ -131,6 +184,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { type MovementRow, useInventoryStore } from '../stores/inventory'
 import { useConfirmAction } from '../composables/useConfirmAction'
+import { useAuthStore } from '../stores/auth'
+import { movementsInvolvingUser } from '../utils/userScope'
 import {
   Plus,
   Search,
@@ -143,10 +198,13 @@ import {
 } from 'lucide-vue-next'
 
 const confirm = useConfirmAction()
+const authStore = useAuthStore()
 
 const showForm = ref(false)
 const search = ref('')
 const editingMovementId = ref<string | null>(null)
+const isAssetInputFocused = ref(false)
+const isResponsibleInputFocused = ref(false)
 
 const newMovement = reactive({
   assetTag: '',
@@ -167,12 +225,67 @@ const inventory = useInventoryStore()
 
 onMounted(() => {
   void inventory.fetchMovements()
+  void inventory.fetchAssets()
+  void inventory.fetchUsers()
 })
+
+const isTechnician = computed(() => authStore.user?.role === 'TECNICO')
+const canManageMovements = computed(() => !isTechnician.value)
+const scopedMovements = computed(() =>
+  isTechnician.value ? movementsInvolvingUser(inventory.movements, authStore.user) : inventory.movements,
+)
+
+const pageSubtitle = computed(() =>
+  isTechnician.value
+    ? 'Histórico de transferências e alocações que envolvem você'
+    : 'Histórico de transferências e alocações de ativos',
+)
+const assetOptions = computed(() => inventory.assets)
+const userOptions = computed(() => inventory.users.filter((u) => u.status === 'Ativo'))
+const filteredAssetSuggestions = computed(() => {
+  const q = newMovement.assetTag.trim().toLowerCase()
+  if (!q) return assetOptions.value.slice(0, 8)
+  return assetOptions.value
+    .filter((asset) => `${asset.tag} ${asset.description}`.toLowerCase().includes(q))
+    .slice(0, 6)
+})
+const filteredResponsibleSuggestions = computed(() => {
+  const q = newMovement.responsible.trim().toLowerCase()
+  if (!q) return userOptions.value.slice(0, 8)
+  return userOptions.value
+    .filter((user) => `${user.name} ${user.email}`.toLowerCase().includes(q))
+    .slice(0, 6)
+})
+const showAssetSuggestions = computed(() => isAssetInputFocused.value && filteredAssetSuggestions.value.length > 0)
+const showResponsibleSuggestions = computed(
+  () => isResponsibleInputFocused.value && filteredResponsibleSuggestions.value.length > 0,
+)
+const sectorSuggestions = computed(() =>
+  Array.from(new Set(inventory.assets.map((asset) => asset.sector?.trim()).filter(Boolean) as string[])),
+)
+const pickMovementAsset = (tag: string) => {
+  newMovement.assetTag = tag
+  isAssetInputFocused.value = false
+}
+const pickResponsible = (value: string) => {
+  newMovement.responsible = value
+  isResponsibleInputFocused.value = false
+}
+const hideAssetSuggestions = () => {
+  window.setTimeout(() => {
+    isAssetInputFocused.value = false
+  }, 120)
+}
+const hideResponsibleSuggestions = () => {
+  window.setTimeout(() => {
+    isResponsibleInputFocused.value = false
+  }, 120)
+}
 
 const filteredMovements = computed(() => {
   const term = search.value.toLowerCase()
-  if (!term) return inventory.movements
-  return inventory.movements.filter((movement) =>
+  if (!term) return scopedMovements.value
+  return scopedMovements.value.filter((movement) =>
     [movement.assetTag, movement.origin, movement.destination, movement.responsible].some((value) =>
       value.toLowerCase().includes(term),
     ),
@@ -264,12 +377,91 @@ const saveMovementEdit = async () => {
   margin-bottom: 24px;
   box-shadow: var(--shadow-md);
 }
+.form-card-elevated {
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at top right, rgba(59,130,246,0.08), transparent 55%),
+    var(--bg-card);
+}
+.form-head { margin-bottom: 12px; }
+.form-eyebrow {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--primary);
+  text-transform: uppercase;
+}
 
 .form-card h3 { margin: 0 0 20px; font-size: 20px; font-weight: 600; color: var(--text-primary); }
 .movement-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
 .form-group { display: flex; flex-direction: column; gap: 6px; }
 .form-group label { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
 .form-actions { display: flex; gap: 12px; align-items: flex-end; }
+.modern-form { gap: 14px; }
+.field label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.field input {
+  padding: 11px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  color: var(--text-primary);
+  transition: all 0.15s ease;
+}
+.field select {
+  padding: 11px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  color: var(--text-primary);
+  transition: all 0.15s ease;
+}
+.field input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+.field select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+.field-wide { grid-column: 1 / -1; }
+.suggestion-panel {
+  margin-top: 4px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-card);
+  border-radius: 10px;
+  box-shadow: var(--shadow-md);
+  max-height: 220px;
+  overflow-y: auto;
+  display: grid;
+}
+.suggestion-item {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+.suggestion-item + .suggestion-item {
+  border-top: 1px solid var(--border-light);
+}
+.suggestion-item span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.suggestion-item:hover {
+  background: var(--bg-hover);
+}
 
 .search-bar {
   display: flex;
