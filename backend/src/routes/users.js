@@ -12,10 +12,10 @@ import {
 
 const router = Router()
 
-router.use(authMiddleware, authorize(['ADM']))
-
 router.get(
   '/',
+  authMiddleware,
+  authorize(['ADM', 'GESTOR']),
   asyncHandler(async (req, res) => {
     const users = await listUsersByTenant(prisma, req.user.tenantId)
     res.json(users)
@@ -24,6 +24,8 @@ router.get(
 
 router.post(
   '/',
+  authMiddleware,
+  authorize(['ADM']),
   asyncHandler(async (req, res) => {
     const parsed = userCreateSchema.safeParse(req.body)
     if (!parsed.success) {
@@ -36,6 +38,8 @@ router.post(
 
 router.patch(
   '/:id',
+  authMiddleware,
+  authorize(['ADM']),
   asyncHandler(async (req, res) => {
     const parsed = userUpdateSchema.safeParse(req.body)
     if (!parsed.success) {
@@ -48,6 +52,8 @@ router.patch(
 
 router.delete(
   '/:id',
+  authMiddleware,
+  authorize(['ADM']),
   asyncHandler(async (req, res) => {
     await deleteUserInTenant(prisma, req.user.tenantId, req.params.id)
     res.status(204).send()
