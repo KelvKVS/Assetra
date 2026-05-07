@@ -248,7 +248,7 @@ const handleLogout = async () => {
 }
 
 .menu-btn {
-  display: flex;
+  display: none;
   background: #1f2937;
   border: 1px solid #374151;
   color: #fff;
@@ -469,6 +469,7 @@ const handleLogout = async () => {
 }
 
 @media (max-width: 900px) {
+  .menu-btn { display: flex; }
   .topbar { padding: 14px 18px; gap: 12px; }
   .page-title { font-size: 20px; }
   .search-box { display: none; }
