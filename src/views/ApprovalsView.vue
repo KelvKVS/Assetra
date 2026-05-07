@@ -115,7 +115,7 @@
           </button>
         </div>
         <div v-if="canReassignApproval(item)" class="reassign-box">
-          <label>Não ficou bom? Reprovar e realocar:</label>
+          <label>Encaminhar para execução técnica:</label>
           <div class="reassign-row">
             <select v-model="reassignmentTargetByApprovalId[item.id]">
               <option value="">Selecione outro técnico</option>
@@ -128,7 +128,7 @@
               :disabled="!reassignmentTargetByApprovalId[item.id]"
               @click="reassignMaintenance(item)"
             >
-              Reprovar e realocar
+              Enviar para técnico
             </button>
           </div>
         </div>
@@ -227,18 +227,18 @@ const reassignMaintenance = async (item: ApprovalRow) => {
   if (!targetEmail) return
   const selectedTech = technicianUsers.value.find((tech) => tech.email.trim().toLowerCase() === targetEmail)
   const ok = await confirm.ask(
-    `A solicitação será reprovada e a ordem será realocada para ${selectedTech?.name ?? targetEmail}. Confirme com a sua senha.`,
-    'Reprovar e realocar',
+    `A solicitação será devolvida para execução técnica com ${selectedTech?.name ?? targetEmail}. Confirme com a sua senha.`,
+    'Encaminhar para técnico',
   )
   if (!ok) return
   await inventory.respondApproval(
     item.id,
     'REJECTED',
-    `Reprovada e realocada para ${selectedTech?.name ?? targetEmail} (${targetEmail}).`,
+    `Devolvida para execução técnica com ${selectedTech?.name ?? targetEmail} (${targetEmail}).`,
   )
   await inventory.updateMaintenance(item.maintenanceId, {
     assignedTechnicianEmail: targetEmail,
-    status: 'Em andamento',
+    status: 'Aberta',
   })
   reassignmentTargetByApprovalId[item.id] = ''
 }
