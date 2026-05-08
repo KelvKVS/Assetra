@@ -11,6 +11,8 @@
         {{ showFilters ? 'Fechar' : 'Filtros' }}
       </button>
     </div>
+    <p v-if="loadingSummary" class="status-message">Atualizando indicadores...</p>
+    <p v-else-if="reportError" class="status-message status-error">{{ reportError }}</p>
 
     <!-- Filters Panel -->
     <div v-if="showFilters" class="filters-card">
@@ -103,7 +105,7 @@
         </div>
         <div class="donut-container">
           <div class="donut" :style="maintenanceDonutStyle">
-            <span>{{ inventory.maintenances.length }}</span>
+            <span>{{ maintenanceTotal }}</span>
           </div>
           <ul class="legend-list">
             <li>
@@ -167,7 +169,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useInventoryStore } from '../stores/inventory'
+import api from '../services/api'
 import {
   SlidersHorizontal,
   Search,
@@ -185,29 +187,88 @@ import {
   Download,
 } from 'lucide-vue-next'
 
-const inventory = useInventoryStore()
-
-onMounted(() => {
-  void inventory.reloadDashboardData()
-})
+type ReportSummary = {
+  sectors: string[]
+  kpis: {
+    sectorCount: number
+    maintenanceRate: number
+    depreciatedAssets: number
+    inventoryCompliance: number
+    concludedMaintenances: number
+    pendingMaintenances: number
+  }
+  charts: {
+    assetsBySector: Array<{ label: string; value: number; percent: number }>
+    maintenanceStatus: {
+      total: number
+      concluded: number
+      pending: number
+    }
+  }
+}
 
 const showFilters = ref(false)
+const loadingSummary = ref(false)
+const reportError = ref('')
 const filters = reactive({
   startDate: '',
   endDate: '',
   sector: '',
 })
+const summary = ref<ReportSummary>({
+  sectors: [],
+  kpis: {
+    sectorCount: 0,
+    maintenanceRate: 0,
+    depreciatedAssets: 0,
+    inventoryCompliance: 0,
+    concludedMaintenances: 0,
+    pendingMaintenances: 0,
+  },
+  charts: {
+    assetsBySector: [],
+    maintenanceStatus: {
+      total: 0,
+      concluded: 0,
+      pending: 0,
+    },
+  },
+})
 
-const sectors = computed(() => [...new Set(inventory.assets.map((asset) => asset.sector))])
+const sectors = computed(() => summary.value.sectors)
 
-const applyFilters = () => {
-  showFilters.value = false
+function buildFilterParams() {
+  const params: Record<string, string> = {}
+  if (filters.startDate) params.startDate = filters.startDate
+  if (filters.endDate) params.endDate = filters.endDate
+  if (filters.sector) params.sector = filters.sector
+  return params
 }
 
-const resetFilters = () => {
+async function fetchSummary() {
+  loadingSummary.value = true
+  reportError.value = ''
+  try {
+    const { data } = await api.get<ReportSummary>('/reports/summary', { params: buildFilterParams() })
+    summary.value = data
+  } catch (error: unknown) {
+    const ax = error as { response?: { data?: { message?: string } } }
+    reportError.value = ax?.response?.data?.message ?? 'Não foi possível carregar os relatórios.'
+  } finally {
+    loadingSummary.value = false
+  }
+}
+
+const applyFilters = async () => {
+  showFilters.value = false
+  await fetchSummary()
+}
+
+const resetFilters = async () => {
   filters.startDate = ''
   filters.endDate = ''
   filters.sector = ''
+  await fetchSummary()
 }
 
 function triggerJsonDownload(filename: string, data: unknown) {
@@ -220,72 +281,40 @@ function triggerJsonDownload(filename: string, data: unknown) {
   URL.revokeObjectURL(url)
 }
 
+onMounted(() => {
+  void fetchSummary()
+})
+
 const downloadReport = async (type: string) => {
   const stamp = new Date().toISOString().slice(0, 10)
   try {
-    if (type === 'location') {
-      triggerJsonDownload(`assetra-ativos-${stamp}.json`, inventory.assets)
-      return
-    }
-    if (type === 'movements') {
-      await inventory.fetchMovements()
-      triggerJsonDownload(`assetra-movimentacoes-${stamp}.json`, inventory.movements)
-      return
-    }
-    if (type === 'maintenance-costs') {
-      await inventory.fetchMaintenances()
-      triggerJsonDownload(`assetra-manutencoes-${stamp}.json`, inventory.maintenances)
-      return
-    }
-    if (type === 'users') {
-      await inventory.fetchUsers()
-      triggerJsonDownload(`assetra-usuarios-${stamp}.json`, inventory.users)
-    }
-  } catch {
-    window.alert('Não foi possível exportar. Confirme que está autenticado e que a API está a responder.')
+    const { data } = await api.get<{ data: unknown }>(`/reports/export/${type}`, { params: buildFilterParams() })
+    const suffix =
+      type === 'location'
+        ? 'ativos'
+        : type === 'movements'
+          ? 'movimentacoes'
+          : type === 'maintenance-costs'
+            ? 'manutencoes'
+            : 'usuarios'
+    triggerJsonDownload(`assetra-${suffix}-${stamp}.json`, data?.data ?? [])
+  } catch (error: unknown) {
+    const ax = error as { response?: { data?: { message?: string } } }
+    window.alert(ax?.response?.data?.message ?? 'Não foi possível exportar. Confirme se a API está a responder.')
   }
 }
 
-const sectorCount = computed(() => new Set(inventory.assets.map((asset) => asset.sector)).size)
-const maintenanceRate = computed(() => {
-  if (!inventory.assets.length) return '0.0'
-  const rate = (inventory.maintenances.length / inventory.assets.length) * 100
-  return rate.toFixed(1)
-})
-
-const depreciatedAssets = computed(() => inventory.assets.filter((asset) => asset.status === 'Em manutenção').length)
-const inventoryCompliance = computed(() => {
-  if (!inventory.assets.length) return 0
-  const compliant = inventory.assets.filter((asset) => asset.status !== 'Em manutenção').length
-  return Math.round((compliant / inventory.assets.length) * 100)
-})
-
-const assetsBySector = computed(() => {
-  const map = new Map<string, number>()
-  inventory.assets.forEach((asset) => {
-    const current = map.get(asset.sector) ?? 0
-    map.set(asset.sector, current + 1)
-  })
-  const raw = Array.from(map.entries())
-    .map(([label, value]) => ({ label, value }))
-    .sort((a, b) => b.value - a.value)
-
-  const max = raw[0]?.value ?? 1
-  return raw.map((item) => ({
-    ...item,
-    percent: Math.round((item.value / max) * 100),
-  }))
-})
-
-const concludedMaintenances = computed(
-  () => inventory.maintenances.filter((maintenance) => maintenance.status === 'Concluída').length,
-)
-const pendingMaintenances = computed(
-  () => inventory.maintenances.filter((maintenance) => maintenance.status !== 'Concluída').length,
-)
+const sectorCount = computed(() => summary.value.kpis.sectorCount)
+const maintenanceRate = computed(() => Number(summary.value.kpis.maintenanceRate ?? 0).toFixed(1))
+const depreciatedAssets = computed(() => summary.value.kpis.depreciatedAssets)
+const inventoryCompliance = computed(() => summary.value.kpis.inventoryCompliance)
+const assetsBySector = computed(() => summary.value.charts.assetsBySector)
+const concludedMaintenances = computed(() => summary.value.kpis.concludedMaintenances)
+const pendingMaintenances = computed(() => summary.value.kpis.pendingMaintenances)
+const maintenanceTotal = computed(() => summary.value.charts.maintenanceStatus.total)
 
 const maintenanceDonutStyle = computed(() => {
-  const total = inventory.maintenances.length || 1
+  const total = maintenanceTotal.value || 1
   const concluded = (concludedMaintenances.value / total) * 100
   return {
     background: `conic-gradient(#22c55e 0% ${concluded}%, #f59e0b ${concluded}% 100%)`,
@@ -298,6 +327,8 @@ const maintenanceDonutStyle = computed(() => {
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 .page-header h2 { margin: 0 0 4px; font-size: 28px; font-weight: 700; color: var(--text-primary); }
 .page-header p { margin: 0; font-size: 14px; color: var(--text-secondary); }
+.status-message { margin: -8px 0 16px; color: var(--text-secondary); font-size: 13px; }
+.status-message.status-error { color: var(--danger); }
 
 .btn-primary {
   display: flex;

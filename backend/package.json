@@ -9,10 +9,11 @@
     "worker:events": "node src/workers/eventsWorker.js",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
+    "prisma:migrate:deploy": "prisma migrate deploy",
     "seed": "node seed.js",
     "seed:safe": "node seed.js",
     "seed:if-enabled": "node scripts/seed-if-enabled.js",
-    "test": "node --test src/services/authService.test.js"
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",

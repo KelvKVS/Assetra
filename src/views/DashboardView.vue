@@ -4,6 +4,7 @@
     <template v-if="isAdmin">
       <div class="welcome-banner">
         <div>
+          <span class="banner-chip">Visão executiva</span>
           <h2>Olá, {{ firstName }} 👋</h2>
           <p>Visão geral da operação em <strong>{{ tenantName }}</strong>.</p>
         </div>
@@ -57,19 +58,50 @@
         </div>
 
         <div class="chart-card">
-          <h3>Movimentações por destino</h3>
-          <div v-if="movementBySector.length" class="bar-list">
-            <div v-for="item in movementBySector" :key="item.label" class="bar-row">
+          <h3>Manutenções por prioridade</h3>
+          <div v-if="maintenanceByPriority.length" class="bar-list">
+            <div v-for="item in maintenanceByPriority" :key="item.label" class="bar-row">
               <span class="bar-label">{{ item.label }}</span>
               <div class="bar-track">
-                <div class="bar-fill" :style="{ width: `${item.percent}%` }"></div>
+                <div class="bar-fill bar-fill-priority" :style="{ width: `${item.percent}%` }"></div>
               </div>
               <strong class="bar-value">{{ item.value }}</strong>
             </div>
           </div>
-          <p v-else class="muted">Sem movimentações registadas.</p>
+          <p v-else class="muted">Sem manutenções registradas.</p>
+        </div>
+
+        <div class="chart-card">
+          <h3>Carga por técnico</h3>
+          <div v-if="workloadByTechnician.length" class="bar-list">
+            <div v-for="item in workloadByTechnician" :key="item.label" class="bar-row">
+              <span class="bar-label">{{ item.label }}</span>
+              <div class="bar-track">
+                <div class="bar-fill bar-fill-workload" :style="{ width: `${item.percent}%` }"></div>
+              </div>
+              <strong class="bar-value">{{ item.value }}</strong>
+            </div>
+          </div>
+          <p v-else class="muted">Sem técnicos atribuídos no momento.</p>
         </div>
       </div>
+
+      <section class="panel">
+        <header class="panel-header">
+          <h3><ArrowRightLeft :size="18" /> Movimentações recentes</h3>
+          <RouterLink to="/movimentacoes" class="link">ver tudo →</RouterLink>
+        </header>
+        <ul v-if="recentMovements.length" class="list">
+          <li v-for="m in recentMovements" :key="m.id">
+            <div class="list-main">
+              <strong>{{ m.assetTag }}</strong>
+              <span class="muted">{{ m.origin }} → {{ m.destination }}</span>
+              <span class="meta">{{ m.responsible }} · {{ m.date }}</span>
+            </div>
+          </li>
+        </ul>
+        <p v-else class="muted">Nenhuma movimentação recente encontrada.</p>
+      </section>
     </template>
 
     <!-- ================= GESTOR ================= -->
@@ -328,10 +360,32 @@ const donutStyle = computed(() => {
   }
 })
 
-const movementBySector = computed(() => {
+const maintenanceByPriority = computed(() => {
   const m = new Map<string, number>()
-  inventory.movements.forEach((mv) => m.set(mv.destination, (m.get(mv.destination) ?? 0) + 1))
-  const raw = Array.from(m.entries()).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value).slice(0, 5)
+  inventory.maintenances.forEach((row) => {
+    const label = String(row.priority ?? 'Média').trim() || 'Média'
+    m.set(label, (m.get(label) ?? 0) + 1)
+  })
+  const raw = Array.from(m.entries())
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 5)
+  const max = raw[0]?.value ?? 1
+  return raw.map((it) => ({ ...it, percent: Math.round((it.value / max) * 100) }))
+})
+
+const workloadByTechnician = computed(() => {
+  const m = new Map<string, number>()
+  inventory.maintenances
+    .filter((row) => row.status !== 'Concluída')
+    .forEach((row) => {
+      const label = String(row.assignedTechnicianName || row.assignedTechnicianEmail || 'Não atribuído').trim()
+      m.set(label, (m.get(label) ?? 0) + 1)
+    })
+  const raw = Array.from(m.entries())
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 6)
   const max = raw[0]?.value ?? 1
   return raw.map((it) => ({ ...it, percent: Math.round((it.value / max) * 100) }))
 })
@@ -380,11 +434,25 @@ const priorityClass = (p: string) =>
 
 .welcome-banner {
   display: flex; justify-content: space-between; align-items: center; gap: 16px;
-  padding: 22px 24px; background: linear-gradient(135deg, var(--primary-light), transparent 80%);
+  padding: 22px 24px; background: radial-gradient(circle at top right, rgba(59,130,246,0.2), transparent 55%), linear-gradient(135deg, var(--primary-light), transparent 80%);
   border: 1px solid var(--border-light); border-radius: 14px;
+  box-shadow: var(--shadow-md);
 }
 .welcome-banner h2 { margin: 0; font-size: 22px; color: var(--text-primary); }
 .welcome-banner p { margin: 4px 0 0; color: var(--text-secondary); font-size: 14px; }
+.banner-chip {
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--primary);
+  background: var(--primary-light);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: 999px;
+  padding: 4px 10px;
+  margin-bottom: 8px;
+}
 
 .btn-primary, .btn-secondary {
   display: inline-flex; align-items: center; gap: 8px;
@@ -436,6 +504,8 @@ const priorityClass = (p: string) =>
 .bar-label { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bar-track { height: 8px; background: var(--bg-hover); border-radius: 4px; overflow: hidden; }
 .bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), #8b5cf6); border-radius: 4px; }
+.bar-fill.bar-fill-priority { background: linear-gradient(90deg, #f59e0b, #ef4444); }
+.bar-fill.bar-fill-workload { background: linear-gradient(90deg, #22c55e, #14b8a6); }
 .bar-value { color: var(--text-primary); font-weight: 700; text-align: right; }
 
 /* Painéis Gestor/Técnico */

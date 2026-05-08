@@ -10,6 +10,7 @@ import MyAssetsView from '../views/MyAssetsView.vue'
 import ApprovalsView from '../views/ApprovalsView.vue'
 import MyRequestsView from '../views/MyRequestsView.vue'
 import TechnicianTasksView from '../views/TechnicianTasksView.vue'
+import ForbiddenView from '../views/ForbiddenView.vue'
 import { useAuthStore } from '../stores/auth'
 
 const router = createRouter({
@@ -32,6 +33,7 @@ const router = createRouter({
     { path: '/execucao-tecnica', name: 'technician-tasks', component: TechnicianTasksView, meta: { requiresAuth: true, roles: ['TECNICO'] } },
     { path: '/usuarios', name: 'users', component: UsersView, meta: { requiresAuth: true, roles: ['ADM'] } },
     { path: '/relatorios', name: 'reports', component: ReportsView, meta: { requiresAuth: true, roles: ['ADM', 'GESTOR'] } },
+    { path: '/acesso-negado', name: 'forbidden', component: ForbiddenView, meta: { requiresAuth: true } },
   ],
 })
 
@@ -52,8 +54,10 @@ router.beforeEach(async (to) => {
 
   if (to.meta.roles && authStore.user) {
     const allowedRoles = to.meta.roles as string[]
-    if (!allowedRoles.includes(authStore.user.role)) {
-      return { name: 'dashboard' }
+    const userRole = String(authStore.user.role ?? '').trim().toUpperCase()
+    const normalizedAllowedRoles = allowedRoles.map((role) => String(role ?? '').trim().toUpperCase())
+    if (!normalizedAllowedRoles.includes(userRole)) {
+      return { name: 'forbidden', query: { from: to.fullPath } }
     }
   }
 

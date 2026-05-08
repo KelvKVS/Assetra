@@ -13,9 +13,12 @@
    - `GOOGLE_CLIENT_ID`
    - `EVENT_BROKER_DRIVER` (`rabbitmq`)
    - `RABBITMQ_URL` (URL do broker, ex.: CloudAMQP)
-   - `INTEGRATION_API_KEY`
+   - Integrações externas (escolha 1 modo):
+     - recomendado: `INTEGRATION_API_KEYS` (formato `tenantId:apiKey,tenantId2:apiKey2`)
+     - legado: `INTEGRATION_API_KEY` + `INTEGRATION_TENANT_ID`
 5. Após deploy, valide:
    - `https://SEU-BACKEND.onrender.com/api/health`
+   - `https://SEU-BACKEND.onrender.com/api/metrics`
    - confira `eventBus.status = "up"` no JSON de health
 
 ### RabbitMQ no Render: preciso subir lá?
@@ -60,4 +63,6 @@ O mesmo `GOOGLE_CLIENT_ID` deve existir:
 
 - A autenticação usa cookie `httpOnly`; em produção foi ajustada para `sameSite=none` e `secure=true` para funcionar entre Vercel e Render.
 - `CORS_ORIGIN` aceita múltiplas origens separadas por vírgula.
-- `prisma db push` roda no build do Render (definido em `render.yaml`).
+- Em produção, o build usa `prisma migrate deploy` (definido em `render.yaml`).
+- A API de integrações possui rate limit dedicado para reduzir abuso.
+- O backend gera logs estruturados JSON com `requestId`, `tenantId`, `userId` e latência.

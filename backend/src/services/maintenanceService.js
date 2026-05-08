@@ -3,7 +3,7 @@ import Asset from '../models/Asset.js'
 import prisma from '../lib/prisma.js'
 import { AppError } from '../utils/AppError.js'
 import { logAudit } from './auditService.js'
-import { publishDomainEvent } from '../lib/eventBus.js'
+import { publishDomainEventSafely } from '../lib/eventBus.js'
 
 function parseOpeningInput(s) {
   if (!s || typeof s !== 'string') return null
@@ -124,12 +124,12 @@ export async function createMaintenance(tenantId, userId, dto, actor = null) {
     before: null,
     after: toDto(m),
   })
-  await publishDomainEvent('maintenance.created', {
+  await publishDomainEventSafely('maintenance.created', {
     tenantId,
     maintenanceId: String(m._id),
     assetTag: m.assetTag,
     status: m.status,
-  }).catch(() => {})
+  }, { service: 'maintenanceService', action: 'createMaintenance' })
   return toDto(m)
 }
 
@@ -172,12 +172,12 @@ export async function updateMaintenance(tenantId, maintenanceId, dto, actor = nu
     before,
     after,
   })
-  await publishDomainEvent('maintenance.updated', {
+  await publishDomainEventSafely('maintenance.updated', {
     tenantId,
     maintenanceId: String(m._id),
     assetTag: m.assetTag,
     status: m.status,
-  }).catch(() => {})
+  }, { service: 'maintenanceService', action: 'updateMaintenance' })
   return toDto(m)
 }
 
@@ -197,9 +197,9 @@ export async function deleteMaintenance(tenantId, maintenanceId, actor = null) {
     before,
     after: null,
   })
-  await publishDomainEvent('maintenance.deleted', {
+  await publishDomainEventSafely('maintenance.deleted', {
     tenantId,
     maintenanceId: String(m._id),
     assetTag: m.assetTag,
-  }).catch(() => {})
+  }, { service: 'maintenanceService', action: 'deleteMaintenance' })
 }

@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { authMiddleware } from '../middlewares/auth.js'
+import { authMiddleware, authorize } from '../middlewares/auth.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { movementCreateSchema, movementUpdateSchema } from '../schemas/index.js'
 import {
@@ -23,6 +23,7 @@ router.get(
 router.post(
   '/',
   authMiddleware,
+  authorize(['ADM', 'GESTOR']),
   asyncHandler(async (req, res) => {
     const parsed = movementCreateSchema.safeParse(req.body)
     if (!parsed.success) {
@@ -36,6 +37,7 @@ router.post(
 router.patch(
   '/:id',
   authMiddleware,
+  authorize(['ADM', 'GESTOR']),
   asyncHandler(async (req, res) => {
     const parsed = movementUpdateSchema.safeParse(req.body)
     if (!parsed.success) {
@@ -49,6 +51,7 @@ router.patch(
 router.delete(
   '/:id',
   authMiddleware,
+  authorize(['ADM', 'GESTOR']),
   asyncHandler(async (req, res) => {
     await deleteMovement(req.user.tenantId, req.params.id)
     res.status(204).send()

@@ -3,7 +3,7 @@ import Maintenance from '../models/Maintenance.js'
 import { AppError } from '../utils/AppError.js'
 import { refreshAssetStatusForTag } from './maintenanceService.js'
 import { logAudit } from './auditService.js'
-import { publishDomainEvent } from '../lib/eventBus.js'
+import { publishDomainEventSafely } from '../lib/eventBus.js'
 
 function resolveRequiredApproverRole(requestedByRole) {
   if (requestedByRole === 'TECNICO') return 'GESTOR'
@@ -117,13 +117,13 @@ export async function createApproval(tenantId, user, dto) {
     before: null,
     after: toDto(a),
   })
-  await publishDomainEvent('approval.created', {
+  await publishDomainEventSafely('approval.created', {
     tenantId,
     approvalId: String(a._id),
     type: a.type,
     status: a.status,
     requiredApproverRole: a.requiredApproverRole,
-  }).catch(() => {})
+  }, { service: 'approvalService', action: 'createApproval' })
   return toDto(a)
 }
 
@@ -179,12 +179,12 @@ export async function respondToApproval(tenantId, user, approvalId, decision, no
     after: toDto(a),
     metadata: { decision },
   })
-  await publishDomainEvent('approval.decided', {
+  await publishDomainEventSafely('approval.decided', {
     tenantId,
     approvalId: String(a._id),
     decision,
     status: a.status,
     maintenanceId: a.maintenanceId ?? '',
-  }).catch(() => {})
+  }, { service: 'approvalService', action: 'respondToApproval' })
   return toDto(a)
 }

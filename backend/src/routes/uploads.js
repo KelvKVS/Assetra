@@ -53,6 +53,14 @@ router.post('/', authMiddleware, upload.array('files', 6), (req, res) => {
 
 router.get('/:filename', authMiddleware, (req, res) => {
   const safe = path.basename(req.params.filename)
+  const tenantId = String(req.user?.tenantId ?? '').trim()
+  if (!tenantId) {
+    return res.status(401).json({ message: 'Sessão inválida para acesso ao ficheiro.' })
+  }
+  const tenantMarker = `-${tenantId}-`
+  if (!safe.includes(tenantMarker)) {
+    return res.status(403).json({ message: 'Acesso negado ao ficheiro solicitado.' })
+  }
   const full = path.join(uploadsDir, safe)
   if (!fs.existsSync(full)) {
     return res.status(404).json({ message: 'Ficheiro não encontrado.' })

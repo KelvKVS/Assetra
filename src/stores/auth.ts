@@ -25,6 +25,7 @@ function clearLegacyMockStorage() {
   try {
     localStorage.removeItem(LEGACY_MOCK_SESSION)
     localStorage.removeItem(LEGACY_MOCK_DATA)
+    localStorage.removeItem(AUTH_TOKEN_KEY)
   } catch {
     /* ignore */
   }
@@ -33,21 +34,12 @@ function clearLegacyMockStorage() {
 function persistToken(token?: string) {
   const value = token?.trim() || ''
   setSessionToken(value)
-  try {
-    if (value) localStorage.setItem(AUTH_TOKEN_KEY, value)
-    else localStorage.removeItem(AUTH_TOKEN_KEY)
-  } catch {
-    /* ignore */
-  }
 }
 
 function loadPersistedToken() {
-  try {
-    const token = localStorage.getItem(AUTH_TOKEN_KEY) || ''
-    setSessionToken(token)
-  } catch {
-    setSessionToken('')
-  }
+  // Endurecimento: evitamos persistir bearer token no localStorage.
+  // A sessão principal continua via cookie httpOnly.
+  setSessionToken('')
 }
 
 export const useAuthStore = defineStore('auth', {
