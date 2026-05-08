@@ -2,6 +2,8 @@ import Maintenance from '../models/Maintenance.js'
 import Asset from '../models/Asset.js'
 import prisma from '../lib/prisma.js'
 import { AppError } from '../utils/AppError.js'
+import { logAudit } from './auditService.js'
+import { publishDomainEvent } from '../lib/eventBus.js'
 
 function parseOpeningInput(s) {
   if (!s || typeof s !== 'string') return null
@@ -88,7 +90,7 @@ export async function listMaintenancesForTenant(tenantId) {
  * `{ assetTag, type, description?, priority, status, openingDate? }`.
  * O texto livre fica em `description` (não existe campo `details` no modelo).
  */
-export async function createMaintenance(tenantId, userId, dto) {
+export async function createMaintenance(tenantId, userId, dto, actor = null) {
   const asset = await Asset.findOne({ tenantId, tag: dto.assetTag.trim() })
   if (!asset) {
     throw new AppError(404, 'Ativo não encontrado para este tenant.')
@@ -113,14 +115,30 @@ export async function createMaintenance(tenantId, userId, dto) {
   })
   await m.save()
   await refreshAssetStatusForTag(tenantId, m.assetTag)
+  await logAudit({
+    tenantId,
+    actor: actor ?? { sub: userId },
+    entityType: 'Maintenance',
+    entityId: String(m._id),
+    action: 'CREATE',
+    before: null,
+    after: toDto(m),
+  })
+  await publishDomainEvent('maintenance.created', {
+    tenantId,
+    maintenanceId: String(m._id),
+    assetTag: m.assetTag,
+    status: m.status,
+  }).catch(() => {})
   return toDto(m)
 }
 
-export async function updateMaintenance(tenantId, maintenanceId, dto) {
+export async function updateMaintenance(tenantId, maintenanceId, dto, actor = null) {
   const m = await Maintenance.findOne({ _id: maintenanceId, tenantId })
   if (!m) {
     throw new AppError(404, 'Manutenção não encontrada.')
   }
+  const before = toDto(m)
   const prevTag = m.assetTag
   if (dto.assetTag != null) m.assetTag = dto.assetTag.trim()
   if (dto.type != null) m.type = dto.type.trim()
@@ -144,13 +162,44 @@ export async function updateMaintenance(tenantId, maintenanceId, dto) {
   if (prevTag !== m.assetTag) {
     await refreshAssetStatusForTag(tenantId, prevTag)
   }
+  const after = toDto(m)
+  await logAudit({
+    tenantId,
+    actor,
+    entityType: 'Maintenance',
+    entityId: String(m._id),
+    action: 'UPDATE',
+    before,
+    after,
+  })
+  await publishDomainEvent('maintenance.updated', {
+    tenantId,
+    maintenanceId: String(m._id),
+    assetTag: m.assetTag,
+    status: m.status,
+  }).catch(() => {})
   return toDto(m)
 }
 
-export async function deleteMaintenance(tenantId, maintenanceId) {
+export async function deleteMaintenance(tenantId, maintenanceId, actor = null) {
   const m = await Maintenance.findOneAndDelete({ _id: maintenanceId, tenantId })
   if (!m) {
     throw new AppError(404, 'Manutenção não encontrada.')
   }
+  const before = toDto(m)
   await refreshAssetStatusForTag(tenantId, m.assetTag)
+  await logAudit({
+    tenantId,
+    actor,
+    entityType: 'Maintenance',
+    entityId: String(m._id),
+    action: 'DELETE',
+    before,
+    after: null,
+  })
+  await publishDomainEvent('maintenance.deleted', {
+    tenantId,
+    maintenanceId: String(m._id),
+    assetTag: m.assetTag,
+  }).catch(() => {})
 }

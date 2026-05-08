@@ -2,6 +2,8 @@ import Approval from '../models/Approval.js'
 import Maintenance from '../models/Maintenance.js'
 import { AppError } from '../utils/AppError.js'
 import { refreshAssetStatusForTag } from './maintenanceService.js'
+import { logAudit } from './auditService.js'
+import { publishDomainEvent } from '../lib/eventBus.js'
 
 function resolveRequiredApproverRole(requestedByRole) {
   if (requestedByRole === 'TECNICO') return 'GESTOR'
@@ -106,6 +108,22 @@ export async function createApproval(tenantId, user, dto) {
     status: 'Pendente',
   })
   await a.save()
+  await logAudit({
+    tenantId,
+    actor: user,
+    entityType: 'Approval',
+    entityId: String(a._id),
+    action: 'CREATE',
+    before: null,
+    after: toDto(a),
+  })
+  await publishDomainEvent('approval.created', {
+    tenantId,
+    approvalId: String(a._id),
+    type: a.type,
+    status: a.status,
+    requiredApproverRole: a.requiredApproverRole,
+  }).catch(() => {})
   return toDto(a)
 }
 
@@ -125,6 +143,7 @@ export async function respondToApproval(tenantId, user, approvalId, decision, no
   if (!canUserDecideApproval(requiredRole, userRole)) {
     throw new AppError(403, 'Esta solicitação deve ser decidida por outro perfil.')
   }
+  const before = toDto(a)
   a.status = decision === 'APPROVED' ? 'Aprovada' : 'Reprovada'
   a.decidedBy = user?.sub
   a.decidedByName = user?.name
@@ -138,7 +157,34 @@ export async function respondToApproval(tenantId, user, approvalId, decision, no
       maintenance.status = decision === 'APPROVED' ? 'Concluída' : 'Em andamento'
       await maintenance.save()
       await refreshAssetStatusForTag(tenantId, maintenance.assetTag)
+      await logAudit({
+        tenantId,
+        actor: user,
+        entityType: 'Maintenance',
+        entityId: String(maintenance._id),
+        action: 'STATUS_FROM_APPROVAL',
+        before: null,
+        after: { status: maintenance.status },
+        metadata: { approvalId: String(a._id), decision },
+      })
     }
   }
+  await logAudit({
+    tenantId,
+    actor: user,
+    entityType: 'Approval',
+    entityId: String(a._id),
+    action: 'DECIDE',
+    before,
+    after: toDto(a),
+    metadata: { decision },
+  })
+  await publishDomainEvent('approval.decided', {
+    tenantId,
+    approvalId: String(a._id),
+    decision,
+    status: a.status,
+    maintenanceId: a.maintenanceId ?? '',
+  }).catch(() => {})
   return toDto(a)
 }

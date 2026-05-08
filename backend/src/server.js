@@ -22,7 +22,9 @@ import movementRoutes from './routes/movements.js'
 import approvalRoutes from './routes/approvals.js'
 import taskRoutes from './routes/tasks.js'
 import uploadRoutes from './routes/uploads.js'
+import integrationRoutes from './routes/integrations.js'
 import { AppError } from './utils/AppError.js'
+import { getEventBusHealth } from './lib/eventBus.js'
 
 if (!process.env.JWT_SECRET) {
   process.env.JWT_SECRET = 'troque-este-segredo-em-producao'
@@ -86,9 +88,11 @@ app.get('/api/health', async (_req, res) => {
   }
   // mongoose readyState: 0=desconectado, 1=conectado, 2=ligando, 3=desconectando
   const mongo = mongoose.connection.readyState === 1
+  const eventBus = await getEventBusHealth()
   res.json({
     status: 'ok',
     database: { sql, mongo },
+    eventBus,
   })
 })
 
@@ -101,6 +105,7 @@ app.use('/api/movements', movementRoutes)
 app.use('/api/approvals', approvalRoutes)
 app.use('/api/tasks', taskRoutes)
 app.use('/api/uploads', uploadRoutes)
+app.use('/api/integrations', integrationRoutes)
 
 
 app.use((error, _req, res, _next) => {

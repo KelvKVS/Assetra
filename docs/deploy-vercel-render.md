@@ -11,8 +11,29 @@
    - `DATABASE_URL` (recomendado: PostgreSQL do Render)
    - `MONGODB_URL` (MongoDB Atlas ou equivalente)
    - `GOOGLE_CLIENT_ID`
+   - `EVENT_BROKER_DRIVER` (`rabbitmq`)
+   - `RABBITMQ_URL` (URL do broker, ex.: CloudAMQP)
+   - `INTEGRATION_API_KEY`
 5. Após deploy, valide:
    - `https://SEU-BACKEND.onrender.com/api/health`
+   - confira `eventBus.status = "up"` no JSON de health
+
+### RabbitMQ no Render: preciso subir lá?
+
+Sim, para mensageria funcionar em produção você precisa de um broker acessível.
+
+Opções:
+
+1. **Recomendado (mais simples): CloudAMQP**  
+   - Crie uma instância RabbitMQ no CloudAMQP.
+   - Copie a URL AMQP para `RABBITMQ_URL` no Render.
+   - Mantém o backend e worker no Render, e o broker externo.
+
+2. **Hospedar broker por conta própria**  
+   - Pode usar outro provedor/VM com RabbitMQ.
+   - Informe a URL em `RABBITMQ_URL`.
+
+> O `render.yaml` já cria um worker (`assetra-events-worker`) para consumir eventos RabbitMQ.
 
 ## 2) Frontend na Vercel
 

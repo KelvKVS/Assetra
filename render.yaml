@@ -23,3 +23,24 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
+      - key: EVENT_BROKER_DRIVER
+        value: rabbitmq
+      - key: RABBITMQ_URL
+        sync: false
+      - key: INTEGRATION_API_KEY
+        sync: false
+  - type: worker
+    name: assetra-events-worker
+    runtime: node
+    rootDir: backend
+    plan: free
+    autoDeploy: true
+    buildCommand: npm install
+    startCommand: npm run worker:events
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: EVENT_BROKER_DRIVER
+        value: rabbitmq
+      - key: RABBITMQ_URL
+        sync: false

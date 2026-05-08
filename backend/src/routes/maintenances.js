@@ -29,7 +29,7 @@ router.post(
     if (!parsed.success) {
       return res.status(400).json({ message: 'Dados inválidos.', issues: parsed.error.flatten() })
     }
-    const row = await createMaintenance(req.user.tenantId, req.user.sub, parsed.data)
+    const row = await createMaintenance(req.user.tenantId, req.user.sub, parsed.data, req.user)
     res.status(201).json(row)
   }),
 )
@@ -43,7 +43,7 @@ router.patch(
     if (!parsed.success) {
       return res.status(400).json({ message: 'Dados inválidos.', issues: parsed.error.flatten() })
     }
-    const row = await updateMaintenance(req.user.tenantId, req.params.id, parsed.data)
+    const row = await updateMaintenance(req.user.tenantId, req.params.id, parsed.data, req.user)
     res.json(row)
   }),
 )
@@ -53,7 +53,7 @@ router.delete(
   authMiddleware,
   authorize(['ADM', 'GESTOR', 'TECNICO']),
   asyncHandler(async (req, res) => {
-    await deleteMaintenance(req.user.tenantId, req.params.id)
+    await deleteMaintenance(req.user.tenantId, req.params.id, req.user)
     res.status(204).send()
   }),
 )

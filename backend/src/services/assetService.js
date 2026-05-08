@@ -1,6 +1,7 @@
 import Asset from '../models/Asset.js'
 import prisma from '../lib/prisma.js'
 import { AppError } from '../utils/AppError.js'
+import { logAudit } from './auditService.js'
 
 function toDto(doc) {
   if (!doc) return null
@@ -56,6 +57,15 @@ export async function createAssetForTenant(tenantId, userId, dto) {
       history: [{ action: 'CRIAÇÃO', userId, details: 'Ativo cadastrado' }],
     })
     await asset.save()
+    await logAudit({
+      tenantId,
+      actor: { sub: userId },
+      entityType: 'Asset',
+      entityId: String(asset._id),
+      action: 'CREATE',
+      before: null,
+      after: toDto(asset),
+    })
     return toDto(asset)
   } catch (e) {
     if (e instanceof AppError) throw e
@@ -65,6 +75,7 @@ export async function createAssetForTenant(tenantId, userId, dto) {
 
 export async function updateAssetForTenant(tenantId, userId, assetId, dto) {
   const asset = await Asset.findOne({ _id: assetId, tenantId })
+  const before = toDto(asset)
   if (!asset) {
     throw new AppError(404, 'Ativo não encontrado.')
   }
@@ -95,13 +106,34 @@ export async function updateAssetForTenant(tenantId, userId, assetId, dto) {
     details: 'Dados do ativo atualizados',
   })
   await asset.save()
+  await logAudit({
+    tenantId,
+    actor: { sub: userId },
+    entityType: 'Asset',
+    entityId: String(asset._id),
+    action: 'UPDATE',
+    before,
+    after: toDto(asset),
+  })
   return toDto(asset)
 }
 
 export async function deleteAssetForTenant(tenantId, assetId) {
+  const current = await Asset.findOne({ _id: assetId, tenantId })
   const result = await Asset.findOneAndDelete({ _id: assetId, tenantId })
   if (!result) {
     throw new AppError(404, 'Ativo não encontrado.')
+  }
+  if (current) {
+    await logAudit({
+      tenantId,
+      actor: null,
+      entityType: 'Asset',
+      entityId: String(current._id),
+      action: 'DELETE',
+      before: toDto(current),
+      after: null,
+    })
   }
 }
 
