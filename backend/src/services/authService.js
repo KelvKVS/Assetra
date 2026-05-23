@@ -1,9 +1,7 @@
 import bcrypt from 'bcryptjs'
-import { OAuth2Client } from 'google-auth-library'
 import jwt from 'jsonwebtoken'
 import { AppError } from '../utils/AppError.js'
-
-const googleClient = new OAuth2Client()
+import { verifyGoogleIdToken } from './googleTokenService.js'
 
 function buildSessionUser(user) {
   return {
@@ -30,6 +28,7 @@ function signSessionToken(user) {
   try {
     return jwt.sign(
       {
+        type: 'session',
         sub: user.id,
         name: user.name,
         email: user.email,
@@ -107,82 +106,74 @@ export async function authenticateUser(prisma, input) {
   }
 
   const token = signSessionToken(user)
-
   return {
     token,
     user: buildSessionUser(user),
   }
 }
 
+function mapTenantChoices(users) {
+  return users.map((u) => ({
+    slug: u.tenant.slug,
+    name: u.tenant.name,
+  }))
+}
+
 /**
- * Login com Google (sem auto-cadastro).
- * - Só autentica se o utilizador já existir e estiver ativo no tenant.
- * - Se email existir em múltiplos tenants e não informar slug => erro 400.
+ * Resolve utilizador Google pelo e-mail (sem auto-cadastro).
  */
-export async function authenticateGoogleUser(prisma, input) {
-  const googleClientId = process.env.GOOGLE_CLIENT_ID
-  if (!googleClientId?.trim()) {
-    throw new AppError(500, 'Configuração inválida: defina GOOGLE_CLIENT_ID em backend/.env.')
-  }
-
-  let payload
-  try {
-    const ticket = await googleClient.verifyIdToken({
-      idToken: input.credential,
-      audience: googleClientId,
-    })
-    payload = ticket.getPayload()
-  } catch {
-    throw new AppError(401, 'Token Google inválido.')
-  }
-
-  const email = String(payload?.email ?? '')
+export async function resolveGoogleLoginUser(prisma, { email, tenantSlug }) {
+  const normalizedEmail = String(email ?? '')
     .trim()
     .toLowerCase()
-  const name = String(payload?.name ?? '').trim()
-  if (!email || !name) {
-    throw new AppError(401, 'Não foi possível obter dados do utilizador Google.')
+  if (!normalizedEmail) {
+    throw new AppError(401, 'Não foi possível obter o e-mail da conta Google.')
   }
 
-  const tenantSlug = input.tenantSlug?.trim().toLowerCase() || undefined
+  const matches = await prisma.user.findMany({
+    where: { email: normalizedEmail, active: true },
+    include: { tenant: true },
+  })
+  const withActiveTenant = matches.filter((u) => u.tenant?.active)
+
+  if (withActiveTenant.length === 0) {
+    throw new AppError(
+      401,
+      'Este e-mail ainda não está cadastrado no Assetra. Peça ao administrador da sua empresa para criar o seu acesso.',
+    )
+  }
+
+  const slug = tenantSlug?.trim().toLowerCase() || undefined
   let user
 
-  if (tenantSlug) {
-    const tenant = await prisma.tenant.findFirst({ where: { slug: tenantSlug, active: true } })
-    if (!tenant) {
-      throw new AppError(400, 'Organização inválida/inativa. Verifique o slug.')
-    }
-    user = await prisma.user.findFirst({
-      where: { tenantId: tenant.id, email, active: true },
-      include: { tenant: true },
-    })
+  if (withActiveTenant.length === 1) {
+    user = withActiveTenant[0]
+  } else if (slug) {
+    user = withActiveTenant.find((u) => String(u.tenant?.slug ?? '').toLowerCase() === slug)
     if (!user) {
-      throw new AppError(
-        401,
-        'Utilizador Google não cadastrado nesta organização. Peça ao administrador para criar a conta.',
-      )
+      throw new AppError(400, 'Este e-mail não está cadastrado na organização selecionada.', {
+        code: 'TENANT_MISMATCH',
+        tenants: mapTenantChoices(withActiveTenant),
+      })
     }
   } else {
-    const matches = await prisma.user.findMany({
-      where: { email, active: true },
-      include: { tenant: true },
+    throw new AppError(409, 'Selecione a organização da sua conta para continuar.', {
+      code: 'MULTIPLE_TENANTS',
+      tenants: mapTenantChoices(withActiveTenant),
     })
-    const withActiveTenant = matches.filter((u) => u.tenant?.active)
-    if (withActiveTenant.length === 0) {
-      throw new AppError(
-        401,
-        'Utilizador Google não cadastrado. Peça ao administrador para criar a conta.',
-      )
-    }
-    if (withActiveTenant.length > 1) {
-      throw new AppError(
-        400,
-        'Este e-mail Google existe em mais de uma organização. Informe o slug da organização.',
-      )
-    }
-    user = withActiveTenant[0]
   }
 
   const token = signSessionToken(user)
   return { token, user: buildSessionUser(user) }
+}
+
+/**
+ * Login com Google via credencial GIS (ADM / fluxo legado no browser).
+ */
+export async function authenticateGoogleUser(prisma, input) {
+  const verified = await verifyGoogleIdToken(input.credential)
+  return resolveGoogleLoginUser(prisma, {
+    email: verified.email,
+    tenantSlug: input.tenantSlug,
+  })
 }

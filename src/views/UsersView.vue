@@ -18,6 +18,32 @@
         <span class="form-eyebrow">Novo usuário</span>
         <h3>Cadastrar novo usuário</h3>
       </div>
+      <div class="registration-mode field-wide">
+        <button
+          type="button"
+          :class="['mode-btn', { active: registrationMode === 'google' }]"
+          @click="setRegistrationMode('google')"
+        >
+          Conta Google (produção)
+        </button>
+        <button
+          type="button"
+          :class="['mode-btn', { active: registrationMode === 'demo' }]"
+          @click="setRegistrationMode('demo')"
+        >
+          Demo @assetra.local
+        </button>
+      </div>
+      <p class="mode-hint field-wide">
+        <template v-if="registrationMode === 'google'">
+          Cadastre o <strong>e-mail Google do colaborador</strong> (o ADM não precisa da password dele).
+          No primeiro acesso, o colaborador usa «Entrar com Google» com essa mesma conta — o sistema valida no Google.
+        </template>
+        <template v-else>
+          Apenas para testes (seed). Domínio obrigatório: <code>@assetra.local</code> — login com senha.
+        </template>
+      </p>
+
       <form @submit.prevent="addUser" class="user-form modern-form">
         <div class="form-group field">
           <label>Nome completo</label>
@@ -25,7 +51,16 @@
         </div>
         <div class="form-group field">
           <label>E-mail</label>
-          <input v-model.trim="newUser.email" type="email" placeholder="email@assetra.local" required />
+          <input
+            v-model.trim="newUser.email"
+            type="email"
+            :placeholder="registrationMode === 'demo' ? 'nome@assetra.local' : 'colaborador@gmail.com'"
+            required
+            @blur="checkEmailAvailability"
+          />
+          <p v-if="emailStatus.message" :class="['email-status', emailStatusClass]">
+            {{ emailStatus.message }}
+          </p>
         </div>
         <div class="form-group field">
           <label>Perfil</label>
@@ -42,42 +77,34 @@
             <option>Inativo</option>
           </select>
         </div>
-        <div class="form-group field">
-          <label>Senha inicial</label>
-          <input
-            v-model="newUser.password"
-            type="password"
-            minlength="8"
-            placeholder="Mínimo 8 caracteres"
-            required
-          />
-        </div>
-        <div class="form-group field">
-          <label>Confirmar senha</label>
-          <input
-            v-model="newUser.confirmPassword"
-            type="password"
-            minlength="8"
-            placeholder="Repita a senha"
-            required
-          />
-        </div>
+        <template v-if="registrationMode === 'demo'">
+          <div class="form-group field">
+            <label>Senha inicial</label>
+            <input
+              v-model="newUser.password"
+              type="password"
+              minlength="8"
+              placeholder="Mínimo 8 caracteres"
+              required
+            />
+          </div>
+          <div class="form-group field">
+            <label>Confirmar senha</label>
+            <input
+              v-model="newUser.confirmPassword"
+              type="password"
+              minlength="8"
+              placeholder="Repita a senha"
+              required
+            />
+          </div>
+        </template>
         <div class="form-actions field-wide">
           <button type="submit" class="btn-primary">
-            {{ isGooglePrefilled ? 'Cadastrar usuário importado' : 'Cadastrar' }}
-          </button>
-          <button type="button" class="btn-google" @click="importFromGoogle" :disabled="!googleEnabled || googleLoading">
-            <Chrome :size="16" :stroke-width="2.2" />
-            {{ googleLoading ? 'Carregando Google...' : 'Puxar dados do Google' }}
+            {{ registrationMode === 'google' ? 'Cadastrar (login Google)' : 'Cadastrar demo' }}
           </button>
           <button type="button" class="btn-secondary" @click="showForm = false">Cancelar</button>
         </div>
-        <p class="google-hint field-wide" v-if="!googleEnabled">
-          Configure <code>VITE_GOOGLE_CLIENT_ID</code> para habilitar importação via Google.
-        </p>
-        <p class="google-hint field-wide" v-else-if="isGooglePrefilled">
-          Dados preenchidos com Google. Revise perfil/status e clique em cadastrar.
-        </p>
       </form>
       <p v-if="formError" class="error-message">{{ formError }}</p>
     </div>
@@ -107,6 +134,8 @@
             <span :class="['status-badge', `status-${user.status.toLowerCase()}`]">
               {{ user.status }}
             </span>
+            <span v-if="isDemoAssetraEmail(user.email)" class="account-badge demo">Demo</span>
+            <span v-else class="account-badge google">Google</span>
           </div>
         </div>
         <div class="user-actions">
@@ -192,10 +221,10 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { type DirectoryUser, useInventoryStore } from '../stores/inventory'
 import { roleLabelPt } from '../utils/roleLabels'
+import { isDemoAssetraEmail } from '../utils/emailPolicy'
 import { useConfirmAction } from '../composables/useConfirmAction'
 import {
   Plus,
-  Chrome,
   Search,
   Mail,
   Users,
@@ -210,11 +239,19 @@ const showForm = ref(false)
 const search = ref('')
 const formError = ref('')
 const editingUserId = ref<string | null>(null)
-const isGooglePrefilled = ref(false)
-const googleLoading = ref(false)
-const googleReady = ref(false)
-const googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)?.trim() ?? ''
-const googleEnabled = Boolean(googleClientId && !googleClientId.toLowerCase().includes('seu-client-id'))
+const registrationMode = ref<'google' | 'demo'>('google')
+const emailStatus = ref({
+  message: '',
+  available: false,
+  formatValid: false,
+})
+
+const emailStatusClass = computed(() => {
+  if (!emailStatus.value.message) return ''
+  if (!emailStatus.value.formatValid) return 'warn'
+  if (!emailStatus.value.available) return 'error'
+  return 'ok'
+})
 
 const newUser = reactive({
   name: '',
@@ -236,19 +273,56 @@ const editUser = reactive({
 
 const inventory = useInventoryStore()
 
+function setRegistrationMode(mode: 'google' | 'demo') {
+  registrationMode.value = mode
+  formError.value = ''
+  emailStatus.value = { message: '', available: false, formatValid: false }
+  if (mode === 'demo') {
+    newUser.email = ''
+    newUser.name = ''
+  }
+}
+
+async function checkEmailAvailability() {
+  const email = newUser.email.trim().toLowerCase()
+  if (!email) {
+    emailStatus.value = { message: '', available: false, formatValid: false }
+    return
+  }
+  if (registrationMode.value === 'demo' && !isDemoAssetraEmail(email)) {
+    emailStatus.value = {
+      message: 'Contas demo devem terminar em @assetra.local',
+      available: false,
+      formatValid: false,
+    }
+    return
+  }
+  if (registrationMode.value === 'google' && isDemoAssetraEmail(email)) {
+    emailStatus.value = {
+      message: 'Para @assetra.local use o modo Demo.',
+      available: false,
+      formatValid: false,
+    }
+    return
+  }
+  try {
+    const result = await inventory.checkUserEmail(email)
+    emailStatus.value = {
+      message: result.message,
+      available: result.available,
+      formatValid: result.formatValid,
+    }
+  } catch {
+    emailStatus.value = {
+      message: 'Não foi possível verificar o e-mail.',
+      available: false,
+      formatValid: false,
+    }
+  }
+}
+
 onMounted(async () => {
   await inventory.fetchUsers()
-  if (!googleEnabled) return
-  try {
-    googleLoading.value = true
-    await loadGoogleScript()
-    initializeGoogleIdentity()
-    googleReady.value = true
-  } catch {
-    googleReady.value = false
-  } finally {
-    googleLoading.value = false
-  }
 })
 
 const filteredUsers = computed(() => {
@@ -261,23 +335,41 @@ const filteredUsers = computed(() => {
 
 const addUser = async () => {
   formError.value = ''
-  if (!isGooglePrefilled.value && newUser.password.length < 8) {
-    formError.value = 'A senha deve ter pelo menos 8 caracteres.'
+  const email = newUser.email.trim().toLowerCase()
+
+  if (registrationMode.value === 'demo') {
+    if (!isDemoAssetraEmail(email)) {
+      formError.value = 'Contas demo devem usar e-mail @assetra.local.'
+      return
+    }
+    if (newUser.password.length < 8) {
+      formError.value = 'A senha deve ter pelo menos 8 caracteres.'
+      return
+    }
+    if (newUser.password !== newUser.confirmPassword) {
+      formError.value = 'A confirmação de senha não corresponde.'
+      return
+    }
+  } else if (isDemoAssetraEmail(email)) {
+    formError.value = 'Para @assetra.local use o modo Demo.'
     return
   }
-  if (!isGooglePrefilled.value && newUser.password !== newUser.confirmPassword) {
-    formError.value = 'A confirmação de senha não corresponde.'
+
+  await checkEmailAvailability()
+  if (!emailStatus.value.available) {
+    formError.value = emailStatus.value.message || 'E-mail indisponível.'
     return
   }
+
   const ok = await confirm.ask('Confirme com a sua senha para cadastrar este utilizador.')
   if (!ok) return
   try {
     await inventory.createUser({
       name: newUser.name,
-      email: newUser.email,
+      email,
       profile: newUser.profile,
       status: newUser.status,
-      ...(isGooglePrefilled.value ? {} : { password: newUser.password }),
+      ...(registrationMode.value === 'demo' ? { password: newUser.password } : {}),
     })
     newUser.name = ''
     newUser.email = ''
@@ -285,95 +377,12 @@ const addUser = async () => {
     newUser.status = 'Ativo'
     newUser.password = ''
     newUser.confirmPassword = ''
-    isGooglePrefilled.value = false
+    registrationMode.value = 'google'
+    emailStatus.value = { message: '', available: false, formatValid: false }
     showForm.value = false
   } catch (e: unknown) {
     const ax = e as { response?: { data?: { message?: string } } }
     formError.value = ax?.response?.data?.message ?? 'Erro ao cadastrar usuário.'
-  }
-}
-
-const importFromGoogle = async () => {
-  formError.value = ''
-  if (!googleEnabled) {
-    formError.value = 'Importação Google indisponível: configure VITE_GOOGLE_CLIENT_ID.'
-    return
-  }
-  if (!googleReady.value || !window.google?.accounts?.id) {
-    formError.value = 'Google ainda não está pronto. Tente novamente em instantes.'
-    return
-  }
-  window.google.accounts.id.prompt()
-}
-
-const onGoogleCredential = (response: { credential?: string }) => {
-  const token = response?.credential
-  if (!token) {
-    formError.value = 'Não foi possível obter credencial do Google.'
-    return
-  }
-  const payload = decodeGoogleJwtPayload(token)
-  const name = String(payload?.name ?? '').trim()
-  const email = String(payload?.email ?? '').trim().toLowerCase()
-  if (!name || !email) {
-    formError.value = 'Não foi possível extrair nome e e-mail do Google.'
-    return
-  }
-  newUser.name = name
-  newUser.email = email
-  newUser.password = ''
-  newUser.confirmPassword = ''
-  isGooglePrefilled.value = true
-  formError.value = ''
-}
-
-function initializeGoogleIdentity() {
-  if (!window.google?.accounts?.id) return
-  window.google.accounts.id.initialize({
-    client_id: googleClientId,
-    callback: onGoogleCredential,
-    auto_select: false,
-    cancel_on_tap_outside: true,
-  })
-}
-
-function loadGoogleScript() {
-  return new Promise<void>((resolve, reject) => {
-    if (window.google?.accounts?.id) {
-      resolve()
-      return
-    }
-    const existing = document.getElementById('google-identity-script')
-    if (existing) {
-      existing.addEventListener('load', () => resolve(), { once: true })
-      existing.addEventListener('error', () => reject(new Error('Erro ao carregar script Google')), { once: true })
-      return
-    }
-    const script = document.createElement('script')
-    script.id = 'google-identity-script'
-    script.src = 'https://accounts.google.com/gsi/client'
-    script.async = true
-    script.defer = true
-    script.onload = () => resolve()
-    script.onerror = () => reject(new Error('Erro ao carregar script Google'))
-    document.head.appendChild(script)
-  })
-}
-
-function decodeGoogleJwtPayload(token: string) {
-  try {
-    const payload = token.split('.')[1]
-    if (!payload) return null
-    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/')
-    const decoded = decodeURIComponent(
-      atob(normalized)
-        .split('')
-        .map((c) => `%${`00${c.charCodeAt(0).toString(16)}`.slice(-2)}`)
-        .join(''),
-    )
-    return JSON.parse(decoded) as { name?: string; email?: string }
-  } catch {
-    return null
   }
 }
 
@@ -443,18 +452,6 @@ const saveUserEdit = async () => {
   }
 }
 
-declare global {
-  interface Window {
-    google?: {
-      accounts?: {
-        id?: {
-          initialize: (config: Record<string, unknown>) => void
-          prompt: () => void
-        }
-      }
-    }
-  }
-}
 </script>
 
 <style scoped>
@@ -631,6 +628,76 @@ declare global {
   margin: 0;
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+.registration-mode {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mode-btn {
+  flex: 1;
+  min-width: 140px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mode-btn.active {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+.mode-hint {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.email-status {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.email-status.ok { color: #22c55e; }
+.email-status.info { color: var(--text-secondary); }
+.email-status.warn { color: #f59e0b; }
+.email-status.error { color: var(--danger); }
+
+.google-verified {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+  font-size: 13px;
+}
+
+.account-badge {
+  padding: 4px 8px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.account-badge.demo {
+  background: rgba(107, 114, 128, 0.2);
+  color: #9ca3af;
+}
+
+.account-badge.google {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
 }
 
 .form-actions {

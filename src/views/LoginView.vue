@@ -34,12 +34,12 @@
             <p class="muted">Digite suas credenciais de acesso</p>
           </div>
 
-          <!-- Login Form -->
           <form @submit.prevent="handleLogin" class="login-form">
             <div class="form-group">
               <label>
                 <Building2 :size="16" />
                 Organização
+                <span class="label-optional">(login com e-mail e senha)</span>
               </label>
               <input
                 v-model.trim="tenantSlug"
@@ -88,6 +88,7 @@
             </button>
 
             <button
+              v-if="hasGoogleClientId"
               type="button"
               class="google-btn"
               :disabled="authStore.isLoading"
@@ -96,11 +97,23 @@
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.2 1.2-1.4 3.6-5.5 3.6-3.3 0-6-2.8-6-6.2s2.7-6.2 6-6.2c1.9 0 3.1.8 3.8 1.5l2.6-2.6C16.9 2.8 14.7 2 12 2 6.9 2 2.8 6.2 2.8 11.4s4.1 9.4 9.2 9.4c5.3 0 8.8-3.7 8.8-8.9 0-.6-.1-1.1-.2-1.6H12z"/>
               </svg>
-              {{ authStore.isLoading ? 'Aguarde...' : 'Entrar / Cadastrar com Google' }}
+              Entrar com Google
             </button>
-            <p v-if="!googleReady" class="google-hint">
-              Configure <code>VITE_GOOGLE_CLIENT_ID</code> no frontend para ativar o Google.
-            </p>
+
+            <div v-if="tenantChoices.length" class="tenant-picker">
+              <p class="tenant-picker-title">O seu e-mail está em mais de uma organização. Escolha uma:</p>
+              <button
+                v-for="t in tenantChoices"
+                :key="t.slug"
+                type="button"
+                class="tenant-choice-btn"
+                :disabled="authStore.isLoading"
+                @click="continueGoogleWithTenant(t.slug)"
+              >
+                <strong>{{ t.name }}</strong>
+                <span>{{ t.slug }}</span>
+              </button>
+            </div>
           </form>
 
           <!-- Error Alert -->
@@ -152,9 +165,11 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useGoogleIdToken } from '../composables/useGoogleIdToken'
+import api from '../services/api'
 import {
   Box,
   CheckCircle,
@@ -169,30 +184,21 @@ import {
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const googleOAuth = useGoogleIdToken()
 
 const tenantSlug = ref('default')
 const email = ref('')
 const password = ref('')
-const googleReady = ref(false)
+const tenantChoices = ref<Array<{ slug: string; name: string }>>([])
+const pendingGoogleCredential = ref<string | null>(null)
 
-const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
-const hasValidGoogleClientId = Boolean(
-  googleClientId?.trim() && !googleClientId.toLowerCase().includes('seu-client-id'),
-)
+const hasGoogleClientId = googleOAuth.enabled
 
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (cfg: {
-            client_id: string
-            callback: (response: { credential?: string }) => void
-          }) => void
-          prompt: () => void
-        }
-      }
-    }
+type ApiErrorBody = {
+  message?: string
+  details?: {
+    code?: string
+    tenants?: Array<{ slug: string; name: string }>
   }
 }
 
@@ -218,81 +224,91 @@ const handleLogin = async () => {
   try {
     await authStore.login(email.value, password.value, tenantSlug.value || undefined)
     router.push('/dashboard')
-  } catch (err) {
+  } catch {
     // Erros são tratados no store
   }
 }
 
-const onGoogleCredential = async (response: { credential?: string }) => {
-  const token = response?.credential
-  if (!token) {
-    authStore.error = 'Não foi possível obter credencial do Google.'
-    return
-  }
-  try {
-    await authStore.loginWithGoogle(token, tenantSlug.value || undefined)
-    router.push('/dashboard')
-  } catch {
-    // mensagem já tratada no store
-  }
-}
-
-function loadGoogleScript() {
-  return new Promise<void>((resolve, reject) => {
-    if (window.google?.accounts?.id) {
-      resolve()
-      return
-    }
-    const existing = document.getElementById('google-identity-script')
-    if (existing) {
-      existing.addEventListener('load', () => resolve(), { once: true })
-      existing.addEventListener('error', () => reject(new Error('Erro ao carregar Google script')), { once: true })
-      return
-    }
-    const script = document.createElement('script')
-    script.id = 'google-identity-script'
-    script.src = 'https://accounts.google.com/gsi/client'
-    script.async = true
-    script.defer = true
-    script.onload = () => resolve()
-    script.onerror = () => reject(new Error('Erro ao carregar Google script'))
-    document.head.appendChild(script)
-  })
-}
-
 const handleGoogleLogin = () => {
-  if (!hasValidGoogleClientId) {
-    authStore.error = 'Login Google indisponível: configure VITE_GOOGLE_CLIENT_ID no frontend.'
+  authStore.error = ''
+  if (!googleOAuth.start('/login', 'login')) {
+    authStore.error = 'Login com Google indisponível.'
+  }
+}
+
+async function finishGoogleLogin(credential: string, slug?: string) {
+  authStore.error = ''
+  try {
+    await authStore.loginWithGoogle(credential, slug)
+    pendingGoogleCredential.value = null
+    tenantChoices.value = []
+    router.push('/dashboard')
+  } catch (error: unknown) {
+    const ax = error as { response?: { data?: ApiErrorBody } }
+    const details = ax?.response?.data?.details
+    if (details?.code === 'MULTIPLE_TENANTS' && details.tenants?.length) {
+      pendingGoogleCredential.value = credential
+      tenantChoices.value = details.tenants
+      authStore.error = ''
+      return
+    }
+    pendingGoogleCredential.value = null
+    tenantChoices.value = []
+  }
+}
+
+const continueGoogleWithTenant = async (slug: string) => {
+  const credential = pendingGoogleCredential.value
+  tenantSlug.value = slug
+  if (credential) {
+    await finishGoogleLogin(credential, slug)
     return
   }
-  if (!googleReady.value || !window.google?.accounts?.id) {
-    authStore.error = 'Login Google ainda não inicializado. Recarregue a página e tente novamente.'
-    return
+  if (!googleOAuth.start('/login', 'login', slug)) {
+    authStore.error = 'Login com Google indisponível.'
   }
-  window.google.accounts.id.prompt()
+}
+
+async function handleGoogleOAuthCallback() {
+  const parsed = googleOAuth.parseRedirect()
+  if (!parsed) return false
+
+  if ('error' in parsed) {
+    authStore.error = googleOAuth.describeOAuthError(parsed.error, parsed.description)
+    return true
+  }
+
+  await finishGoogleLogin(parsed.idToken, parsed.tenant)
+  return true
+}
+
+async function loadGoogleTenantChoices() {
+  try {
+    const { data } = await api.get<{ tenants: Array<{ slug: string; name: string }> }>(
+      '/auth/google/tenant-choices',
+    )
+    tenantChoices.value = data.tenants ?? []
+    if (!tenantChoices.value.length) {
+      authStore.error = 'Nenhuma organização pendente. Clique em Entrar com Google novamente.'
+    }
+  } catch {
+    authStore.error = 'Escolha de organização expirada. Clique em Entrar com Google novamente.'
+    tenantChoices.value = []
+  }
 }
 
 onMounted(async () => {
-  if (!hasValidGoogleClientId) {
-    googleReady.value = false
-    return
-  }
-  try {
-    await loadGoogleScript()
-    if (!window.google?.accounts?.id) return
-    window.google.accounts.id.initialize({
-      client_id: googleClientId,
-      callback: onGoogleCredential,
-    })
-    googleReady.value = true
-  } catch {
-    googleReady.value = false
-  }
-})
+  if (await handleGoogleOAuthCallback()) return
 
-onBeforeUnmount(() => {
-  // Mantemos script global carregado; apenas limpamos estado local.
-  googleReady.value = false
+  const err = route.query.error
+  if (typeof err === 'string' && err.trim()) {
+    authStore.error = err.trim()
+    router.replace({ name: 'login' })
+  }
+  if (route.query.google === 'pick') {
+    await loadGoogleTenantChoices()
+    router.replace({ name: 'login' })
+  }
 })
 </script>
 
@@ -429,38 +445,16 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
 }
 
-.input-field {
-  width: 100%;
-  padding: 12px 16px;
-  font-size: 15px;
-  border: 2px solid var(--border-light);
-  border-radius: 10px;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  transition: all 0.2s ease;
+.label-optional {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
 }
 
-.input-field:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 4px var(--primary-light);
-}
-
-.login-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 100%;
-  padding: 14px;
-  font-size: 16px;
-  font-weight: 700;
-  background: var(--primary);
-  color: white;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.3s ease;
+.field-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
 }
 
 .google-btn {
@@ -495,10 +489,79 @@ onBeforeUnmount(() => {
   height: 18px;
 }
 
-.google-hint {
-  margin: -10px 0 0;
+.tenant-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  background: var(--bg-hover);
+}
+
+.tenant-picker-title {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.tenant-choice-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  cursor: pointer;
+  text-align: left;
+  color: var(--text-primary);
+  transition: border-color 0.15s ease;
+}
+
+.tenant-choice-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+}
+
+.tenant-choice-btn span {
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.input-field {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 15px;
+  border: 2px solid var(--border-light);
+  border-radius: 10px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px var(--primary-light);
+}
+
+.login-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
 }
 
 .login-btn:hover {

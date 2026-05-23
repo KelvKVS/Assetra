@@ -255,12 +255,36 @@ export const useInventoryStore = defineStore('inventory', {
       await this.fetchMaintenances()
       await this.fetchAssets()
     },
+    async checkUserEmail(email: string) {
+      const { data } = await api.get<{
+        formatValid: boolean
+        available: boolean
+        isDemo: boolean
+        requiresGoogleImport: boolean
+        message: string
+      }>('/users/check-email', { params: { email } })
+      return data
+    },
+    async verifyGoogleForUserImport(credential: string) {
+      const { data } = await api.post<{
+        name: string
+        email: string
+        emailVerified: boolean
+        formatValid: boolean
+        available: boolean
+        isDemo: boolean
+        requiresGoogleImport: boolean
+        message: string
+      }>('/users/verify-google', { credential })
+      return data
+    },
     async createUser(payload: {
       name: string
       email: string
       profile: string
       status: string
       password?: string
+      googleCredential?: string
     }) {
       await api.post('/users', {
         name: payload.name,
@@ -268,6 +292,7 @@ export const useInventoryStore = defineStore('inventory', {
         profile: payload.profile,
         status: payload.status,
         password: payload.password,
+        googleCredential: payload.googleCredential,
       })
       await this.fetchUsers()
     },

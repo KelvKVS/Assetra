@@ -1,0 +1,33 @@
+@startuml assetra-arquitetura-appendix
+' Script PlantUML de autoria do projeto — visão resumida para o Apêndice 8.
+' Gerar PNG/SVG: plantuml docs/diagramas/arquitetura-assetra.puml
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+title Assetra — visão lógica (camadas e persistência)
+
+actor "Utilizador\n(navegador)" as U
+rectangle "Cliente (SPA)" as FE {
+  [Vue 3 + Pinia + Vue Router] as Vue
+}
+rectangle "Servidor (Node.js)" as BE {
+  [Express 5 — REST /api] as API
+  [Services + middlewares] as SVC
+}
+database "PostgreSQL\n(Prisma)" as PG
+database "MongoDB\n(Mongoose)" as MG
+queue "Broker de eventos\n(RabbitMQ / Kafka)" as Q
+
+U --> Vue : HTTPS
+Vue --> API : JSON / cookies
+API --> SVC
+SVC --> PG : tenants, users
+SVC --> MG : ativos, manutenções,\nmovimentações, auditoria
+SVC ..> Q : eventos de domínio\n(opcional)
+
+note right of BE
+  Monólito modular em camadas.
+  Ver documentação técnica secção 5.
+end note
+
+@enduml

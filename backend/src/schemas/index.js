@@ -20,6 +20,7 @@ export const userCreateSchema = z
     name: z.string().min(3).max(120),
     email: z.string().email().max(120),
     password: z.string().min(8).max(100).optional(),
+    googleCredential: z.string().min(1).max(4000).optional(),
     role: z.enum(['ADM', 'GESTOR', 'TECNICO']).optional(),
     profile: profileEnum.optional(),
     status: userStatusEnum.optional(),

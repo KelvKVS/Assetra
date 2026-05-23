@@ -95,7 +95,7 @@ app.use(
     credentials: true,
   }),
 )
-app.use(express.json({ limit: '10kb' }))
+app.use(express.json({ limit: '64kb' }))
 app.use(cookieParser())
 app.use((req, res, next) => {
   const requestStartedAt = Date.now()
@@ -217,7 +217,10 @@ app.use((error, req, res, _next) => {
   }
   if (error instanceof AppError) {
     console.error(JSON.stringify({ ...baseErrorLog, statusCode: error.statusCode }))
-    return res.status(error.statusCode).json({ message: error.message })
+    return res.status(error.statusCode).json({
+      message: error.message,
+      ...(error.details ? { details: error.details } : {}),
+    })
   }
 
   if (error?.name === 'MulterError' || /Tipo de ficheiro/i.test(String(error?.message ?? ''))) {
@@ -228,7 +231,7 @@ app.use((error, req, res, _next) => {
   const prismaUnavailable =
     error?.name === 'PrismaClientInitializationError' ||
     error?.code === 'P1001' ||
-    /Can't reach database server|ECONNREFUSED.*5432/i.test(msg)
+    /Can't reach database server|ECONNREFUSED.*5432|must start with the protocol/i.test(msg)
 
   if (prismaUnavailable) {
     console.error(JSON.stringify({ ...baseErrorLog, statusCode: 503, prismaUnavailable: true }))

@@ -42,6 +42,9 @@ function loadPersistedToken() {
   setSessionToken('')
 }
 
+/** Evita dois GET /auth/me em paralelo (App.vue + router guard). */
+let fetchMePromise: Promise<void> | null = null
+
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     user: null as AuthUser | null,
@@ -59,11 +62,17 @@ export const useAuthStore = defineStore('auth', {
 
       try {
         const slug = tenantSlug?.trim()
-        const { data } = await api.post('/auth/login', {
+        const { data } = await api.post<{
+          user: AuthUser & { tenant?: TenantInfo; tenantId?: string }
+          token: string
+        }>('/auth/login', {
           email,
           password,
           ...(slug ? { tenantSlug: slug } : {}),
         })
+        if (!data.user || !data.token) {
+          throw new Error('Resposta de login inválida.')
+        }
         this.user = {
           id: data.user.id,
           name: data.user.name,
@@ -76,7 +85,7 @@ export const useAuthStore = defineStore('auth', {
         clearLegacyMockStorage()
       } catch (error: unknown) {
         const ax = error as { response?: { data?: { message?: string } } }
-        this.error = ax?.response?.data?.message ?? 'Falha no login. Confirme o backend (npm run dev), o ficheiro backend/.env e as credenciais do seed (npm run db:seed).'
+        this.error = ax?.response?.data?.message ?? 'Falha no login. Verifique e-mail, senha e organização.'
         throw error
       } finally {
         this.isLoading = false
@@ -110,29 +119,37 @@ export const useAuthStore = defineStore('auth', {
       }
     },
     async fetchMe() {
-      loadPersistedToken()
-      try {
-        const res = await api.get('/auth/me', { silent401: true } as Record<string, unknown>)
-        if (res?.status === 200 && res.data?.user) {
-          this.user = {
-            id: res.data.user.id,
-            name: res.data.user.name,
-            email: res.data.user.email,
-            role: res.data.user.role as Profile,
-            tenantId: res.data.user.tenantId,
-            tenant: res.data.user.tenant,
+      if (this.bootstrapped) return
+      if (fetchMePromise) return fetchMePromise
+
+      fetchMePromise = (async () => {
+        loadPersistedToken()
+        try {
+          const res = await api.get('/auth/me')
+          if (res.data?.user) {
+            this.user = {
+              id: res.data.user.id,
+              name: res.data.user.name,
+              email: res.data.user.email,
+              role: res.data.user.role as Profile,
+              tenantId: res.data.user.tenantId,
+              tenant: res.data.user.tenant,
+            }
+            clearLegacyMockStorage()
+          } else {
+            this.user = null
+            persistToken('')
           }
-          clearLegacyMockStorage()
-        } else {
+        } catch {
           this.user = null
           persistToken('')
+        } finally {
+          this.bootstrapped = true
+          fetchMePromise = null
         }
-      } catch {
-        this.user = null
-        persistToken('')
-      } finally {
-        this.bootstrapped = true
-      }
+      })()
+
+      return fetchMePromise
     },
     async logout() {
       clearLegacyMockStorage()

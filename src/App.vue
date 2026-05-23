@@ -75,13 +75,9 @@ const toggleTheme = () => {
   applyTheme(!isDark.value)
 }
 
-onMounted(async () => {
+onMounted(() => {
   const storedTheme = localStorage.getItem('assetra-theme')
   applyTheme(storedTheme !== 'light')
-  
-  if (!authStore.bootstrapped) {
-    await authStore.fetchMe()
-  }
 })
 </script>
 

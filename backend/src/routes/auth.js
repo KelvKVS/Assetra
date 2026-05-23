@@ -1,10 +1,25 @@
 import bcrypt from 'bcryptjs'
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
-import { authMiddleware } from '../middlewares/auth.js'
+import { authMiddleware, optionalAuthMiddleware } from '../middlewares/auth.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { googleAuthSchema, loginSchema, passwordVerifySchema } from '../schemas/index.js'
-import { authenticateGoogleUser, authenticateUser } from '../services/authService.js'
+import {
+  authenticateGoogleUser,
+  authenticateUser,
+  resolveGoogleLoginUser,
+} from '../services/authService.js'
+import {
+  buildGoogleAuthUrl,
+  exchangeGoogleCodeForEmail,
+  parseGoogleOAuthState,
+  readTenantPickCookie,
+  redirectToDashboard,
+  redirectToLoginPick,
+  redirectWithError,
+  signTenantPickCookie,
+} from '../services/googleOAuthService.js'
+import { AppError } from '../utils/AppError.js'
 
 const router = Router()
 const isProd = process.env.NODE_ENV === 'production'
@@ -27,11 +42,78 @@ router.post(
       return res.status(400).json({ message: 'Dados de login inválidos.' })
     }
 
-    const { token, user } = await authenticateUser(prisma, parsed.data)
+    const result = await authenticateUser(prisma, parsed.data)
 
-    res.cookie('token', token, getCookieOptions())
+    res.cookie('token', result.token, getCookieOptions())
+    return res.json({ user: result.user, token: result.token })
+  }),
+)
 
-    return res.json({ user, token })
+/** Login Google por redirecionamento (não depende de origens JavaScript no browser). */
+router.get(
+  '/google/start',
+  asyncHandler(async (req, res) => {
+    const tenantSlug = typeof req.query.tenantSlug === 'string' ? req.query.tenantSlug : undefined
+    const { url } = buildGoogleAuthUrl(tenantSlug)
+    return res.redirect(url)
+  }),
+)
+
+router.get(
+  '/google/tenant-choices',
+  asyncHandler(async (req, res) => {
+    const tenants = readTenantPickCookie(req.cookies?.google_tenant_pick)
+    if (!tenants?.length) {
+      return res.status(400).json({ message: 'Nenhuma escolha de organização pendente. Entre com Google novamente.' })
+    }
+    return res.json({ tenants })
+  }),
+)
+
+router.get(
+  '/google/callback',
+  asyncHandler(async (req, res) => {
+    const oauthError = typeof req.query.error === 'string' ? req.query.error : ''
+    if (oauthError) {
+      return redirectWithError(res, 'Login Google cancelado ou recusado.')
+    }
+
+    const code = typeof req.query.code === 'string' ? req.query.code : ''
+    const stateRaw = typeof req.query.state === 'string' ? req.query.state : ''
+    if (!code) {
+      return redirectWithError(res, 'Código Google ausente. Tente novamente.')
+    }
+
+    let statePayload
+    try {
+      statePayload = parseGoogleOAuthState(stateRaw)
+    } catch (err) {
+      const message = err instanceof AppError ? err.message : 'Estado OAuth inválido.'
+      return redirectWithError(res, message)
+    }
+
+    try {
+      const email = await exchangeGoogleCodeForEmail(code)
+      const { token, user } = await resolveGoogleLoginUser(prisma, {
+        email,
+        tenantSlug: statePayload?.tenantSlug,
+      })
+      res.clearCookie('google_tenant_pick', getCookieOptions())
+      res.cookie('token', token, getCookieOptions())
+      return redirectToDashboard(res)
+    } catch (err) {
+      if (err instanceof AppError && err.details?.code === 'MULTIPLE_TENANTS') {
+        const pickToken = signTenantPickCookie(err.details.tenants)
+        res.cookie('google_tenant_pick', pickToken, {
+          ...getCookieOptions(),
+          maxAge: 10 * 60 * 1000,
+        })
+        return redirectToLoginPick(res)
+      }
+      const message =
+        err instanceof AppError ? err.message : 'Não foi possível concluir o login com Google.'
+      return redirectWithError(res, message)
+    }
   }),
 )
 
@@ -78,14 +160,18 @@ router.post(
 
 router.get(
   '/me',
-  authMiddleware,
+  optionalAuthMiddleware,
   asyncHandler(async (req, res) => {
+    if (!req.user?.sub) {
+      return res.json({ user: null })
+    }
     const user = await prisma.user.findUnique({
       where: { id: req.user.sub },
       include: { tenant: true },
     })
     if (!user || !user.active || !user.tenant?.active) {
-      return res.status(401).json({ message: 'Sessão inválida.' })
+      res.clearCookie('token', getCookieOptions())
+      return res.json({ user: null })
     }
     return res.json({
       user: {

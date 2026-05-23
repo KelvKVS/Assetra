@@ -4,11 +4,13 @@ import { authMiddleware, authorize } from '../middlewares/auth.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { userCreateSchema, userUpdateSchema } from '../schemas/index.js'
 import {
+  checkUserEmailInTenant,
   createUserInTenant,
   deleteUserInTenant,
   listUsersByTenant,
   updateUserInTenant,
 } from '../services/userService.js'
+import { verifyGoogleIdToken } from '../services/googleTokenService.js'
 
 const router = Router()
 
@@ -19,6 +21,34 @@ router.get(
   asyncHandler(async (req, res) => {
     const users = await listUsersByTenant(prisma, req.user.tenantId)
     res.json(users)
+  }),
+)
+
+router.get(
+  '/check-email',
+  authMiddleware,
+  authorize(['ADM']),
+  asyncHandler(async (req, res) => {
+    const email = typeof req.query.email === 'string' ? req.query.email : ''
+    const result = await checkUserEmailInTenant(prisma, req.user.tenantId, email)
+    res.json(result)
+  }),
+)
+
+router.post(
+  '/verify-google',
+  authMiddleware,
+  authorize(['ADM']),
+  asyncHandler(async (req, res) => {
+    const credential = typeof req.body?.credential === 'string' ? req.body.credential : ''
+    const verified = await verifyGoogleIdToken(credential)
+    const availability = await checkUserEmailInTenant(prisma, req.user.tenantId, verified.email)
+    res.json({
+      name: verified.name,
+      email: verified.email,
+      emailVerified: true,
+      ...availability,
+    })
   }),
 )
 
