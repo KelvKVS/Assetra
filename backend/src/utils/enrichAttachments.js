@@ -2,9 +2,9 @@ import { buildUploadPublicUrl } from './publicApiUrl.js'
 import { signUploadFileToken } from './uploadFileToken.js'
 
 /**
- * Garante URLs absolutas + token de leitura para <img> em frontend noutro domínio (Vercel).
+ * Garante URL relativa + token de leitura (?ft=) para <img> e links.
  */
-export function enrichAttachmentUrls(req, attachments, tenantId) {
+export function enrichAttachmentUrls(_req, attachments, tenantId) {
   if (!Array.isArray(attachments) || !attachments.length) return []
   const tid = String(tenantId ?? '').trim()
   if (!tid) return attachments
@@ -15,7 +15,7 @@ export function enrichAttachmentUrls(req, attachments, tenantId) {
     const fileToken = signUploadFileToken(filename, tid)
     return {
       ...att,
-      url: buildUploadPublicUrl(req, filename, fileToken),
+      url: buildUploadPublicUrl(filename, fileToken),
     }
   })
 }

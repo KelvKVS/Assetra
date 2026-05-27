@@ -228,9 +228,8 @@ export const useInventoryStore = defineStore('inventory', {
       if (!files.length) return []
       const form = new FormData()
       for (const f of files) form.append('files', f)
-      const { data } = await api.post('/uploads', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
+      // Não definir Content-Type manualmente — o browser precisa incluir o boundary do multipart.
+      const { data } = await api.post('/uploads', form)
       return normalizeAttachments((data?.files ?? []) as AttachmentRef[]) ?? []
     },
     async createApproval(payload: {

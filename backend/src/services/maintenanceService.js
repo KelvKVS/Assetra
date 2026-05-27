@@ -5,6 +5,7 @@ import { AppError } from '../utils/AppError.js'
 import { logAudit } from './auditService.js'
 import { publishDomainEventSafely } from '../lib/eventBus.js'
 import { enrichAttachmentUrls } from '../utils/enrichAttachments.js'
+import { sanitizeAttachmentsForDb } from '../utils/sanitizeAttachments.js'
 
 function parseOpeningInput(s) {
   if (!s || typeof s !== 'string') return null
@@ -111,7 +112,7 @@ export async function createMaintenance(tenantId, userId, dto, actor = null) {
     status: dto.status,
     assignedTechnicianEmail: assignedTechnician.email,
     assignedTechnicianName: assignedTechnician.name,
-    attachments: Array.isArray(dto.attachments) ? dto.attachments : [],
+    attachments: sanitizeAttachmentsForDb(dto.attachments),
     openingDate,
   })
   await m.save()
@@ -152,7 +153,7 @@ export async function updateMaintenance(tenantId, maintenanceId, dto, actor = nu
     m.assignedTechnicianName = assignedTechnician.name
   }
   if (dto.attachments !== undefined) {
-    m.attachments = Array.isArray(dto.attachments) ? dto.attachments : []
+    m.attachments = sanitizeAttachmentsForDb(dto.attachments)
   }
   if (dto.openingDate) {
     const dt = parseOpeningInput(dto.openingDate)

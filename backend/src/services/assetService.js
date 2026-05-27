@@ -2,6 +2,7 @@ import Asset from '../models/Asset.js'
 import prisma from '../lib/prisma.js'
 import { AppError } from '../utils/AppError.js'
 import { enrichAttachmentUrls } from '../utils/enrichAttachments.js'
+import { sanitizeAttachmentsForDb } from '../utils/sanitizeAttachments.js'
 import { logAudit } from './auditService.js'
 
 function toDto(doc, req = null) {
@@ -18,11 +19,6 @@ function toDto(doc, req = null) {
     createdAt: o.createdAt,
     updatedAt: o.updatedAt,
   }
-}
-
-function normalizeAttachments(raw) {
-  if (!Array.isArray(raw)) return []
-  return raw.slice(0, 6)
 }
 
 /**
@@ -60,7 +56,7 @@ export async function createAssetForTenant(tenantId, userId, dto) {
       sector: dto.sector.trim(),
       status: dto.status ?? 'Disponível',
       assignedTo: assigned || undefined,
-      attachments: normalizeAttachments(dto.attachments),
+      attachments: sanitizeAttachmentsForDb(dto.attachments),
       tenantId,
       history: [{ action: 'CRIAÇÃO', userId, details: 'Ativo cadastrado' }],
     })
@@ -109,7 +105,7 @@ export async function updateAssetForTenant(tenantId, userId, assetId, dto) {
     asset.assignedTo = v || undefined
   }
   if (dto.attachments !== undefined) {
-    asset.attachments = normalizeAttachments(dto.attachments)
+    asset.attachments = sanitizeAttachmentsForDb(dto.attachments)
   }
   asset.history.push({
     action: 'EDIÇÃO',

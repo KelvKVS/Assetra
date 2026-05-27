@@ -2,24 +2,38 @@ import { apiBaseUrl } from '../services/api'
 import type { AttachmentRef } from '../types/assetra'
 
 /**
- * Converte `/api/uploads/...` em URL absoluta do backend em produção (Vercel + Render).
+ * Converte `/api/uploads/...` na URL que o browser deve pedir.
+ * Em dev: mantém relativo (proxy Vite). Em produção: prefixa VITE_API_BASE_URL se necessário.
  */
 export function resolveMediaUrl(url?: string): string {
   if (!url?.trim()) return ''
   const trimmed = url.trim()
   if (/^https?:\/\//i.test(trimmed)) return trimmed
 
-  const base = apiBaseUrl.replace(/\/+$/, '')
-  const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+  const qIdx = trimmed.indexOf('?')
+  const pathOnly = qIdx >= 0 ? trimmed.slice(0, qIdx) : trimmed
+  const query = qIdx >= 0 ? trimmed.slice(qIdx) : ''
 
-  if (path.startsWith('/api/')) {
-    if (base.endsWith('/api')) {
-      return `${base}${path.slice(4)}`
-    }
-    return `${base}${path}`
+  const base = apiBaseUrl.replace(/\/+$/, '')
+  const path = pathOnly.startsWith('/') ? pathOnly : `/${pathOnly}`
+
+  if (!path.startsWith('/api/')) {
+    return `${path}${query}`
   }
 
-  return path
+  // Dev com proxy: base = "/api" → manter "/api/uploads/..."
+  if (base === '/api' || base.endsWith('/api')) {
+    if (base.endsWith('/api')) {
+      return `${base}${path.slice(4)}${query}`
+    }
+  }
+
+  // Produção: base = "https://backend.../api"
+  if (base.endsWith('/api')) {
+    return `${base}${path.slice(4)}${query}`
+  }
+
+  return `${base}${path}${query}`
 }
 
 export function normalizeAttachment(att: AttachmentRef): AttachmentRef {

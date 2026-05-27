@@ -113,6 +113,7 @@ const confirm = async () => {
   try {
     const { data } = await api.post('/auth/verify-password', { password: password.value })
     if (data?.ok) {
+      password.value = ''
       emit('confirmed')
     } else {
       error.value = 'Senha incorreta.'

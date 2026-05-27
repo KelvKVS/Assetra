@@ -67,7 +67,7 @@ const attachmentRefSchema = z.object({
   originalName: z.string().max(200).optional(),
   mimetype: z.string().max(120).optional(),
   size: z.number().nonnegative().optional(),
-  url: z.string().min(1).max(400),
+  url: z.string().min(1).max(2048).optional(),
 })
 
 export const assetCreateSchema = z.object({

@@ -42,43 +42,58 @@ const upload = multer({
 
 const router = Router()
 
-router.post('/', authMiddleware, upload.array('files', 6), (req, res) => {
-  const tenantId = String(req.user?.tenantId ?? '').trim()
-  const files = (req.files ?? []).map((f) => {
-    const fileToken = tenantId ? signUploadFileToken(f.filename, tenantId) : ''
-    return {
-      filename: f.filename,
-      originalName: f.originalname,
-      mimetype: f.mimetype,
-      size: f.size,
-      url: buildUploadPublicUrl(req, f.filename, fileToken),
+router.post('/', authMiddleware, (req, res, next) => {
+  upload.array('files', 6)(req, res, (err) => {
+    if (err) return next(err)
+    const tenantId = String(req.user?.tenantId ?? '').trim()
+    const uploaded = req.files ?? []
+    if (!uploaded.length) {
+      return res.status(400).json({ message: 'Nenhum ficheiro recebido. Selecione imagens e tente novamente.' })
     }
+    const files = uploaded.map((f) => {
+      const fileToken = tenantId ? signUploadFileToken(f.filename, tenantId) : ''
+      return {
+        filename: f.filename,
+        originalName: f.originalname,
+        mimetype: f.mimetype,
+        size: f.size,
+        url: buildUploadPublicUrl(f.filename, fileToken),
+      }
+    })
+    res.status(201).json({ files })
   })
-  res.status(201).json({ files })
 })
 
-router.get('/:filename', optionalAuthMiddleware, (req, res) => {
-  const safe = path.basename(req.params.filename)
-  let tenantId = String(req.user?.tenantId ?? '').trim()
+router.get('/:filename', optionalAuthMiddleware, (req, res, next) => {
+  try {
+    const safe = path.basename(decodeURIComponent(req.params.filename ?? ''))
+    if (!safe) {
+      return res.status(400).json({ message: 'Nome de ficheiro inválido.' })
+    }
 
-  const ft = typeof req.query.ft === 'string' ? req.query.ft : ''
-  if (!tenantId && ft) {
-    const verified = verifyUploadFileToken(ft, safe)
-    if (verified?.tenantId) tenantId = verified.tenantId
-  }
+    let tenantId = String(req.user?.tenantId ?? '').trim()
 
-  if (!tenantId) {
-    return res.status(401).json({ message: 'Sessão inválida para acesso ao ficheiro.' })
+    const ft = typeof req.query.ft === 'string' ? req.query.ft : ''
+    if (!tenantId && ft) {
+      const verified = verifyUploadFileToken(ft, safe)
+      if (verified?.tenantId) tenantId = verified.tenantId
+    }
+
+    if (!tenantId) {
+      return res.status(401).json({ message: 'Sessão inválida para acesso ao ficheiro.' })
+    }
+    const tenantMarker = `-${tenantId}-`
+    if (!safe.includes(tenantMarker)) {
+      return res.status(403).json({ message: 'Acesso negado ao ficheiro solicitado.' })
+    }
+    const full = path.join(uploadsDir, safe)
+    if (!fs.existsSync(full)) {
+      return res.status(404).json({ message: 'Ficheiro não encontrado.' })
+    }
+    return res.sendFile(full)
+  } catch (err) {
+    return next(err)
   }
-  const tenantMarker = `-${tenantId}-`
-  if (!safe.includes(tenantMarker)) {
-    return res.status(403).json({ message: 'Acesso negado ao ficheiro solicitado.' })
-  }
-  const full = path.join(uploadsDir, safe)
-  if (!fs.existsSync(full)) {
-    return res.status(404).json({ message: 'Ficheiro não encontrado.' })
-  }
-  res.sendFile(full)
 })
 
 export default router

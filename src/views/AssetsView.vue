@@ -94,8 +94,10 @@
           </div>
         </div>
         <div class="form-actions">
-          <button type="submit" class="btn-primary">Cadastrar</button>
-          <button type="button" class="btn-secondary" @click="showForm = false">Cancelar</button>
+          <button type="submit" class="btn-primary" :disabled="isSaving">
+            {{ isSaving ? 'A guardar...' : 'Cadastrar' }}
+          </button>
+          <button type="button" class="btn-secondary" :disabled="isSaving" @click="showForm = false">Cancelar</button>
         </div>
       </form>
       <p v-if="formError" class="error-message">{{ formError }}</p>
@@ -329,6 +331,7 @@ const canManageAssets = computed(() => ['ADM', 'GESTOR'].includes(authStore.user
 const showForm = ref(false)
 const search = ref('')
 const formError = ref('')
+const isSaving = ref(false)
 const editingAssetId = ref<string | null>(null)
 const isCreateResponsibleFocused = ref(false)
 const isEditResponsibleFocused = ref(false)
@@ -455,19 +458,31 @@ const removeEditAttachment = (index: number) => {
 }
 
 const addAsset = async () => {
+  if (isSaving.value) return
   formError.value = ''
   const ok = await confirm.ask('Confirme com a sua senha para cadastrar este ativo.')
   if (!ok) return
+  isSaving.value = true
   try {
     const assigned = newAsset.assignedTo?.trim()
     let attachments: AttachmentRef[] = []
     if (selectedCreateFiles.value.length) {
       attachments = await inventory.uploadAttachments(selectedCreateFiles.value)
+      if (!attachments.length) {
+        formError.value = 'Não foi possível enviar as fotos. Tente novamente.'
+        return
+      }
     }
     await inventory.createAsset({
       ...newAsset,
       assignedTo: assigned || undefined,
-      attachments,
+      attachments: attachments.map(({ filename, originalName, mimetype, size, url }) => ({
+        filename,
+        originalName,
+        mimetype,
+        size,
+        url: url || `/api/uploads/${filename}`,
+      })),
     })
     newAsset.tag = ''
     newAsset.description = ''
@@ -479,6 +494,8 @@ const addAsset = async () => {
   } catch (e: unknown) {
     const ax = e as { response?: { data?: { message?: string } } }
     formError.value = ax?.response?.data?.message ?? 'Erro ao cadastrar ativo.'
+  } finally {
+    isSaving.value = false
   }
 }
 
@@ -517,21 +534,33 @@ const cancelAssetEdit = () => {
 }
 
 const saveAssetEdit = async () => {
+  if (isSaving.value) return
   formError.value = ''
   if (!editingAssetId.value) return
   const ok = await confirm.ask('Confirme com a sua senha para guardar as alterações.')
   if (!ok) return
+  isSaving.value = true
   try {
     const assigned = editAsset.assignedTo?.trim()
     let attachments = [...editAttachments.value]
     if (selectedEditFiles.value.length) {
       const uploaded = await inventory.uploadAttachments(selectedEditFiles.value)
+      if (!uploaded.length) {
+        formError.value = 'Não foi possível enviar as fotos novas. Tente novamente.'
+        return
+      }
       attachments = [...attachments, ...uploaded].slice(0, 6)
     }
     await inventory.updateAsset(editingAssetId.value, {
       ...editAsset,
       assignedTo: assigned ? assigned : null,
-      attachments,
+      attachments: attachments.map(({ filename, originalName, mimetype, size, url }) => ({
+        filename,
+        originalName,
+        mimetype,
+        size,
+        url: url || `/api/uploads/${filename}`,
+      })),
     })
     editingAssetId.value = null
     editAttachments.value = []
@@ -539,6 +568,8 @@ const saveAssetEdit = async () => {
   } catch (e: unknown) {
     const ax = e as { response?: { data?: { message?: string } } }
     formError.value = ax?.response?.data?.message ?? 'Não foi possível salvar.'
+  } finally {
+    isSaving.value = false
   }
 }
 </script>

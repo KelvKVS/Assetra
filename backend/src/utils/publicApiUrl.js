@@ -1,7 +1,17 @@
+import path from 'node:path'
+
 /**
- * URL pública da API (ex.: https://assetra-backend.onrender.com).
- * Em produção com frontend noutro domínio, uploads devem devolver URLs absolutas.
+ * URL relativa servida pelo mesmo origin do frontend (proxy /api no Vite ou rewrite na Vercel).
+ * Evita imagens quebradas em localhost:5173 → localhost:3000 cross-origin.
  */
+export function buildUploadPublicUrl(filename, fileAccessToken) {
+  const safeName = path.basename(String(filename ?? '').trim())
+  if (!safeName) return ''
+  const ft = fileAccessToken ? `?ft=${encodeURIComponent(fileAccessToken)}` : ''
+  return `/api/uploads/${safeName}${ft}`
+}
+
+/** Mantido para OAuth Google e redirects externos. */
 export function getPublicApiBase(req) {
   const fromEnv = String(process.env.API_PUBLIC_URL ?? process.env.PUBLIC_API_URL ?? '')
     .trim()
@@ -13,11 +23,4 @@ export function getPublicApiBase(req) {
   if (host) return `${proto}://${host}`
 
   return 'http://localhost:3000'
-}
-
-export function buildUploadPublicUrl(req, filename, fileAccessToken) {
-  const base = getPublicApiBase(req)
-  const encoded = encodeURIComponent(filename)
-  const ft = fileAccessToken ? `?ft=${encodeURIComponent(fileAccessToken)}` : ''
-  return `${base}/api/uploads/${encoded}${ft}`
 }

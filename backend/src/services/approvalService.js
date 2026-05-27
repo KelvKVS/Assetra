@@ -5,6 +5,7 @@ import { refreshAssetStatusForTag } from './maintenanceService.js'
 import { logAudit } from './auditService.js'
 import { publishDomainEventSafely } from '../lib/eventBus.js'
 import { enrichAttachmentUrls } from '../utils/enrichAttachments.js'
+import { sanitizeAttachmentsForDb } from '../utils/sanitizeAttachments.js'
 
 function resolveRequiredApproverRole(requestedByRole) {
   if (requestedByRole === 'FUNCIONARIO' || requestedByRole === 'TECNICO') return 'GESTOR'
@@ -101,7 +102,7 @@ export async function createApproval(tenantId, user, dto) {
     assetTag: dto.assetTag.trim(),
     description: dto.description.trim(),
     feedback: dto.feedback?.trim() || undefined,
-    attachments: Array.isArray(dto.attachments) ? dto.attachments : [],
+    attachments: sanitizeAttachmentsForDb(dto.attachments),
     requestedBy: user?.sub,
     requestedByName: user?.name,
     requestedByRole,
