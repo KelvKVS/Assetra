@@ -28,9 +28,10 @@ function getCookieOptions() {
   return {
     httpOnly: true,
     secure: isProd,
+    path: '/',
     // Render (API) + Vercel (frontend) precisam de cookie cross-site em produção.
     sameSite: isProd ? 'none' : 'lax',
-    maxAge: 60 * 60 * 1000,
+    maxAge: 60 * 60 * 24 * 7 * 1000,
   }
 }
 

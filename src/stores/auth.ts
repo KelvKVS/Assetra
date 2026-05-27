@@ -26,7 +26,6 @@ function clearLegacyMockStorage() {
   try {
     localStorage.removeItem(LEGACY_MOCK_SESSION)
     localStorage.removeItem(LEGACY_MOCK_DATA)
-    localStorage.removeItem(AUTH_TOKEN_KEY)
   } catch {
     /* ignore */
   }
@@ -35,12 +34,24 @@ function clearLegacyMockStorage() {
 function persistToken(token?: string) {
   const value = token?.trim() || ''
   setSessionToken(value)
+  try {
+    if (value) {
+      localStorage.setItem(AUTH_TOKEN_KEY, value)
+    } else {
+      localStorage.removeItem(AUTH_TOKEN_KEY)
+    }
+  } catch {
+    /* ignore — modo privado / quota */
+  }
 }
 
 function loadPersistedToken() {
-  // Endurecimento: evitamos persistir bearer token no localStorage.
-  // A sessão principal continua via cookie httpOnly.
-  setSessionToken('')
+  try {
+    const stored = localStorage.getItem(AUTH_TOKEN_KEY)?.trim() || ''
+    setSessionToken(stored)
+  } catch {
+    setSessionToken('')
+  }
 }
 
 /** Evita dois GET /auth/me em paralelo (App.vue + router guard). */

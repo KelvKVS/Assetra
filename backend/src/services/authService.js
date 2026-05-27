@@ -38,7 +38,7 @@ function signSessionToken(user) {
         tenantSlug: user.tenant.slug,
       },
       secret,
-      { expiresIn: '1h' },
+      { expiresIn: '7d' },
     )
   } catch {
     throw new AppError(500, 'Não foi possível criar a sessão. Verifique JWT_SECRET.')

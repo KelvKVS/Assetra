@@ -44,6 +44,11 @@ api.interceptors.response.use(
     }
     if (error?.response?.status === 401) {
       setSessionToken('')
+      try {
+        localStorage.removeItem('assetra-auth-token')
+      } catch {
+        /* ignore */
+      }
     }
     return Promise.reject(error)
   },
