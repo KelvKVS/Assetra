@@ -17,6 +17,7 @@ type AuthUser = {
   name: string
   email: string
   role: Profile
+  department?: string | null
   tenantId?: string
   tenant?: TenantInfo
 }
@@ -78,6 +79,7 @@ export const useAuthStore = defineStore('auth', {
           name: data.user.name,
           email: data.user.email,
           role: data.user.role as Profile,
+          department: data.user.department ?? null,
           tenantId: data.user.tenantId,
           tenant: data.user.tenant,
         }
@@ -105,6 +107,7 @@ export const useAuthStore = defineStore('auth', {
           name: data.user.name,
           email: data.user.email,
           role: data.user.role as Profile,
+          department: data.user.department ?? null,
           tenantId: data.user.tenantId,
           tenant: data.user.tenant,
         }
@@ -132,6 +135,7 @@ export const useAuthStore = defineStore('auth', {
               name: res.data.user.name,
               email: res.data.user.email,
               role: res.data.user.role as Profile,
+              department: res.data.user.department ?? null,
               tenantId: res.data.user.tenantId,
               tenant: res.data.user.tenant,
             }

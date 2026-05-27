@@ -51,7 +51,9 @@
         <div class="user-avatar">{{ userInitial }}</div>
         <div class="user-info">
           <strong>{{ authStore.user.name }}</strong>
-          <small class="user-meta">{{ roleLabel }}<template v-if="authStore.user.tenant"> · {{ authStore.user.tenant.name }}</template></small>
+          <small class="user-meta">
+            {{ roleLabel }}<template v-if="authStore.user.department"> · {{ authStore.user.department }}</template><template v-if="authStore.user.tenant"> · {{ authStore.user.tenant.name }}</template>
+          </small>
         </div>
         <button class="logout-btn" @click="handleLogout" title="Sair">
           <LogOut :size="18" />

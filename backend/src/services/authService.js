@@ -9,6 +9,7 @@ function buildSessionUser(user) {
     name: user.name,
     email: user.email,
     role: user.role,
+    department: user.department ?? null,
     tenantId: user.tenantId,
     tenant: {
       slug: user.tenant.slug,

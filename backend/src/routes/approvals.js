@@ -33,7 +33,7 @@ router.get(
 router.post(
   '/',
   authMiddleware,
-  authorize(['ADM', 'GESTOR', 'TECNICO']),
+  authorize(['ADM', 'GESTOR', 'TECNICO', 'FUNCIONARIO']),
   asyncHandler(async (req, res) => {
     const parsed = approvalCreateSchema.safeParse(req.body)
     if (!parsed.success) {

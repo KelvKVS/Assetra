@@ -62,6 +62,37 @@
             </button>
           </div>
         </div>
+        <div class="form-group field-wide">
+          <label>Fotos do ativo</label>
+          <div class="upload-shell">
+            <label class="btn-secondary upload-btn">
+              <Paperclip :size="16" />
+              Subir fotos
+              <input
+                type="file"
+                multiple
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                class="file-hidden"
+                @change="onCreateFilesPick"
+              />
+            </label>
+            <small class="field-hint">Até 6 fotos (8 MB por arquivo).</small>
+          </div>
+          <ul v-if="selectedCreateFiles.length" class="picked-list">
+            <li v-for="(file, idx) in selectedCreateFiles" :key="`${file.name}-${idx}`">
+              <span>{{ file.name }}</span>
+              <button type="button" class="picked-remove" @click="removeCreateFile(idx)">Remover</button>
+            </li>
+          </ul>
+          <div v-if="createPreviewUrls.length" class="photo-preview-row">
+            <img
+              v-for="(src, idx) in createPreviewUrls"
+              :key="`create-preview-${idx}`"
+              :src="src"
+              :alt="selectedCreateFiles[idx]?.name ?? 'Pré-visualização'"
+            />
+          </div>
+        </div>
         <div class="form-actions">
           <button type="submit" class="btn-primary">Cadastrar</button>
           <button type="button" class="btn-secondary" @click="showForm = false">Cancelar</button>
@@ -111,6 +142,15 @@
     <!-- Assets Grid -->
     <div class="assets-grid">
       <div v-for="asset in filteredAssets" :key="asset.id ?? asset.tag" class="asset-card">
+        <button
+          v-if="coverPhoto(asset)"
+          type="button"
+          class="asset-cover asset-cover-btn"
+          :aria-label="`Ver fotos de ${asset.tag}`"
+          @click="openGallery(asset, coverPhoto(asset)!)"
+        >
+          <img :src="coverPhoto(asset)!.url" :alt="coverPhoto(asset)!.originalName ?? asset.tag" />
+        </button>
         <div class="asset-header">
           <div class="asset-icon">
             <Monitor :size="24" :stroke-width="2" />
@@ -133,6 +173,22 @@
               <span class="detail-label">Resp.</span>
               <span>{{ asset.assignedTo }}</span>
             </div>
+            <div v-if="asset.attachments?.length" class="detail-item">
+              <Paperclip :size="14" :stroke-width="2.5" />
+              <span>{{ asset.attachments.length }} foto(s)</span>
+            </div>
+          </div>
+          <div v-if="imageAttachments(asset.attachments).length" class="asset-gallery">
+            <button
+              v-for="(att, idx) in imageAttachments(asset.attachments)"
+              :key="`${asset.tag}-photo-${idx}`"
+              type="button"
+              class="gallery-thumb"
+              :aria-label="`Abrir foto ${idx + 1} de ${asset.tag}`"
+              @click="openGallery(asset, att)"
+            >
+              <img :src="att.url" :alt="att.originalName ?? att.filename" />
+            </button>
           </div>
         </div>
         <div v-if="canManageAssets" class="asset-actions">
@@ -199,6 +255,36 @@
               </button>
             </div>
           </div>
+          <div class="form-group">
+            <label>Fotos do ativo</label>
+            <div v-if="editAttachments.length" class="edit-attachments">
+              <div v-for="(att, idx) in editAttachments" :key="`edit-att-${att.filename}-${idx}`" class="edit-att-item">
+                <img v-if="!att.mimetype || att.mimetype.startsWith('image/')" :src="att.url" :alt="att.originalName ?? att.filename" />
+                <span v-else>{{ att.originalName ?? att.filename }}</span>
+                <button type="button" class="picked-remove" @click="removeEditAttachment(idx)">Remover</button>
+              </div>
+            </div>
+            <div class="upload-shell">
+              <label class="btn-secondary upload-btn">
+                <Paperclip :size="16" />
+                Adicionar fotos
+                <input
+                  type="file"
+                  multiple
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  class="file-hidden"
+                  @change="onEditFilesPick"
+                />
+              </label>
+              <small class="field-hint">Máximo de 6 fotos no total.</small>
+            </div>
+            <ul v-if="selectedEditFiles.length" class="picked-list">
+              <li v-for="(file, idx) in selectedEditFiles" :key="`edit-file-${file.name}-${idx}`">
+                <span>{{ file.name }}</span>
+                <button type="button" class="picked-remove" @click="removeEditFile(idx)">Remover</button>
+              </li>
+            </ul>
+          </div>
           <div class="modal-actions">
             <button type="submit" class="btn-primary">Salvar</button>
             <button type="button" class="btn-secondary" @click="cancelAssetEdit">Cancelar</button>
@@ -206,18 +292,36 @@
         </form>
       </div>
     </div>
+
+    <AssetPhotoLightbox
+      :open="lightboxOpen"
+      :attachments="lightboxAttachments"
+      :start-index="lightboxIndex"
+      :title="lightboxTitle"
+      @close="closeGallery"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
-import { type Asset, type AssetStatus } from '../types/assetra'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { type Asset, type AssetStatus, type AttachmentRef } from '../types/assetra'
 import { useAuthStore } from '../stores/auth'
 import { useInventoryStore } from '../stores/inventory'
 import { useConfirmAction } from '../composables/useConfirmAction'
-import { Plus, Search, Monitor, CheckCircle, Package, Wrench, MapPin, Edit, Trash2, X } from 'lucide-vue-next'
+import { imageAttachments, useAssetPhotoLightbox } from '../composables/useAssetPhotoLightbox'
+import AssetPhotoLightbox from '../components/AssetPhotoLightbox.vue'
+import { Plus, Search, Monitor, CheckCircle, Package, Wrench, MapPin, Edit, Trash2, X, Paperclip } from 'lucide-vue-next'
 
 const confirm = useConfirmAction()
+const {
+  lightboxOpen,
+  lightboxAttachments,
+  lightboxIndex,
+  lightboxTitle,
+  openGallery,
+  closeGallery,
+} = useAssetPhotoLightbox()
 
 const authStore = useAuthStore()
 const canManageAssets = computed(() => ['ADM', 'GESTOR'].includes(authStore.user?.role ?? ''))
@@ -228,6 +332,11 @@ const formError = ref('')
 const editingAssetId = ref<string | null>(null)
 const isCreateResponsibleFocused = ref(false)
 const isEditResponsibleFocused = ref(false)
+const selectedCreateFiles = ref<File[]>([])
+const selectedEditFiles = ref<File[]>([])
+const editAttachments = ref<AttachmentRef[]>([])
+const createPreviewUrls = ref<string[]>([])
+const coverPhoto = (asset: Asset) => imageAttachments(asset.attachments)[0]
 const editAsset = reactive<Asset>({
   tag: '',
   description: '',
@@ -305,21 +414,67 @@ const hideEditResponsibleSuggestions = () => {
   }, 120)
 }
 
+const revokeCreatePreviews = () => {
+  createPreviewUrls.value.forEach((url) => URL.revokeObjectURL(url))
+  createPreviewUrls.value = []
+}
+
+watch(selectedCreateFiles, (files) => {
+  revokeCreatePreviews()
+  createPreviewUrls.value = files.map((f) => URL.createObjectURL(f))
+})
+
+onBeforeUnmount(() => revokeCreatePreviews())
+
+const onCreateFilesPick = (ev: Event) => {
+  const input = ev.target as HTMLInputElement
+  if (!input.files?.length) return
+  selectedCreateFiles.value = Array.from(input.files).slice(0, 6)
+  input.value = ''
+}
+
+const removeCreateFile = (index: number) => {
+  selectedCreateFiles.value.splice(index, 1)
+}
+
+const onEditFilesPick = (ev: Event) => {
+  const input = ev.target as HTMLInputElement
+  if (!input.files?.length) return
+  const room = Math.max(0, 6 - editAttachments.value.length)
+  const picked = Array.from(input.files).slice(0, room)
+  selectedEditFiles.value = [...selectedEditFiles.value, ...picked].slice(0, room)
+  input.value = ''
+}
+
+const removeEditFile = (index: number) => {
+  selectedEditFiles.value.splice(index, 1)
+}
+
+const removeEditAttachment = (index: number) => {
+  editAttachments.value.splice(index, 1)
+}
+
 const addAsset = async () => {
   formError.value = ''
   const ok = await confirm.ask('Confirme com a sua senha para cadastrar este ativo.')
   if (!ok) return
   try {
     const assigned = newAsset.assignedTo?.trim()
+    let attachments: AttachmentRef[] = []
+    if (selectedCreateFiles.value.length) {
+      attachments = await inventory.uploadAttachments(selectedCreateFiles.value)
+    }
     await inventory.createAsset({
       ...newAsset,
       assignedTo: assigned || undefined,
+      attachments,
     })
     newAsset.tag = ''
     newAsset.description = ''
     newAsset.sector = ''
     newAsset.status = 'Disponível'
     newAsset.assignedTo = ''
+    selectedCreateFiles.value = []
     showForm.value = false
   } catch (e: unknown) {
     const ax = e as { response?: { data?: { message?: string } } }
@@ -351,10 +506,14 @@ const startAssetEdit = (asset: Asset & { id?: string }) => {
   editAsset.sector = asset.sector
   editAsset.status = asset.status as AssetStatus
   editAsset.assignedTo = asset.assignedTo ?? ''
+  editAttachments.value = [...(asset.attachments ?? [])]
+  selectedEditFiles.value = []
 }
 
 const cancelAssetEdit = () => {
   editingAssetId.value = null
+  editAttachments.value = []
+  selectedEditFiles.value = []
 }
 
 const saveAssetEdit = async () => {
@@ -364,11 +523,19 @@ const saveAssetEdit = async () => {
   if (!ok) return
   try {
     const assigned = editAsset.assignedTo?.trim()
+    let attachments = [...editAttachments.value]
+    if (selectedEditFiles.value.length) {
+      const uploaded = await inventory.uploadAttachments(selectedEditFiles.value)
+      attachments = [...attachments, ...uploaded].slice(0, 6)
+    }
     await inventory.updateAsset(editingAssetId.value, {
       ...editAsset,
       assignedTo: assigned ? assigned : null,
+      attachments,
     })
     editingAssetId.value = null
+    editAttachments.value = []
+    selectedEditFiles.value = []
   } catch (e: unknown) {
     const ax = e as { response?: { data?: { message?: string } } }
     formError.value = ax?.response?.data?.message ?? 'Não foi possível salvar.'
@@ -509,10 +676,141 @@ const saveAssetEdit = async () => {
 .suggestion-item span { font-size: 12px; color: var(--text-muted); }
 .suggestion-item:hover { background: var(--bg-hover); }
 
+.field-wide {
+  grid-column: 1 / -1;
+}
+
+.upload-shell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.upload-btn {
+  cursor: pointer;
+  margin: 0;
+}
+
+.file-hidden {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.field-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.picked-list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.picked-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.picked-remove {
+  border: none;
+  background: transparent;
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.photo-preview-row,
+.asset-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.photo-preview-row img,
+.gallery-thumb img,
+.edit-att-item img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+}
+
+.gallery-thumb {
+  display: block;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: zoom-in;
+  border-radius: 8px;
+}
+
+.gallery-thumb:hover img {
+  opacity: 0.9;
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+.asset-cover-btn {
+  display: block;
+  width: calc(100% + 40px);
+  margin: -20px -20px 12px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: zoom-in;
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
+  max-height: 140px;
+}
+
+.asset-cover-btn img {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.2s ease;
+}
+
+.asset-cover-btn:hover img {
+  transform: scale(1.03);
+}
+
+.edit-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.edit-att-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 12px;
+}
+
 .form-actions {
   display: flex;
   gap: 12px;
   align-items: flex-end;
+  grid-column: 1 / -1;
 }
 
 .error-message {
@@ -771,7 +1069,7 @@ const saveAssetEdit = async () => {
   border-radius: 16px;
   padding: 24px;
   width: 90%;
-  max-width: 500px;
+  max-width: 560px;
   box-shadow: var(--shadow-2xl);
 }
 

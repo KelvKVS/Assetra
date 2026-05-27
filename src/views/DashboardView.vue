@@ -202,8 +202,85 @@
       </section>
     </template>
 
+    <!-- ================= FUNCIONÁRIO ================= -->
+    <template v-else-if="isEmployee">
+      <div class="welcome-banner">
+        <div>
+          <h2>Olá, {{ firstName }} 👋</h2>
+          <p>
+            Consulte os equipamentos atribuídos a si e abra pedidos quando precisar de apoio da TI.
+            <template v-if="employeeDepartment"> Área: <strong>{{ employeeDepartment }}</strong>.</template>
+          </p>
+        </div>
+        <RouterLink to="/solicitacoes" class="btn-primary">
+          <Plus :size="16" /> Nova solicitação
+        </RouterLink>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card stat-info">
+          <Monitor :size="22" />
+          <div>
+            <span class="stat-label">Meus ativos</span>
+            <strong>{{ myAssets.length }}</strong>
+          </div>
+        </div>
+        <div class="stat-card stat-warning">
+          <Clock :size="22" />
+          <div>
+            <span class="stat-label">Pedidos pendentes</span>
+            <strong>{{ myPendingRequestsCount }}</strong>
+          </div>
+        </div>
+        <div class="stat-card stat-success">
+          <CheckCircle :size="22" />
+          <div>
+            <span class="stat-label">Pedidos concluídos</span>
+            <strong>{{ myClosedRequestsCount }}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="cols-2">
+        <section class="panel">
+          <header class="panel-header">
+            <h3><Monitor :size="18" /> Os meus ativos</h3>
+            <RouterLink to="/meus-ativos" class="link">ver tudo →</RouterLink>
+          </header>
+          <ul v-if="myAssets.length" class="list">
+            <li v-for="a in myAssets.slice(0, 5)" :key="a.id ?? a.tag">
+              <div class="list-main">
+                <strong>{{ a.tag }}</strong>
+                <span class="muted">{{ a.description }}</span>
+                <span class="meta">{{ a.sector }}</span>
+              </div>
+              <span :class="['status-badge', `status-${statusClass(a.status)}`]">{{ a.status }}</span>
+            </li>
+          </ul>
+          <p v-else class="muted">Nenhum ativo está atribuído ao seu e-mail. Peça ao administrador para associar o seu e-mail na ficha do ativo.</p>
+        </section>
+
+        <section class="panel">
+          <header class="panel-header">
+            <h3><Send :size="18" /> Últimas solicitações</h3>
+            <RouterLink to="/solicitacoes" class="link">ver tudo →</RouterLink>
+          </header>
+          <ul v-if="myRecentRequests.length" class="list">
+            <li v-for="req in myRecentRequests" :key="req.id">
+              <div class="list-main">
+                <strong>{{ req.type }} · {{ req.assetTag }}</strong>
+                <span class="muted">{{ req.description }}</span>
+              </div>
+              <span :class="['status-badge', requestStatusClass(req.status)]">{{ req.status }}</span>
+            </li>
+          </ul>
+          <p v-else class="muted">Ainda não enviou solicitações. Use «Nova solicitação» para manutenção ou troca de setor.</p>
+        </section>
+      </div>
+    </template>
+
     <!-- ================= TÉCNICO ================= -->
-    <template v-else>
+    <template v-else-if="isTechnician">
       <div class="welcome-banner">
         <div>
           <h2>Olá, {{ firstName }} 👋</h2>
@@ -325,6 +402,19 @@ const authStore = useAuthStore()
 const inventory = useInventoryStore()
 
 onMounted(async () => {
+  const r = authStore.user?.role
+  if (r === 'FUNCIONARIO') {
+    await Promise.allSettled([inventory.fetchAssets(), inventory.fetchMyApprovalsSafe()])
+    return
+  }
+  if (r === 'TECNICO') {
+    await Promise.allSettled([
+      inventory.reloadDashboardData(),
+      inventory.fetchTasksSafe(),
+      inventory.fetchMyApprovalsSafe(),
+    ])
+    return
+  }
   await Promise.allSettled([
     inventory.reloadDashboardData(),
     inventory.fetchApprovalsSafe(),
@@ -335,6 +425,9 @@ onMounted(async () => {
 const role = computed(() => authStore.user?.role)
 const isAdmin = computed(() => role.value === 'ADM')
 const isManager = computed(() => role.value === 'GESTOR')
+const isTechnician = computed(() => role.value === 'TECNICO')
+const isEmployee = computed(() => role.value === 'FUNCIONARIO')
+const employeeDepartment = computed(() => authStore.user?.department?.trim() || '')
 
 const firstName = computed(() => (authStore.user?.name?.split(' ')[0] ?? 'utilizador'))
 const tenantName = computed(() => authStore.user?.tenant?.name ?? 'Assetra')
@@ -406,8 +499,22 @@ const decisionsToday = computed(() => {
   ).length
 })
 
-/* === Técnico === */
+/* === Funcionário / Técnico === */
 const myAssets = computed(() => assetsAssignedToEmail(inventory.assets, authStore.user?.email))
+const myPendingRequestsCount = computed(
+  () => inventory.myApprovals.filter((a) => a.status === 'Pendente').length,
+)
+const myClosedRequestsCount = computed(
+  () => inventory.myApprovals.filter((a) => a.status === 'Aprovada' || a.status === 'Reprovada').length,
+)
+const myRecentRequests = computed(() => inventory.myApprovals.slice(0, 5))
+
+const requestStatusClass = (status: string) => {
+  const s = status.toLowerCase()
+  if (s === 'pendente') return 'status-em-manutencao'
+  if (s === 'aprovada') return 'status-em-uso'
+  return 'status-disponivel'
+}
 const activeTaskCount = computed(() => inventory.tasks.filter((t) => t.status !== 'Concluída').length)
 const completedTaskCount = computed(() => inventory.tasks.filter((t) => t.status === 'Concluída').length)
 const highPriorityTaskCount = computed(() => inventory.tasks.filter((t) => t.priority === 'Alta').length)

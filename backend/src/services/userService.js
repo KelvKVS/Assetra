@@ -3,6 +3,30 @@ import bcrypt from 'bcryptjs'
 import { AppError } from '../utils/AppError.js'
 import { profileToRole } from '../utils/profileRole.js'
 import { isDemoAssetraEmail, normalizeEmail, requiresGoogleVerification } from '../utils/emailPolicy.js'
+import { DEFAULT_DEPARTMENTS } from '../constants/departments.js'
+
+function normalizeDepartment(raw) {
+  const value = String(raw ?? '').trim()
+  return value || null
+}
+
+function assertDepartmentForRole(role, department) {
+  if (role === 'FUNCIONARIO' && !department) {
+    throw new AppError(400, 'Informe a área/setor do funcionário.')
+  }
+}
+
+function mapUserDto(u, extra = {}) {
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    department: u.department ?? null,
+    status: u.active ? 'Ativo' : 'Inativo',
+    ...extra,
+  }
+}
 
 /**
  * @param {import('@prisma/client').PrismaClient} prisma
@@ -11,16 +35,35 @@ import { isDemoAssetraEmail, normalizeEmail, requiresGoogleVerification } from '
 export async function listUsersByTenant(prisma, tenantId) {
   const users = await prisma.user.findMany({
     where: { tenantId },
-    select: { id: true, name: true, email: true, role: true, active: true, createdAt: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      department: true,
+      active: true,
+      createdAt: true,
+    },
     orderBy: { createdAt: 'desc' },
   })
-  return users.map((u) => ({
-    id: u.id,
-    name: u.name,
-    email: u.email,
-    role: u.role,
-    status: u.active ? 'Ativo' : 'Inativo',
-  }))
+  return users.map((u) => mapUserDto(u))
+}
+
+/**
+ * @param {import('@prisma/client').PrismaClient} prisma
+ * @param {string} tenantId
+ */
+export async function listDepartmentOptions(prisma, tenantId) {
+  const rows = await prisma.user.findMany({
+    where: { tenantId, department: { not: null } },
+    select: { department: true },
+  })
+  const fromDb = rows
+    .map((r) => String(r.department ?? '').trim())
+    .filter(Boolean)
+  const merged = [...new Set([...DEFAULT_DEPARTMENTS, ...fromDb])]
+  merged.sort((a, b) => a.localeCompare(b, 'pt'))
+  return { departments: merged }
 }
 
 function resolveRole(input) {
@@ -116,6 +159,8 @@ export async function createUserInTenant(prisma, tenantId, input) {
   }
 
   const role = resolveRole(input)
+  const department = normalizeDepartment(input.department)
+  assertDepartmentForRole(role, department)
   const active = input.status !== 'Inativo'
   const defaultPassword = isDemo
     ? input.password || 'senha123'
@@ -132,18 +177,12 @@ export async function createUserInTenant(prisma, tenantId, input) {
         email: normalizeEmail(input.email),
         passwordHash,
         role,
+        department,
         active,
         tenantId,
       },
     })
-    return {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      status: user.active ? 'Ativo' : 'Inativo',
-      accountType: isDemo ? 'demo' : 'google',
-    }
+    return mapUserDto(user, { accountType: isDemo ? 'demo' : 'google' })
   } catch {
     throw new AppError(400, 'E-mail já existe nesta organização ou dados inválidos.')
   }
@@ -163,23 +202,25 @@ export async function updateUserInTenant(prisma, tenantId, userId, input) {
   if (input.role != null) data.role = input.role
   if (input.profile != null && input.role == null) data.role = profileToRole(input.profile)
   if (input.status != null) data.active = input.status === 'Ativo'
+  if (input.department !== undefined) {
+    data.department = input.department === null ? null : normalizeDepartment(input.department)
+  }
 
   try {
     const existing = await prisma.user.findFirst({ where: { id: userId, tenantId } })
     if (!existing) {
       throw new AppError(404, 'Usuário não encontrado neste tenant.')
     }
+    const nextRole = data.role ?? existing.role
+    const nextDepartment =
+      data.department !== undefined ? data.department : existing.department
+    assertDepartmentForRole(nextRole, nextDepartment)
+
     const user = await prisma.user.update({
       where: { id: userId },
       data,
     })
-    return {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      status: user.active ? 'Ativo' : 'Inativo',
-    }
+    return mapUserDto(user)
   } catch {
     throw new AppError(400, 'Não foi possível atualizar (e-mail duplicado ou usuário inexistente).')
   }

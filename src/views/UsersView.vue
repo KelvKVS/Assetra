@@ -68,7 +68,30 @@
             <option value="ADM">Administrador</option>
             <option value="GESTOR">Gestor</option>
             <option value="TECNICO">Técnico</option>
+            <option value="FUNCIONARIO">Funcionário</option>
           </select>
+        </div>
+        <div class="form-group field">
+          <label>
+            Área / setor
+            <span v-if="requiresDepartment" class="label-required">*</span>
+          </label>
+          <select v-model="departmentSelect" :required="requiresDepartment">
+            <option disabled value="">Selecione a área</option>
+            <option v-for="area in departmentOptions" :key="`new-area-${area}`" :value="area">
+              {{ area }}
+            </option>
+            <option :value="DEPARTMENT_OTHER">Outra área…</option>
+          </select>
+          <input
+            v-if="departmentSelect === DEPARTMENT_OTHER"
+            v-model.trim="departmentCustom"
+            type="text"
+            class="input-field department-custom"
+            placeholder="Ex.: Facilities, Produção"
+            :required="requiresDepartment"
+          />
+          <small v-if="!requiresDepartment" class="field-hint">Opcional para administradores, gestores e técnicos.</small>
         </div>
         <div class="form-group field">
           <label>Status</label>
@@ -136,6 +159,7 @@
             </span>
             <span v-if="isDemoAssetraEmail(user.email)" class="account-badge demo">Demo</span>
             <span v-else class="account-badge google">Google</span>
+            <span v-if="user.department" class="department-badge">{{ user.department }}</span>
           </div>
         </div>
         <div class="user-actions">
@@ -180,7 +204,28 @@
               <option value="ADM">Administrador</option>
               <option value="GESTOR">Gestor</option>
               <option value="TECNICO">Técnico</option>
+              <option value="FUNCIONARIO">Funcionário</option>
             </select>
+          </div>
+          <div class="form-group">
+            <label>
+              Área / setor
+              <span v-if="editRequiresDepartment" class="label-required">*</span>
+            </label>
+            <select v-model="editDepartmentSelect" :required="editRequiresDepartment">
+              <option disabled value="">Selecione a área</option>
+              <option v-for="area in departmentOptions" :key="`edit-area-${area}`" :value="area">
+                {{ area }}
+              </option>
+              <option :value="DEPARTMENT_OTHER">Outra área…</option>
+            </select>
+            <input
+              v-if="editDepartmentSelect === DEPARTMENT_OTHER"
+              v-model.trim="editDepartmentCustom"
+              type="text"
+              placeholder="Nome da área"
+              :required="editRequiresDepartment"
+            />
           </div>
           <div class="form-group">
             <label>Status</label>
@@ -218,11 +263,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { type DirectoryUser, useInventoryStore } from '../stores/inventory'
 import { roleLabelPt } from '../utils/roleLabels'
 import { isDemoAssetraEmail } from '../utils/emailPolicy'
 import { useConfirmAction } from '../composables/useConfirmAction'
+import { DEFAULT_DEPARTMENTS, DEPARTMENT_OTHER } from '../constants/departments'
 import {
   Plus,
   Search,
@@ -273,6 +319,48 @@ const editUser = reactive({
 
 const inventory = useInventoryStore()
 
+const departmentOptions = ref<string[]>([...DEFAULT_DEPARTMENTS])
+const departmentSelect = ref('RH')
+const departmentCustom = ref('')
+const editDepartmentSelect = ref('RH')
+const editDepartmentCustom = ref('')
+
+const requiresDepartment = computed(() => newUser.profile === 'FUNCIONARIO')
+const editRequiresDepartment = computed(() => editUser.profile === 'FUNCIONARIO')
+
+function resolveDepartmentValue(select: string, custom: string) {
+  if (select === DEPARTMENT_OTHER) return custom.trim()
+  return select.trim()
+}
+
+function applyEditDepartment(department: string | null | undefined) {
+  const value = String(department ?? '').trim()
+  if (!value) {
+    editDepartmentSelect.value = 'RH'
+    editDepartmentCustom.value = ''
+    return
+  }
+  if (departmentOptions.value.includes(value)) {
+    editDepartmentSelect.value = value
+    editDepartmentCustom.value = ''
+    return
+  }
+  editDepartmentSelect.value = DEPARTMENT_OTHER
+  editDepartmentCustom.value = value
+  if (!departmentOptions.value.includes(value)) {
+    departmentOptions.value = [...departmentOptions.value, value].sort((a, b) => a.localeCompare(b, 'pt'))
+  }
+}
+
+watch(
+  () => newUser.profile,
+  (profile) => {
+    if (profile === 'FUNCIONARIO' && !departmentSelect.value) {
+      departmentSelect.value = 'RH'
+    }
+  },
+)
+
 function setRegistrationMode(mode: 'google' | 'demo') {
   registrationMode.value = mode
   formError.value = ''
@@ -322,6 +410,11 @@ async function checkEmailAvailability() {
 }
 
 onMounted(async () => {
+  try {
+    departmentOptions.value = await inventory.fetchDepartmentOptions()
+  } catch {
+    departmentOptions.value = [...DEFAULT_DEPARTMENTS]
+  }
   await inventory.fetchUsers()
 })
 
@@ -329,7 +422,9 @@ const filteredUsers = computed(() => {
   const term = search.value.toLowerCase()
   if (!term) return inventory.users
   return inventory.users.filter((user) =>
-    [user.name, user.email, user.role, user.status].some((value) => value.toLowerCase().includes(term)),
+    [user.name, user.email, user.role, user.status, user.department ?? ''].some((value) =>
+      value.toLowerCase().includes(term),
+    ),
   )
 })
 
@@ -361,6 +456,12 @@ const addUser = async () => {
     return
   }
 
+  const department = resolveDepartmentValue(departmentSelect.value, departmentCustom.value)
+  if (requiresDepartment.value && !department) {
+    formError.value = 'Informe a área/setor do funcionário.'
+    return
+  }
+
   const ok = await confirm.ask('Confirme com a sua senha para cadastrar este utilizador.')
   if (!ok) return
   try {
@@ -369,12 +470,15 @@ const addUser = async () => {
       email,
       profile: newUser.profile,
       status: newUser.status,
+      department: department || null,
       ...(registrationMode.value === 'demo' ? { password: newUser.password } : {}),
     })
     newUser.name = ''
     newUser.email = ''
     newUser.profile = 'TECNICO'
     newUser.status = 'Ativo'
+    departmentSelect.value = 'RH'
+    departmentCustom.value = ''
     newUser.password = ''
     newUser.confirmPassword = ''
     registrationMode.value = 'google'
@@ -409,6 +513,7 @@ const startUserEdit = (user: DirectoryUser) => {
   editUser.status = user.status as typeof editUser.status
   editUser.password = ''
   editUser.confirmPassword = ''
+  applyEditDepartment(user.department)
 }
 
 const cancelUserEdit = () => {
@@ -431,17 +536,25 @@ const saveUserEdit = async () => {
   const ok = await confirm.ask('Confirme com a sua senha para guardar as alterações.')
   if (!ok) return
   try {
+    const department = resolveDepartmentValue(editDepartmentSelect.value, editDepartmentCustom.value)
+    if (editRequiresDepartment.value && !department) {
+      formError.value = 'Informe a área/setor do funcionário.'
+      return
+    }
+
     const payload: {
       name: string
       email: string
       profile: string
       status: string
+      department: string | null
       password?: string
     } = {
       name: editUser.name,
       email: editUser.email,
       profile: editUser.profile,
       status: editUser.status,
+      department: department || null,
     }
     if (editUser.password) payload.password = editUser.password
     await inventory.updateUser(editingUserId.value, payload)
@@ -827,6 +940,33 @@ const saveUserEdit = async () => {
 .profile-adm { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
 .profile-gestor { background: rgba(6, 182, 212, 0.15); color: #06b6d4; }
 .profile-tecnico { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.profile-funcionario { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+
+.label-required {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.department-custom {
+  margin-top: 8px;
+}
+
+.department-badge {
+  display: inline-flex;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+}
 
 .status-badge {
   padding: 4px 10px;

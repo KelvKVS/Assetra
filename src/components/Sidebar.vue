@@ -35,21 +35,21 @@
           <Monitor :size="20" :stroke-width="2" />
           <span>Ativos</span>
         </RouterLink>
-        <RouterLink v-if="isManager || isTechnician" to="/meus-ativos" class="nav-item">
+        <RouterLink v-if="isManager || isTechnician || isEmployee" to="/meus-ativos" class="nav-item">
           <Package :size="20" :stroke-width="2" />
           <span>Meus Ativos</span>
         </RouterLink>
-        <RouterLink to="/movimentacoes" class="nav-item">
+        <RouterLink v-if="!isEmployee" to="/movimentacoes" class="nav-item">
           <Repeat :size="20" :stroke-width="2" />
           <span>Movimentações</span>
         </RouterLink>
-        <RouterLink to="/manutencoes" class="nav-item">
+        <RouterLink v-if="!isEmployee" to="/manutencoes" class="nav-item">
           <Wrench :size="20" :stroke-width="2" />
           <span>Manutenções</span>
         </RouterLink>
       </div>
 
-      <div class="nav-section" v-if="isManager || isTechnician || isAdmin">
+      <div class="nav-section" v-if="isManager || isTechnician || isAdmin || isEmployee">
         <span class="nav-section-title">Gestão</span>
         <RouterLink to="/solicitacoes" class="nav-item">
           <Send :size="20" :stroke-width="2" />
@@ -122,6 +122,7 @@ const route = useRoute()
 const isAdmin = computed(() => authStore.user?.role === 'ADM')
 const isManager = computed(() => authStore.user?.role === 'GESTOR')
 const isTechnician = computed(() => authStore.user?.role === 'TECNICO')
+const isEmployee = computed(() => authStore.user?.role === 'FUNCIONARIO')
 
 watch(
   () => route.fullPath,

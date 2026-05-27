@@ -4,8 +4,16 @@ export type AssetStatus = 'Em uso' | 'Disponível' | 'Em manutenção'
 export type MaintenanceType = 'Corretiva' | 'Preventiva'
 export type MaintenancePriority = 'Alta' | 'Média' | 'Baixa'
 export type MaintenanceStatus = 'Aberta' | 'Em andamento' | 'Agendada' | 'Concluída'
-export type Profile = 'ADM' | 'GESTOR' | 'TECNICO'
+export type Profile = 'ADM' | 'GESTOR' | 'TECNICO' | 'FUNCIONARIO'
 export type UserStatus = 'Ativo' | 'Inativo'
+
+export type AttachmentRef = {
+  filename: string
+  originalName?: string
+  mimetype?: string
+  size?: number
+  url: string
+}
 
 export type Asset = {
   id?: string
@@ -15,6 +23,7 @@ export type Asset = {
   status: AssetStatus
   /** E-mail do utilizador (mesmo domínio que o login) a quem o ativo está atribuído. */
   assignedTo?: string | null
+  attachments?: AttachmentRef[]
 }
 
 export type Movement = {

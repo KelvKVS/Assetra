@@ -9,7 +9,7 @@
           Envie uma solicitação de <strong>manutenção</strong> de um ativo ou de
           <strong>movimentação entre setores</strong>. Pode anexar
           <strong>fotos / prints</strong> e a sua justificativa — o aprovador é
-          definido automaticamente pela hierarquia (Técnico → Gestor, Gestor → ADM).
+          definido automaticamente pela hierarquia (Funcionário/Técnico → Gestor, Gestor → ADM).
         </p>
       </div>
       <div class="hero-stats">

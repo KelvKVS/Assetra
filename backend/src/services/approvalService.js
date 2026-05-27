@@ -6,7 +6,7 @@ import { logAudit } from './auditService.js'
 import { publishDomainEventSafely } from '../lib/eventBus.js'
 
 function resolveRequiredApproverRole(requestedByRole) {
-  if (requestedByRole === 'TECNICO') return 'GESTOR'
+  if (requestedByRole === 'FUNCIONARIO' || requestedByRole === 'TECNICO') return 'GESTOR'
   if (requestedByRole === 'GESTOR') return 'ADM'
   return 'ADM'
 }
@@ -71,7 +71,7 @@ export async function listApprovalsByRequester(tenantId, userId) {
 
 export async function createApproval(tenantId, user, dto) {
   const requestedByRole = String(user?.role ?? '').toUpperCase()
-  if (!['ADM', 'GESTOR', 'TECNICO'].includes(requestedByRole)) {
+  if (!['ADM', 'GESTOR', 'TECNICO', 'FUNCIONARIO'].includes(requestedByRole)) {
     throw new AppError(403, 'Perfil sem permissão para solicitar aprovação.')
   }
 

@@ -13,9 +13,15 @@ function toDto(doc) {
     sector: o.sector,
     status: o.status,
     assignedTo: o.assignedTo,
+    attachments: Array.isArray(o.attachments) ? o.attachments : [],
     createdAt: o.createdAt,
     updatedAt: o.updatedAt,
   }
+}
+
+function normalizeAttachments(raw) {
+  if (!Array.isArray(raw)) return []
+  return raw.slice(0, 6)
 }
 
 /**
@@ -53,6 +59,7 @@ export async function createAssetForTenant(tenantId, userId, dto) {
       sector: dto.sector.trim(),
       status: dto.status ?? 'Disponível',
       assignedTo: assigned || undefined,
+      attachments: normalizeAttachments(dto.attachments),
       tenantId,
       history: [{ action: 'CRIAÇÃO', userId, details: 'Ativo cadastrado' }],
     })
@@ -99,6 +106,9 @@ export async function updateAssetForTenant(tenantId, userId, assetId, dto) {
       await assertAssignedEmailExists(tenantId, v)
     }
     asset.assignedTo = v || undefined
+  }
+  if (dto.attachments !== undefined) {
+    asset.attachments = normalizeAttachments(dto.attachments)
   }
   asset.history.push({
     action: 'EDIÇÃO',

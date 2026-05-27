@@ -4,7 +4,10 @@
     <div class="page-header">
       <div>
         <h2>Meus Ativos</h2>
-        <p class="muted">Ativos com o seu e-mail em <strong>Responsável</strong> (definido pelo administrador na ficha do ativo).</p>
+        <p class="muted">
+          Ativos atribuídos ao seu e-mail
+          <template v-if="userDepartment"> · área <strong>{{ userDepartment }}</strong></template>
+        </p>
       </div>
     </div>
 
@@ -49,6 +52,15 @@
     <!-- Assets Grid -->
     <div class="assets-grid">
       <div v-for="asset in filteredAssets" :key="asset.id ?? asset.tag" class="asset-card">
+        <button
+          v-if="coverPhoto(asset)"
+          type="button"
+          class="asset-cover asset-cover-btn"
+          :aria-label="`Ver fotos de ${asset.tag}`"
+          @click="openGallery(asset, coverPhoto(asset)!)"
+        >
+          <img :src="coverPhoto(asset)!.url" :alt="coverPhoto(asset)!.originalName ?? asset.tag" />
+        </button>
         <div class="asset-header">
           <div class="asset-icon">
             <Monitor :size="24" :stroke-width="2" />
@@ -68,6 +80,18 @@
               <span>{{ asset.sector }}</span>
             </div>
           </div>
+          <div v-if="imageAttachments(asset.attachments).length > 1" class="asset-gallery">
+            <button
+              v-for="(att, idx) in imageAttachments(asset.attachments)"
+              :key="`${asset.tag}-photo-${idx}`"
+              type="button"
+              class="gallery-thumb"
+              :aria-label="`Abrir foto ${idx + 1}`"
+              @click="openGallery(asset, att)"
+            >
+              <img :src="att.url" :alt="att.originalName ?? att.filename" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -78,6 +102,14 @@
       <h3>Nenhum ativo atribuído</h3>
       <p>Não há ativos com o seu e-mail no campo responsável. Peça a um administrador para associar o seu e-mail na ficha do ativo.</p>
     </div>
+
+    <AssetPhotoLightbox
+      :open="lightboxOpen"
+      :attachments="lightboxAttachments"
+      :start-index="lightboxIndex"
+      :title="lightboxTitle"
+      @close="closeGallery"
+    />
   </div>
 </template>
 
@@ -86,11 +118,26 @@ import { computed, onMounted, ref } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useInventoryStore } from '../stores/inventory'
 import { assetsAssignedToEmail } from '../utils/userScope'
+import AssetPhotoLightbox from '../components/AssetPhotoLightbox.vue'
+import { imageAttachments, useAssetPhotoLightbox } from '../composables/useAssetPhotoLightbox'
+import type { Asset } from '../types/assetra'
 import { Monitor, Search, CheckCircle, Wrench, Shield, MapPin } from 'lucide-vue-next'
+
+const {
+  lightboxOpen,
+  lightboxAttachments,
+  lightboxIndex,
+  lightboxTitle,
+  openGallery,
+  closeGallery,
+} = useAssetPhotoLightbox()
+
+const coverPhoto = (asset: Asset) => imageAttachments(asset.attachments)[0]
 
 const authStore = useAuthStore()
 const inventory = useInventoryStore()
 
+const userDepartment = computed(() => authStore.user?.department?.trim() || '')
 const search = ref('')
 
 onMounted(() => {
@@ -151,8 +198,21 @@ const statusClass = (status: string) => {
 .search-bar input { flex: 1; border: none; background: transparent; font-size: 14px; color: var(--text-primary); outline: none; }
 
 .assets-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-.asset-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; transition: all 0.2s ease; }
+.asset-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; transition: all 0.2s ease; overflow: hidden; }
 .asset-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); border-color: var(--primary); }
+.asset-cover-btn {
+  display: block;
+  width: calc(100% + 40px);
+  margin: -20px -20px 12px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: zoom-in;
+  max-height: 140px;
+  overflow: hidden;
+}
+.asset-cover-btn img { width: 100%; height: 140px; object-fit: cover; display: block; transition: transform 0.2s ease; }
+.asset-cover-btn:hover img { transform: scale(1.03); }
 
 .asset-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .asset-icon { width: 48px; height: 48px; background: var(--primary-light); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--primary); }
@@ -175,6 +235,10 @@ const statusClass = (status: string) => {
 .asset-description { margin: 0 0 12px; font-size: 14px; color: var(--text-secondary); line-height: 1.4; }
 .asset-details { display: flex; gap: 12px; }
 .detail-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-muted); }
+.asset-gallery { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.gallery-thumb { padding: 0; border: none; background: transparent; cursor: zoom-in; border-radius: 8px; }
+.gallery-thumb img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-light); }
+.gallery-thumb:hover img { box-shadow: 0 0 0 2px var(--primary); }
 
 .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
 .empty-icon { margin-bottom: 16px; opacity: 0.3; }

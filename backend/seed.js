@@ -45,7 +45,7 @@ async function seedMongo(tenantId) {
       description: 'Desktop Lenovo M75q',
       sector: 'RH',
       status: 'Disponível',
-      assignedTo: 'tecnico@assetra.local',
+      assignedTo: 'funcionario@assetra.local',
       history: [],
     },
     {
@@ -61,6 +61,10 @@ async function seedMongo(tenantId) {
   for (const asset of assets) {
     await Asset.updateOne({ tenantId: asset.tenantId, tag: asset.tag }, { $setOnInsert: asset }, { upsert: true })
   }
+  await Asset.updateOne(
+    { tenantId, tag: 'AST-002' },
+    { $set: { assignedTo: 'funcionario@assetra.local' } },
+  )
 
   const movementCount = await Movement.countDocuments({ tenantId })
   if (movementCount === 0) {
@@ -156,18 +160,28 @@ async function seed() {
       name: 'Administrador Assetra',
       password: 'senha123',
       role: 'ADM',
+      department: 'TI',
     },
     {
       email: 'gestor@assetra.local',
       name: 'Gestor Assetra',
       password: 'senha123',
       role: 'GESTOR',
+      department: 'Operações',
     },
     {
       email: 'tecnico@assetra.local',
       name: 'Técnico Assetra',
       password: 'senha123',
       role: 'TECNICO',
+      department: 'TI',
+    },
+    {
+      email: 'funcionario@assetra.local',
+      name: 'Funcionário Demo',
+      password: 'senha123',
+      role: 'FUNCIONARIO',
+      department: 'RH',
     },
   ]
 
@@ -183,6 +197,7 @@ async function seed() {
       update: {
         role: user.role,
         name: user.name,
+        department: user.department ?? null,
         passwordHash,
         tenantId: tenant.id,
         active: true,
@@ -192,6 +207,7 @@ async function seed() {
         name: user.name,
         passwordHash,
         role: user.role,
+        department: user.department ?? null,
         tenantId: tenant.id,
         active: true,
       },

@@ -22,13 +22,15 @@ model Tenant {
   @@map("tenants")
 }
 
-/// Papel do utilizador. O serviço valida ADM | GESTOR | TECNICO.
+/// Papel do utilizador. O serviço valida ADM | GESTOR | TECNICO | FUNCIONARIO.
 model User {
   id           String   @id @default(uuid())
   name         String
   email        String
   passwordHash String
   role         String   @default("TECNICO")
+  /// Área/setor da empresa (ex.: RH, Financeiro) — definido pelo ADM
+  department   String?
   active       Boolean  @default(true)
   tenantId     String
   tenant       Tenant   @relation(fields: [tenantId], references: [id])

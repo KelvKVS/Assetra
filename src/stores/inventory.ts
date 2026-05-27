@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import api from '../services/api'
-import type { Asset, AssetStatus } from '../types/assetra'
+import type { Asset, AssetStatus, AttachmentRef } from '../types/assetra'
 import { useAuthStore } from './auth'
 
 export type AssetWithId = Asset & { id: string }
@@ -70,6 +70,7 @@ export type DirectoryUser = {
   name: string
   email: string
   role: string
+  department?: string | null
   status: string
 }
 
@@ -133,11 +134,11 @@ export const useInventoryStore = defineStore('inventory', {
       }
       this.loading = false
     },
-    async createAsset(payload: Asset) {
+    async createAsset(payload: Asset & { attachments?: AttachmentRef[] }) {
       await api.post('/assets', payload)
       await this.fetchAssets()
     },
-    async updateAsset(id: string, payload: Partial<Asset> & { tag?: string }) {
+    async updateAsset(id: string, payload: Partial<Asset> & { tag?: string; attachments?: AttachmentRef[] }) {
       await api.put(`/assets/${id}`, payload)
       await this.fetchAssets()
     },
@@ -278,11 +279,16 @@ export const useInventoryStore = defineStore('inventory', {
       }>('/users/verify-google', { credential })
       return data
     },
+    async fetchDepartmentOptions() {
+      const { data } = await api.get<{ departments: string[] }>('/users/departments')
+      return data.departments ?? []
+    },
     async createUser(payload: {
       name: string
       email: string
       profile: string
       status: string
+      department?: string | null
       password?: string
       googleCredential?: string
     }) {
@@ -291,12 +297,23 @@ export const useInventoryStore = defineStore('inventory', {
         email: payload.email,
         profile: payload.profile,
         status: payload.status,
+        department: payload.department ?? undefined,
         password: payload.password,
         googleCredential: payload.googleCredential,
       })
       await this.fetchUsers()
     },
-    async updateUser(id: string, payload: Partial<{ name: string; email: string; profile: string; status: string; password: string }>) {
+    async updateUser(
+      id: string,
+      payload: Partial<{
+        name: string
+        email: string
+        profile: string
+        status: string
+        department: string | null
+        password: string
+      }>,
+    ) {
       await api.patch(`/users/${id}`, payload)
       await this.fetchUsers()
     },

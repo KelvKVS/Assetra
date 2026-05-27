@@ -7,6 +7,7 @@ import {
   checkUserEmailInTenant,
   createUserInTenant,
   deleteUserInTenant,
+  listDepartmentOptions,
   listUsersByTenant,
   updateUserInTenant,
 } from '../services/userService.js'
@@ -21,6 +22,16 @@ router.get(
   asyncHandler(async (req, res) => {
     const users = await listUsersByTenant(prisma, req.user.tenantId)
     res.json(users)
+  }),
+)
+
+router.get(
+  '/departments',
+  authMiddleware,
+  authorize(['ADM', 'GESTOR']),
+  asyncHandler(async (req, res) => {
+    const options = await listDepartmentOptions(prisma, req.user.tenantId)
+    res.json(options)
   }),
 )
 

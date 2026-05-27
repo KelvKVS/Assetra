@@ -12,7 +12,17 @@ export const googleAuthSchema = z.object({
   tenantSlug: z.string().trim().max(64).nullish(),
 })
 
-const profileEnum = z.enum(['Administrador', 'Gestor', 'Técnico', 'ADM', 'GESTOR', 'TECNICO'])
+const roleEnum = z.enum(['ADM', 'GESTOR', 'TECNICO', 'FUNCIONARIO'])
+const profileEnum = z.enum([
+  'Administrador',
+  'Gestor',
+  'Técnico',
+  'Funcionário',
+  'ADM',
+  'GESTOR',
+  'TECNICO',
+  'FUNCIONARIO',
+])
 const userStatusEnum = z.enum(['Ativo', 'Inativo'])
 
 export const userCreateSchema = z
@@ -21,24 +31,44 @@ export const userCreateSchema = z
     email: z.string().email().max(120),
     password: z.string().min(8).max(100).optional(),
     googleCredential: z.string().min(1).max(4000).optional(),
-    role: z.enum(['ADM', 'GESTOR', 'TECNICO']).optional(),
+    role: roleEnum.optional(),
     profile: profileEnum.optional(),
+    department: z.string().trim().min(1).max(120).optional(),
     status: userStatusEnum.optional(),
   })
   .refine((d) => d.role != null || d.profile != null, { message: 'Informe role ou profile.' })
+  .refine(
+    (d) => {
+      const role = d.role ?? (d.profile === 'FUNCIONARIO' || d.profile === 'Funcionário' ? 'FUNCIONARIO' : null)
+      if (role === 'FUNCIONARIO' && !d.department?.trim()) {
+        return false
+      }
+      return true
+    },
+    { message: 'Informe a área/setor do funcionário.', path: ['department'] },
+  )
 
 export const userUpdateSchema = z
   .object({
     name: z.string().min(3).max(120).optional(),
     email: z.string().email().max(120).optional(),
     password: z.string().min(8).max(100).optional(),
-    role: z.enum(['ADM', 'GESTOR', 'TECNICO']).optional(),
+    role: roleEnum.optional(),
     profile: profileEnum.optional(),
+    department: z.string().trim().min(1).max(120).nullable().optional(),
     status: userStatusEnum.optional(),
   })
   .refine((d) => Object.keys(d).length > 0, { message: 'Informe ao menos um campo para atualizar.' })
 
 const assetStatusEnum = z.enum(['Em uso', 'Disponível', 'Em manutenção'])
+
+const attachmentRefSchema = z.object({
+  filename: z.string().min(1).max(200),
+  originalName: z.string().max(200).optional(),
+  mimetype: z.string().max(120).optional(),
+  size: z.number().nonnegative().optional(),
+  url: z.string().min(1).max(400),
+})
 
 export const assetCreateSchema = z.object({
   tag: z.string().min(1).max(40),
@@ -47,6 +77,7 @@ export const assetCreateSchema = z.object({
   status: assetStatusEnum.optional(),
   /** E-mail do utilizador responsável (Prisma); vazio omite o campo. */
   assignedTo: z.string().trim().max(120).optional(),
+  attachments: z.array(attachmentRefSchema).max(6).optional(),
 })
 
 export const assetUpdateSchema = z.object({
@@ -55,6 +86,7 @@ export const assetUpdateSchema = z.object({
   sector: z.string().min(1).max(120).optional(),
   status: assetStatusEnum.optional(),
   assignedTo: z.string().trim().max(120).optional().nullable(),
+  attachments: z.array(attachmentRefSchema).max(6).optional(),
 })
 
 export const movementCreateSchema = z.object({
@@ -71,14 +103,6 @@ export const movementUpdateSchema = z.object({
   responsible: z.string().min(1).max(120).optional(),
   /** Data exibida (ex.: dd/mm/aaaa) ou ISO */
   date: z.string().max(40).optional(),
-})
-
-const attachmentRefSchema = z.object({
-  filename: z.string().min(1).max(200),
-  originalName: z.string().max(200).optional(),
-  mimetype: z.string().max(120).optional(),
-  size: z.number().nonnegative().optional(),
-  url: z.string().min(1).max(400),
 })
 
 export const maintenanceCreateSchema = z.object({

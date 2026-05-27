@@ -156,6 +156,16 @@
                 <code>tecnico@assetra.local</code>
                 <span class="demo-slug">default</span>
               </button>
+
+              <button
+                type="button"
+                class="demo-user"
+                @click="fillForm('funcionario@assetra.local', 'senha123', 'default')"
+              >
+                <span class="role-tag funcionario">FUNCIONÁRIO</span>
+                <code>funcionario@assetra.local</code>
+                <span class="demo-slug">default</span>
+              </button>
             </div>
           </div>
         </div>
@@ -642,6 +652,7 @@ onMounted(async () => {
 .role-tag.adm { background: rgba(139, 92, 246, 0.2); color: #8b5cf6; }
 .role-tag.gestor { background: rgba(6, 182, 212, 0.2); color: #06b6d4; }
 .role-tag.tecnico { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+.role-tag.funcionario { background: rgba(16, 185, 129, 0.2); color: #10b981; }
 
 .demo-user code {
   font-size: 12px;
