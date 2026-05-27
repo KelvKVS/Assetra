@@ -30,10 +30,9 @@
             <Lock :size="14" :stroke-width="2.5" />
             Senha do utilizador
           </label>
-          <input
-            ref="inputEl"
+          <PasswordInput
+            ref="passwordInputRef"
             v-model="password"
-            type="password"
             autocomplete="current-password"
             placeholder="Digite a sua senha"
             :disabled="loading"
@@ -62,6 +61,7 @@
 import { nextTick, ref, watch } from 'vue'
 import { Check, Loader, Lock, ShieldCheck, X } from 'lucide-vue-next'
 import api from '../services/api'
+import PasswordInput from './PasswordInput.vue'
 import { useAuthStore } from '../stores/auth'
 
 const authStore = useAuthStore()
@@ -86,7 +86,7 @@ const emit = defineEmits<{
 const password = ref('')
 const error = ref('')
 const loading = ref(false)
-const inputEl = ref<HTMLInputElement | null>(null)
+const passwordInputRef = ref<InstanceType<typeof PasswordInput> | null>(null)
 
 watch(
   () => props.open,
@@ -96,7 +96,7 @@ watch(
       error.value = ''
       loading.value = false
       await nextTick()
-      inputEl.value?.focus()
+      passwordInputRef.value?.focus()
     }
   },
 )
@@ -229,8 +229,8 @@ const confirm = async () => {
   letter-spacing: 0.05em;
 }
 
-.pcm-form input {
-  padding: 11px 12px;
+.pcm-form :deep(.password-field input) {
+  padding: 11px 42px 11px 12px;
   background: var(--bg-primary);
   border: 1px solid var(--border-light);
   border-radius: 8px;
@@ -240,7 +240,7 @@ const confirm = async () => {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.pcm-form input:focus {
+.pcm-form :deep(.password-field input:focus) {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-light);
 }

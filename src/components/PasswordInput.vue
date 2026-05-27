@@ -20,7 +20,6 @@
       :aria-label="visible ? 'Ocultar senha' : 'Mostrar senha'"
       :aria-pressed="visible"
       :disabled="disabled"
-      tabindex="-1"
       @click="visible = !visible"
     >
       <Eye v-if="!visible" :size="18" :stroke-width="2" />

@@ -245,10 +245,10 @@
           </div>
           <div class="form-group">
             <label>Confirmar nova senha</label>
-            <input
+            <PasswordInput
               v-model="editUser.confirmPassword"
-              type="password"
-              minlength="8"
+              :minlength="8"
+              autocomplete="new-password"
               placeholder="Repita a nova senha"
             />
           </div>
@@ -268,6 +268,7 @@ import { type DirectoryUser, useInventoryStore } from '../stores/inventory'
 import { roleLabelPt } from '../utils/roleLabels'
 import { isDemoAssetraEmail } from '../utils/emailPolicy'
 import { useConfirmAction } from '../composables/useConfirmAction'
+import PasswordInput from '../components/PasswordInput.vue'
 import { DEFAULT_DEPARTMENTS, DEPARTMENT_OTHER } from '../constants/departments'
 import {
   Plus,
@@ -712,12 +713,18 @@ const saveUserEdit = async () => {
   color: var(--text-secondary);
 }
 
-.form-group input, .form-group select {
+.form-group input,
+.form-group select,
+.form-group :deep(.password-field input) {
   padding: 10px 12px;
   background: var(--bg-primary);
   border: 1px solid var(--border-light);
   border-radius: 8px;
   color: var(--text-primary);
+}
+
+.form-group :deep(.password-field input) {
+  padding-right: 42px;
 }
 .btn-google {
   display: inline-flex;
