@@ -312,6 +312,7 @@ import { useAuthStore } from '../stores/auth'
 import { useInventoryStore } from '../stores/inventory'
 import { useConfirmAction } from '../composables/useConfirmAction'
 import { imageAttachments, useAssetPhotoLightbox } from '../composables/useAssetPhotoLightbox'
+import { prepareAttachmentsForApi } from '../utils/attachmentPayload'
 import AssetPhotoLightbox from '../components/AssetPhotoLightbox.vue'
 import { Plus, Search, Monitor, CheckCircle, Package, Wrench, MapPin, Edit, Trash2, X, Paperclip } from 'lucide-vue-next'
 
@@ -474,15 +475,12 @@ const addAsset = async () => {
       }
     }
     await inventory.createAsset({
-      ...newAsset,
+      tag: newAsset.tag,
+      description: newAsset.description,
+      sector: newAsset.sector,
+      status: newAsset.status,
       assignedTo: assigned || undefined,
-      attachments: attachments.map(({ filename, originalName, mimetype, size, url }) => ({
-        filename,
-        originalName,
-        mimetype,
-        size,
-        url: url || `/api/uploads/${filename}`,
-      })),
+      attachments: prepareAttachmentsForApi(attachments),
     })
     newAsset.tag = ''
     newAsset.description = ''
@@ -552,15 +550,12 @@ const saveAssetEdit = async () => {
       attachments = [...attachments, ...uploaded].slice(0, 6)
     }
     await inventory.updateAsset(editingAssetId.value, {
-      ...editAsset,
+      tag: editAsset.tag,
+      description: editAsset.description,
+      sector: editAsset.sector,
+      status: editAsset.status,
       assignedTo: assigned ? assigned : null,
-      attachments: attachments.map(({ filename, originalName, mimetype, size, url }) => ({
-        filename,
-        originalName,
-        mimetype,
-        size,
-        url: url || `/api/uploads/${filename}`,
-      })),
+      attachments: prepareAttachmentsForApi(attachments),
     })
     editingAssetId.value = null
     editAttachments.value = []

@@ -63,11 +63,18 @@ export const userUpdateSchema = z
 const assetStatusEnum = z.enum(['Em uso', 'Disponível', 'Em manutenção'])
 
 const attachmentRefSchema = z.object({
-  filename: z.string().min(1).max(200),
+  filename: z.string().min(1).max(240),
   originalName: z.string().max(200).optional(),
   mimetype: z.string().max(120).optional(),
-  size: z.number().nonnegative().optional(),
-  url: z.string().min(1).max(2048).optional(),
+  size: z
+    .union([z.number(), z.string(), z.null()])
+    .optional()
+    .transform((v) => {
+      if (v === null || v === undefined || v === '') return undefined
+      const n = Number(v)
+      return Number.isFinite(n) && n >= 0 ? n : undefined
+    }),
+  url: z.string().max(500).optional(),
 })
 
 export const assetCreateSchema = z.object({

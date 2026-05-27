@@ -27,7 +27,12 @@ router.post(
   asyncHandler(async (req, res) => {
     const parsed = assetCreateSchema.safeParse(req.body)
     if (!parsed.success) {
-      return res.status(400).json({ message: 'Dados inválidos.', issues: parsed.error.flatten() })
+      const first = parsed.error.errors[0]
+      const detail = first ? `${first.path.join('.')}: ${first.message}` : ''
+      return res.status(400).json({
+        message: detail ? `Dados inválidos (${detail}).` : 'Dados inválidos.',
+        issues: parsed.error.flatten(),
+      })
     }
     const asset = await createAssetForTenant(req.user.tenantId, req.user.sub, parsed.data)
     res.status(201).json(asset)
@@ -41,7 +46,12 @@ router.put(
   asyncHandler(async (req, res) => {
     const parsed = assetUpdateSchema.safeParse(req.body)
     if (!parsed.success) {
-      return res.status(400).json({ message: 'Dados inválidos.', issues: parsed.error.flatten() })
+      const first = parsed.error.errors[0]
+      const detail = first ? `${first.path.join('.')}: ${first.message}` : ''
+      return res.status(400).json({
+        message: detail ? `Dados inválidos (${detail}).` : 'Dados inválidos.',
+        issues: parsed.error.flatten(),
+      })
     }
     const asset = await updateAssetForTenant(req.user.tenantId, req.user.sub, req.params.id, parsed.data)
     res.json(asset)
