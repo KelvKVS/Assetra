@@ -103,20 +103,20 @@
         <template v-if="registrationMode === 'demo'">
           <div class="form-group field">
             <label>Senha inicial</label>
-            <input
+            <PasswordInput
               v-model="newUser.password"
-              type="password"
-              minlength="8"
+              :minlength="8"
+              autocomplete="new-password"
               placeholder="Mínimo 8 caracteres"
               required
             />
           </div>
           <div class="form-group field">
             <label>Confirmar senha</label>
-            <input
+            <PasswordInput
               v-model="newUser.confirmPassword"
-              type="password"
-              minlength="8"
+              :minlength="8"
+              autocomplete="new-password"
               placeholder="Repita a senha"
               required
             />
@@ -236,10 +236,10 @@
           </div>
           <div class="form-group">
             <label>Nova senha (opcional)</label>
-            <input
+            <PasswordInput
               v-model="editUser.password"
-              type="password"
-              minlength="8"
+              :minlength="8"
+              autocomplete="new-password"
               placeholder="Deixe vazio para não alterar"
             />
           </div>

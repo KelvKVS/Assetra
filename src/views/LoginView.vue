@@ -71,12 +71,11 @@
                 <Lock :size="16" />
                 Senha
               </label>
-              <input
+              <PasswordInput
                 v-model="password"
-                type="password"
                 autocomplete="current-password"
                 required
-                class="input-field"
+                input-class="input-field"
                 placeholder="••••••••"
               />
             </div>
@@ -180,6 +179,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useGoogleIdToken } from '../composables/useGoogleIdToken'
 import api from '../services/api'
+import PasswordInput from '../components/PasswordInput.vue'
 import {
   Box,
   CheckCircle,
