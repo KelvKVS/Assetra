@@ -1,9 +1,10 @@
 import Asset from '../models/Asset.js'
 import prisma from '../lib/prisma.js'
 import { AppError } from '../utils/AppError.js'
+import { enrichAttachmentUrls } from '../utils/enrichAttachments.js'
 import { logAudit } from './auditService.js'
 
-function toDto(doc) {
+function toDto(doc, req = null) {
   if (!doc) return null
   const o = doc.toObject ? doc.toObject() : doc
   return {
@@ -13,7 +14,7 @@ function toDto(doc) {
     sector: o.sector,
     status: o.status,
     assignedTo: o.assignedTo,
-    attachments: Array.isArray(o.attachments) ? o.attachments : [],
+    attachments: enrichAttachmentUrls(req, o.attachments, o.tenantId),
     createdAt: o.createdAt,
     updatedAt: o.updatedAt,
   }

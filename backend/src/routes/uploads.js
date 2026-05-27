@@ -3,7 +3,9 @@ import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { Router } from 'express'
 import multer from 'multer'
-import { authMiddleware } from '../middlewares/auth.js'
+import { authMiddleware, optionalAuthMiddleware } from '../middlewares/auth.js'
+import { buildUploadPublicUrl } from '../utils/publicApiUrl.js'
+import { signUploadFileToken, verifyUploadFileToken } from '../utils/uploadFileToken.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.resolve(__dirname, '../../uploads')
@@ -41,19 +43,30 @@ const upload = multer({
 const router = Router()
 
 router.post('/', authMiddleware, upload.array('files', 6), (req, res) => {
-  const files = (req.files ?? []).map((f) => ({
-    filename: f.filename,
-    originalName: f.originalname,
-    mimetype: f.mimetype,
-    size: f.size,
-    url: `/api/uploads/${encodeURIComponent(f.filename)}`,
-  }))
+  const tenantId = String(req.user?.tenantId ?? '').trim()
+  const files = (req.files ?? []).map((f) => {
+    const fileToken = tenantId ? signUploadFileToken(f.filename, tenantId) : ''
+    return {
+      filename: f.filename,
+      originalName: f.originalname,
+      mimetype: f.mimetype,
+      size: f.size,
+      url: buildUploadPublicUrl(req, f.filename, fileToken),
+    }
+  })
   res.status(201).json({ files })
 })
 
-router.get('/:filename', authMiddleware, (req, res) => {
+router.get('/:filename', optionalAuthMiddleware, (req, res) => {
   const safe = path.basename(req.params.filename)
-  const tenantId = String(req.user?.tenantId ?? '').trim()
+  let tenantId = String(req.user?.tenantId ?? '').trim()
+
+  const ft = typeof req.query.ft === 'string' ? req.query.ft : ''
+  if (!tenantId && ft) {
+    const verified = verifyUploadFileToken(ft, safe)
+    if (verified?.tenantId) tenantId = verified.tenantId
+  }
+
   if (!tenantId) {
     return res.status(401).json({ message: 'Sessão inválida para acesso ao ficheiro.' })
   }

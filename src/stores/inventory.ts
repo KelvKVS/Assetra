@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import api from '../services/api'
 import type { Asset, AssetStatus, AttachmentRef } from '../types/assetra'
+import { normalizeAttachments } from '../utils/mediaUrl'
 import { useAuthStore } from './auth'
 
 export type AssetWithId = Asset & { id: string }
@@ -96,6 +97,7 @@ export const useInventoryStore = defineStore('inventory', {
       this.assets = data.map((a) => ({
         ...a,
         status: a.status as AssetStatus,
+        attachments: normalizeAttachments(a.attachments),
       }))
     },
     async fetchMovements() {
@@ -104,7 +106,10 @@ export const useInventoryStore = defineStore('inventory', {
     },
     async fetchMaintenances() {
       const { data } = await api.get<MaintenanceRow[]>('/maintenances')
-      this.maintenances = data
+      this.maintenances = data.map((m) => ({
+        ...m,
+        attachments: normalizeAttachments(m.attachments),
+      }))
     },
     async fetchUsers() {
       const { data } = await api.get<DirectoryUser[]>('/users')
@@ -112,7 +117,10 @@ export const useInventoryStore = defineStore('inventory', {
     },
     async fetchApprovals() {
       const { data } = await api.get<ApprovalRow[]>('/approvals')
-      this.approvals = data
+      this.approvals = data.map((item) => ({
+        ...item,
+        attachments: normalizeAttachments(item.attachments),
+      }))
     },
     async fetchTasks() {
       const { data } = await api.get<TaskRow[]>('/tasks')
@@ -204,7 +212,10 @@ export const useInventoryStore = defineStore('inventory', {
     },
     async fetchMyApprovals() {
       const { data } = await api.get<ApprovalRow[]>('/approvals/mine')
-      this.myApprovals = data
+      this.myApprovals = data.map((item) => ({
+        ...item,
+        attachments: normalizeAttachments(item.attachments),
+      }))
     },
     async fetchMyApprovalsSafe() {
       try {
@@ -220,7 +231,7 @@ export const useInventoryStore = defineStore('inventory', {
       const { data } = await api.post('/uploads', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      return (data?.files ?? []) as AttachmentRef[]
+      return normalizeAttachments((data?.files ?? []) as AttachmentRef[]) ?? []
     },
     async createApproval(payload: {
       type: 'Movimentação' | 'Manutenção'

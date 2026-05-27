@@ -41,6 +41,7 @@ connectNoSQL() // Conexão MongoDB
 
 const app = express()
 app.disable('x-powered-by')
+app.set('trust proxy', 1)
 const port = Number(process.env.PORT) || 3000
 const startedAt = new Date().toISOString()
 const metrics = {

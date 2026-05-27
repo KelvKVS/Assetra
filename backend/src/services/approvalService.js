@@ -4,6 +4,7 @@ import { AppError } from '../utils/AppError.js'
 import { refreshAssetStatusForTag } from './maintenanceService.js'
 import { logAudit } from './auditService.js'
 import { publishDomainEventSafely } from '../lib/eventBus.js'
+import { enrichAttachmentUrls } from '../utils/enrichAttachments.js'
 
 function resolveRequiredApproverRole(requestedByRole) {
   if (requestedByRole === 'FUNCIONARIO' || requestedByRole === 'TECNICO') return 'GESTOR'
@@ -35,7 +36,7 @@ function toDto(doc) {
     assetTag: o.assetTag,
     description: o.description,
     feedback: o.feedback ?? '',
-    attachments: Array.isArray(o.attachments) ? o.attachments : [],
+    attachments: enrichAttachmentUrls(null, o.attachments, o.tenantId),
     status: o.status,
     requestedBy: o.requestedBy ?? '',
     requestedByName: o.requestedByName ?? '',

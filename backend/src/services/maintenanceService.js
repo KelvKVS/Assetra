@@ -4,6 +4,7 @@ import prisma from '../lib/prisma.js'
 import { AppError } from '../utils/AppError.js'
 import { logAudit } from './auditService.js'
 import { publishDomainEventSafely } from '../lib/eventBus.js'
+import { enrichAttachmentUrls } from '../utils/enrichAttachments.js'
 
 function parseOpeningInput(s) {
   if (!s || typeof s !== 'string') return null
@@ -36,7 +37,7 @@ function toDto(doc) {
     status: o.status,
     assignedTechnicianEmail: o.assignedTechnicianEmail ?? '',
     assignedTechnicianName: o.assignedTechnicianName ?? '',
-    attachments: Array.isArray(o.attachments) ? o.attachments : [],
+    attachments: enrichAttachmentUrls(null, o.attachments, o.tenantId),
     openingDate: formatOpening(o.openingDate),
   }
 }

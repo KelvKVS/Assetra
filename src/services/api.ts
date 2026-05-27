@@ -2,7 +2,7 @@ import axios, { type InternalAxiosRequestConfig } from 'axios'
 
 type AxiosConfigWithSilent = InternalAxiosRequestConfig & { silent401?: boolean }
 
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || '/api'
+export const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || '/api'
 let sessionToken = ''
 
 export function setSessionToken(token?: string) {
