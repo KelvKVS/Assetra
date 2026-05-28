@@ -41,9 +41,9 @@ async function assertAssignedEmailExists(tenantId, email) {
   }
 }
 
-export async function listAssetsByTenant(tenantId) {
+export async function listAssetsByTenant(tenantId, req = null) {
   const rows = await Asset.find({ tenantId }).sort({ updatedAt: -1 })
-  return rows.map(toDto)
+  return rows.map((row) => toDto(row, req))
 }
 
 export async function createAssetForTenant(tenantId, userId, dto) {
@@ -70,7 +70,7 @@ export async function createAssetForTenant(tenantId, userId, dto) {
       before: null,
       after: toDto(asset),
     })
-    return toDto(asset)
+    return toDto(asset, null)
   } catch (e) {
     if (e instanceof AppError) throw e
     throw new AppError(400, 'Erro ao criar ativo (tag duplicada no tenant ou dados inválidos).')
@@ -79,10 +79,10 @@ export async function createAssetForTenant(tenantId, userId, dto) {
 
 export async function updateAssetForTenant(tenantId, userId, assetId, dto) {
   const asset = await Asset.findOne({ _id: assetId, tenantId })
-  const before = toDto(asset)
   if (!asset) {
     throw new AppError(404, 'Ativo não encontrado.')
   }
+  const before = toDto(asset)
   if (dto.tag && dto.tag.trim().toLowerCase() !== asset.tag.toLowerCase()) {
     const clash = await Asset.findOne({
       tenantId,
@@ -120,9 +120,9 @@ export async function updateAssetForTenant(tenantId, userId, assetId, dto) {
     entityId: String(asset._id),
     action: 'UPDATE',
     before,
-    after: toDto(asset),
+    after: toDto(asset, null),
   })
-  return toDto(asset)
+  return toDto(asset, null)
 }
 
 export async function deleteAssetForTenant(tenantId, assetId) {

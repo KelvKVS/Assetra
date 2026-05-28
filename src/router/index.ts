@@ -10,6 +10,7 @@ import MyAssetsView from '../views/MyAssetsView.vue'
 import ApprovalsView from '../views/ApprovalsView.vue'
 import MyRequestsView from '../views/MyRequestsView.vue'
 import TechnicianTasksView from '../views/TechnicianTasksView.vue'
+import IntegrationsView from '../views/IntegrationsView.vue'
 import ForbiddenView from '../views/ForbiddenView.vue'
 import { useAuthStore } from '../stores/auth'
 
@@ -33,6 +34,7 @@ const router = createRouter({
     { path: '/execucao-tecnica', name: 'technician-tasks', component: TechnicianTasksView, meta: { requiresAuth: true, roles: ['TECNICO'] } },
     { path: '/usuarios', name: 'users', component: UsersView, meta: { requiresAuth: true, roles: ['ADM', 'GESTOR'] } },
     { path: '/relatorios', name: 'reports', component: ReportsView, meta: { requiresAuth: true, roles: ['ADM', 'GESTOR'] } },
+    { path: '/integracoes', name: 'integrations', component: IntegrationsView, meta: { requiresAuth: true, roles: ['ADM'] } },
     { path: '/acesso-negado', name: 'forbidden', component: ForbiddenView, meta: { requiresAuth: true } },
   ],
 })

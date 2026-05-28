@@ -143,7 +143,7 @@
         </div>
         <Download :size="18" :stroke-width="2.5" class="report-action" />
       </div>
-      <div class="report-card" @click="downloadReport('maintenance-costs')">
+      <div v-if="financeEnabled" class="report-card" @click="downloadReport('maintenance-costs')">
         <div class="report-icon report-icon-warning">
           <DollarSign :size="24" :stroke-width="2.5" />
         </div>
@@ -152,6 +152,15 @@
           <p>Análise financeira de todas as manutenções</p>
         </div>
         <Download :size="18" :stroke-width="2.5" class="report-action" />
+      </div>
+      <div v-else class="report-card report-card-disabled">
+        <div class="report-icon report-icon-warning">
+          <DollarSign :size="24" :stroke-width="2.5" />
+        </div>
+        <div class="report-info">
+          <h3>Custos de manutenção</h3>
+          <p>Ative uma integração do tipo financeiro em Integrações para habilitar este relatório</p>
+        </div>
       </div>
       <div class="report-card" @click="downloadReport('users')">
         <div class="report-icon report-icon-success">
@@ -205,6 +214,9 @@ type ReportSummary = {
       pending: number
     }
   }
+  integrations?: {
+    financeEnabled?: boolean
+  }
 }
 
 const showFilters = ref(false)
@@ -236,6 +248,7 @@ const summary = ref<ReportSummary>({
 })
 
 const sectors = computed(() => summary.value.sectors)
+const financeEnabled = computed(() => Boolean(summary.value.integrations?.financeEnabled))
 
 function buildFilterParams() {
   const params: Record<string, string> = {}
@@ -406,6 +419,8 @@ const maintenanceDonutStyle = computed(() => {
 .reports-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
 .report-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 16px; cursor: pointer; transition: all 0.2s ease; }
 .report-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); border-color: var(--primary); }
+.report-card-disabled { cursor: default; opacity: 0.72; }
+.report-card-disabled:hover { transform: none; box-shadow: none; border-color: var(--border-light); }
 .report-icon { width: 56px; height: 56px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: white; }
 .report-icon-primary { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
 .report-icon-info { background: linear-gradient(135deg, #06b6d4, #0891b2); }

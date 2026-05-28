@@ -21,6 +21,22 @@ type AuthUser = {
   department?: string | null
   tenantId?: string
   tenant?: TenantInfo
+  avatarUrl?: string | null
+  avatarFilename?: string | null
+}
+
+function mapAuthUser(raw: AuthUser & { tenant?: TenantInfo; tenantId?: string }): AuthUser {
+  return {
+    id: raw.id,
+    name: raw.name,
+    email: raw.email,
+    role: raw.role as Profile,
+    department: raw.department ?? null,
+    tenantId: raw.tenantId,
+    tenant: raw.tenant,
+    avatarUrl: raw.avatarUrl ?? null,
+    avatarFilename: raw.avatarFilename ?? null,
+  }
 }
 
 function clearLegacyMockStorage() {
@@ -89,15 +105,7 @@ export const useAuthStore = defineStore('auth', {
         if (!data.user || !data.token) {
           throw new Error('Resposta de login inválida.')
         }
-        this.user = {
-          id: data.user.id,
-          name: data.user.name,
-          email: data.user.email,
-          role: data.user.role as Profile,
-          department: data.user.department ?? null,
-          tenantId: data.user.tenantId,
-          tenant: data.user.tenant,
-        }
+        this.user = mapAuthUser(data.user)
         persistToken(data.token)
         clearLegacyMockStorage()
       } catch (error: unknown) {
@@ -117,15 +125,7 @@ export const useAuthStore = defineStore('auth', {
           credential,
           ...(slug ? { tenantSlug: slug } : {}),
         })
-        this.user = {
-          id: data.user.id,
-          name: data.user.name,
-          email: data.user.email,
-          role: data.user.role as Profile,
-          department: data.user.department ?? null,
-          tenantId: data.user.tenantId,
-          tenant: data.user.tenant,
-        }
+        this.user = mapAuthUser(data.user)
         persistToken(data.token)
         clearLegacyMockStorage()
       } catch (error: unknown) {
@@ -145,15 +145,7 @@ export const useAuthStore = defineStore('auth', {
         try {
           const res = await api.get('/auth/me')
           if (res.data?.user) {
-            this.user = {
-              id: res.data.user.id,
-              name: res.data.user.name,
-              email: res.data.user.email,
-              role: res.data.user.role as Profile,
-              department: res.data.user.department ?? null,
-              tenantId: res.data.user.tenantId,
-              tenant: res.data.user.tenant,
-            }
+            this.user = mapAuthUser(res.data.user)
             clearLegacyMockStorage()
           } else {
             this.user = null
@@ -169,6 +161,21 @@ export const useAuthStore = defineStore('auth', {
       })()
 
       return fetchMePromise
+    },
+    applySessionUser(raw: AuthUser) {
+      if (!this.user) {
+        this.user = mapAuthUser(raw)
+        return
+      }
+      this.user = mapAuthUser({ ...this.user, ...raw })
+    },
+    async updateAvatar(filename: string) {
+      const { data } = await api.patch<{ user: AuthUser }>('/auth/me/avatar', { filename })
+      if (data?.user) this.applySessionUser(data.user)
+    },
+    async removeAvatar() {
+      const { data } = await api.delete<{ user: AuthUser }>('/auth/me/avatar')
+      if (data?.user) this.applySessionUser(data.user)
     },
     async logout() {
       clearLegacyMockStorage()

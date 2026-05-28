@@ -24,6 +24,7 @@ import approvalRoutes from './routes/approvals.js'
 import taskRoutes from './routes/tasks.js'
 import uploadRoutes from './routes/uploads.js'
 import integrationRoutes from './routes/integrations.js'
+import financeIntegrationsRoutes from './routes/financeIntegrations.js'
 import reportRoutes from './routes/reports.js'
 import notificationRoutes from './routes/notifications.js'
 import { AppError } from './utils/AppError.js'
@@ -205,6 +206,7 @@ app.use('/api/notifications', notificationRoutes)
 app.use('/api/tasks', taskRoutes)
 app.use('/api/uploads', uploadRoutes)
 app.use('/api/integrations', integrationRoutes)
+app.use('/api/admin-integrations', financeIntegrationsRoutes)
 app.use('/api/reports', reportRoutes)
 
 

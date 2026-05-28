@@ -1,7 +1,8 @@
 import Approval from '../models/Approval.js'
 import Maintenance from '../models/Maintenance.js'
+import prisma from '../lib/prisma.js'
 import { AppError } from '../utils/AppError.js'
-import { refreshAssetStatusForTag } from './maintenanceService.js'
+import { createMaintenance, refreshAssetStatusForTag } from './maintenanceService.js'
 import { findAssetByTag } from './assetService.js'
 import { parseDestinationFromDescription, registerMovementFromApproval } from './movementService.js'
 import { logAudit } from './auditService.js'
@@ -19,6 +20,111 @@ function normalizeRole(raw) {
   return String(raw ?? '')
     .trim()
     .toUpperCase()
+}
+
+function parsePriorityFromFeedback(feedback) {
+  const text = String(feedback ?? '')
+  if (/severidade:\s*alta/i.test(text)) return 'Alta'
+  if (/severidade:\s*baixa/i.test(text)) return 'Baixa'
+  return 'Média'
+}
+
+function isExecutionValidationApproval(approval, maintenance) {
+  if (!maintenance) return false
+  if (/validação de execução técnica/i.test(String(approval.description ?? ''))) return true
+  return maintenance.status === 'Em andamento'
+}
+
+async function resolveTechnicianEmailForSpawn(tenantId, approval, overrideEmail) {
+  const override = String(overrideEmail ?? '')
+    .trim()
+    .toLowerCase()
+  if (override) {
+    const tech = await prisma.user.findFirst({
+      where: { tenantId, email: override, role: 'TECNICO', active: true },
+    })
+    if (!tech) {
+      throw new AppError(400, 'Técnico selecionado inválido ou inativo.')
+    }
+    return tech.email.toLowerCase()
+  }
+
+  const requesterId = String(approval.requestedBy ?? '').trim()
+  if (requesterId) {
+    const requester = await prisma.user.findFirst({
+      where: { tenantId, id: requesterId },
+    })
+    if (requester?.role === 'TECNICO' && requester.active) {
+      return requester.email.toLowerCase()
+    }
+  }
+
+  const fallback = await prisma.user.findFirst({
+    where: { tenantId, role: 'TECNICO', active: true },
+    orderBy: { name: 'asc' },
+  })
+  if (!fallback) {
+    throw new AppError(400, 'Não há técnicos ativos para executar esta manutenção.')
+  }
+  return fallback.email.toLowerCase()
+}
+
+async function applyMaintenanceApprovalEffects(
+  tenantId,
+  user,
+  approval,
+  decision,
+  assignedTechnicianEmail,
+) {
+  if (String(approval.type) !== 'Manutenção') return
+
+  const maintenanceId = String(approval.maintenanceId ?? '').trim()
+  if (maintenanceId) {
+    const maintenance = await Maintenance.findOne({ _id: maintenanceId, tenantId })
+    if (!maintenance) return
+    if (!isExecutionValidationApproval(approval, maintenance)) return
+
+    maintenance.status = decision === 'APPROVED' ? 'Concluída' : 'Em andamento'
+    await maintenance.save()
+    await refreshAssetStatusForTag(tenantId, maintenance.assetTag)
+    await logAudit({
+      tenantId,
+      actor: user,
+      entityType: 'Maintenance',
+      entityId: String(maintenance._id),
+      action: 'STATUS_FROM_APPROVAL',
+      before: null,
+      after: { status: maintenance.status },
+      metadata: { approvalId: String(approval._id), decision },
+    })
+    return
+  }
+
+  if (decision !== 'APPROVED') return
+
+  const techEmail = await resolveTechnicianEmailForSpawn(
+    tenantId,
+    approval,
+    assignedTechnicianEmail,
+  )
+  const details = [approval.description, approval.feedback].filter(Boolean).join('\n\n')
+  const created = await createMaintenance(
+    tenantId,
+    user?.sub,
+    {
+      assetTag: approval.assetTag,
+      type: 'Corretiva',
+      description: details.slice(0, 2000),
+      priority: parsePriorityFromFeedback(approval.feedback),
+      status: 'Aberta',
+      assignedTechnicianEmail: techEmail,
+      attachments: approval.attachments ?? [],
+    },
+    user,
+  )
+
+  approval.maintenanceId = String(created.id)
+  await approval.save()
 }
 
 function canUserDecideApproval(requiredRole, userRole) {
@@ -141,7 +247,14 @@ export async function createApproval(tenantId, user, dto) {
   return toDto(a)
 }
 
-export async function respondToApproval(tenantId, user, approvalId, decision, notes) {
+export async function respondToApproval(
+  tenantId,
+  user,
+  approvalId,
+  decision,
+  notes,
+  assignedTechnicianEmail,
+) {
   const a = await Approval.findOne({ _id: approvalId, tenantId })
   if (!a) {
     throw new AppError(404, 'Solicitação não encontrada.')
@@ -184,24 +297,13 @@ export async function respondToApproval(tenantId, user, approvalId, decision, no
     })
   }
 
-  if (String(a.type) === 'Manutenção' && String(a.maintenanceId ?? '').trim()) {
-    const maintenance = await Maintenance.findOne({ _id: String(a.maintenanceId).trim(), tenantId })
-    if (maintenance) {
-      maintenance.status = decision === 'APPROVED' ? 'Concluída' : 'Em andamento'
-      await maintenance.save()
-      await refreshAssetStatusForTag(tenantId, maintenance.assetTag)
-      await logAudit({
-        tenantId,
-        actor: user,
-        entityType: 'Maintenance',
-        entityId: String(maintenance._id),
-        action: 'STATUS_FROM_APPROVAL',
-        before: null,
-        after: { status: maintenance.status },
-        metadata: { approvalId: String(a._id), decision },
-      })
-    }
-  }
+  await applyMaintenanceApprovalEffects(
+    tenantId,
+    user,
+    a,
+    decision,
+    assignedTechnicianEmail,
+  )
   await logAudit({
     tenantId,
     actor: user,

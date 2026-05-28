@@ -55,8 +55,11 @@
             <component :is="typeIcon(item.type)" :size="16" :stroke-width="2.5" />
             {{ item.type }}
           </span>
-          <span v-if="item.type === 'Manutenção' && item.maintenanceId" class="reassignable-badge">
-            Realocável
+          <span v-if="flowKind(item) === 'validation'" class="flow-badge flow-badge--validation">
+            Validação técnica
+          </span>
+          <span v-else-if="flowKind(item) === 'opening'" class="flow-badge flow-badge--opening">
+            Nova OS
           </span>
           <span :class="['status-badge', `status-${statusClass(item.status)}`]">
             {{ item.status }}
@@ -107,32 +110,63 @@
           </div>
         </div>
 
-        <div v-if="canApprove && item.status === 'Pendente'" class="approval-actions">
-          <button class="btn-approve" @click="setStatus(item, 'APPROVED')">
-            <CheckCircle :size="16" :stroke-width="2.5" />
-            Aprovar
-          </button>
-          <button class="btn-reject" @click="setStatus(item, 'REJECTED')">
-            <XCircle :size="16" :stroke-width="2.5" />
-            Reprovar
-          </button>
-        </div>
-        <div v-if="canReassignApproval(item)" class="reassign-box">
-          <label>Encaminhar para execução técnica:</label>
-          <div class="reassign-row">
-            <select v-model="reassignmentTargetByApprovalId[item.id]">
-              <option value="">Selecione outro técnico</option>
-              <option v-for="tech in technicianUsers" :key="`tech-${tech.id}`" :value="tech.email">
-                {{ tech.name }} ({{ tech.email }})
+        <div v-if="canApprove && item.status === 'Pendente'" class="approval-footer">
+          <p v-if="flowKind(item) === 'opening'" class="flow-hint">
+            Ao aprovar, o sistema abre uma ordem de serviço na <strong>Execução Técnica</strong> do técnico escolhido.
+          </p>
+          <p v-else-if="flowKind(item) === 'validation'" class="flow-hint">
+            Relatório enviado pelo técnico. Aprove para concluir a ordem ou reprove para nova execução.
+          </p>
+
+          <div v-if="needsTechnicianPick(item)" class="assign-block">
+            <label>
+              <UserCog :size="14" />
+              Técnico para execução
+            </label>
+            <select v-model="technicianPickByApprovalId[item.id]" required>
+              <option value="">Selecione o técnico responsável</option>
+              <option v-for="tech in technicianUsers" :key="`pick-${tech.id}`" :value="tech.email">
+                {{ tech.name }} · {{ tech.email }}
               </option>
             </select>
+          </div>
+
+          <div class="approval-actions">
             <button
-              class="btn-reassign"
-              :disabled="!reassignmentTargetByApprovalId[item.id]"
-              @click="reassignMaintenance(item)"
+              class="action-btn action-btn--approve"
+              :disabled="approveDisabled(item)"
+              @click="setStatus(item, 'APPROVED')"
             >
-              Enviar para técnico
+              <CheckCircle :size="17" :stroke-width="2.5" />
+              {{ approveLabel(item) }}
             </button>
+            <button class="action-btn action-btn--reject" @click="setStatus(item, 'REJECTED')">
+              <XCircle :size="17" :stroke-width="2.5" />
+              {{ rejectLabel(item) }}
+            </button>
+          </div>
+
+          <div v-if="canReassignValidation(item)" class="reassign-block">
+            <label>
+              <RotateCcw :size="14" />
+              Devolver para outro técnico
+            </label>
+            <div class="reassign-row">
+              <select v-model="reassignmentTargetByApprovalId[item.id]">
+                <option value="">Selecione o técnico</option>
+                <option v-for="tech in technicianUsers" :key="`tech-${tech.id}`" :value="tech.email">
+                  {{ tech.name }} · {{ tech.email }}
+                </option>
+              </select>
+              <button
+                type="button"
+                class="action-btn action-btn--outline"
+                :disabled="!reassignmentTargetByApprovalId[item.id]"
+                @click="reassignMaintenance(item)"
+              >
+                Devolver à fila
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -147,7 +181,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, type Component } from 'vue'
+import { computed, onMounted, reactive, ref, watch, type Component } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useInventoryStore, type ApprovalRow } from '../stores/inventory'
 import { useConfirmAction } from '../composables/useConfirmAction'
@@ -168,6 +202,8 @@ import {
   FileText,
   User,
   ShieldCheck,
+  UserCog,
+  RotateCcw,
 } from 'lucide-vue-next'
 
 type ApprovalStatus = 'Pendente' | 'Aprovada' | 'Reprovada'
@@ -180,12 +216,18 @@ const role = computed(() => authStore.user?.role)
 const canApprove = computed(() => role.value === 'ADM' || role.value === 'GESTOR')
 
 onMounted(async () => {
-  await Promise.allSettled([inventory.fetchApprovalsSafe(), inventory.fetchAssets(), inventory.fetchUsers()])
+  await Promise.allSettled([
+    inventory.fetchApprovalsSafe(),
+    inventory.fetchAssets(),
+    inventory.fetchUsers(),
+    inventory.fetchMaintenances(),
+  ])
 })
 
 const { pageSearch, matchesPageSearch } = useLocalPageSearch()
 const filter = ref<'all' | ApprovalStatus>('all')
 const reassignmentTargetByApprovalId = reactive<Record<string, string>>({})
+const technicianPickByApprovalId = reactive<Record<string, string>>({})
 
 const approvals = computed(() => inventory.approvals)
 const technicianUsers = computed(() => inventory.users.filter((u) => u.role === 'TECNICO' && u.status === 'Ativo'))
@@ -238,18 +280,75 @@ const listEmptyState = computed(() => {
   return byFilter[filter.value]
 })
 
-const setStatus = async (item: ApprovalRow, decision: 'APPROVED' | 'REJECTED') => {
-  const action = decision === 'APPROVED' ? 'aprovar' : 'reprovar'
-  const ok = await confirm.ask(
-    `Confirme com a sua senha para ${action} a solicitação ${item.assetTag}.`,
-    `Confirmar ${action}`,
-  )
-  if (!ok) return
-  await inventory.respondApproval(item.id, decision)
+type ApprovalFlowKind = 'opening' | 'validation' | 'movement' | 'other'
+
+const isExecutionValidation = (item: ApprovalRow) =>
+  Boolean(item.maintenanceId) &&
+  /validação de execução técnica/i.test(String(item.description ?? ''))
+
+const flowKind = (item: ApprovalRow): ApprovalFlowKind => {
+  if (item.type === 'Movimentação') return 'movement'
+  if (item.type === 'Manutenção' && isExecutionValidation(item)) return 'validation'
+  if (item.type === 'Manutenção') return 'opening'
+  return 'other'
 }
 
-const canReassignApproval = (item: ApprovalRow) =>
-  canApprove.value && item.status === 'Pendente' && item.type === 'Manutenção' && Boolean(item.maintenanceId)
+const needsTechnicianPick = (item: ApprovalRow) =>
+  canApprove.value && item.status === 'Pendente' && flowKind(item) === 'opening'
+
+const approveLabel = (item: ApprovalRow) => {
+  if (flowKind(item) === 'validation') return 'Validar conclusão'
+  if (flowKind(item) === 'opening') return 'Aprovar e abrir OS'
+  return 'Aprovar'
+}
+
+const rejectLabel = (item: ApprovalRow) => {
+  if (flowKind(item) === 'validation') return 'Pedir correção'
+  return 'Reprovar'
+}
+
+const approveDisabled = (item: ApprovalRow) =>
+  needsTechnicianPick(item) && !String(technicianPickByApprovalId[item.id] ?? '').trim()
+
+watch(
+  () => [approvals.value, technicianUsers.value] as const,
+  () => {
+    for (const item of approvals.value) {
+      if (!needsTechnicianPick(item)) continue
+      if (technicianPickByApprovalId[item.id]) continue
+      const requesterEmail = inventory.users
+        .find((u) => u.id === item.requestedBy && u.role === 'TECNICO')
+        ?.email?.trim()
+        .toLowerCase()
+      if (requesterEmail && technicianUsers.value.some((t) => t.email.toLowerCase() === requesterEmail)) {
+        technicianPickByApprovalId[item.id] = requesterEmail
+      }
+    }
+  },
+  { immediate: true },
+)
+
+const setStatus = async (item: ApprovalRow, decision: 'APPROVED' | 'REJECTED') => {
+  if (decision === 'APPROVED' && needsTechnicianPick(item) && approveDisabled(item)) return
+
+  const action = decision === 'APPROVED' ? approveLabel(item).toLowerCase() : rejectLabel(item).toLowerCase()
+  const ok = await confirm.ask(
+    `Confirme com a sua senha para ${action} a solicitação ${item.assetTag}.`,
+    `Confirmar decisão`,
+  )
+  if (!ok) return
+
+  const techEmail =
+    decision === 'APPROVED' && needsTechnicianPick(item)
+      ? String(technicianPickByApprovalId[item.id] ?? '').trim()
+      : undefined
+
+  await inventory.respondApproval(item.id, decision, undefined, techEmail)
+  if (decision === 'APPROVED') technicianPickByApprovalId[item.id] = ''
+}
+
+const canReassignValidation = (item: ApprovalRow) =>
+  canApprove.value && item.status === 'Pendente' && flowKind(item) === 'validation'
 
 const reassignMaintenance = async (item: ApprovalRow) => {
   if (!item.maintenanceId) return
@@ -405,7 +504,7 @@ const openAttachment = (item: ApprovalRow, att: AttachmentRef) => {
 }
 .type-movimentacao { background: rgba(6, 182, 212, 0.15); color: #06b6d4; }
 .type-manutencao { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
-.reassignable-badge {
+.flow-badge {
   margin-left: auto;
   margin-right: 6px;
   padding: 4px 10px;
@@ -414,9 +513,16 @@ const openAttachment = (item: ApprovalRow, att: AttachmentRef) => {
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  background: rgba(245, 158, 11, 0.14);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+.flow-badge--opening {
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.28);
+}
+.flow-badge--validation {
+  background: rgba(168, 85, 247, 0.12);
+  color: #a855f7;
+  border: 1px solid rgba(168, 85, 247, 0.28);
 }
 
 .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -455,59 +561,135 @@ const openAttachment = (item: ApprovalRow, att: AttachmentRef) => {
 .approval-meta { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--text-muted); }
 .approval-meta span { display: inline-flex; gap: 6px; align-items: center; }
 
-.approval-actions { display: flex; gap: 10px; padding-top: 12px; border-top: 1px solid var(--border-light); }
+.approval-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-light);
+}
 
-.reassign-box {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--border-light);
+.flow-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  padding: 10px 12px;
+  background: var(--bg-primary);
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+}
+
+.assign-block,
+.reassign-block {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.reassign-box label {
-  font-size: 12px;
+
+.assign-block label,
+.reassign-block label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: var(--text-secondary);
 }
-.reassign-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-}
+
+.assign-block select,
 .reassign-row select {
-  padding: 9px 10px;
-  border-radius: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
   border: 1px solid var(--border-light);
   background: var(--bg-primary);
   color: var(--text-primary);
-}
-.btn-reassign {
-  border: 1px solid rgba(245, 158, 11, 0.45);
-  background: rgba(245, 158, 11, 0.14);
-  color: #f59e0b;
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.btn-reassign:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.btn-approve, .btn-reject {
-  display: flex; align-items: center; justify-content: center; gap: 6px; flex: 1;
-  padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer;
-  transition: all 0.2s ease;
+.assign-block select:focus,
+.reassign-row select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
 }
-.btn-approve { background: var(--success-light); color: var(--success); border: 1px solid rgba(34,197,94,0.3); }
-.btn-approve:hover { background: var(--success); color: white; border-color: var(--success); }
-.btn-reject { background: var(--danger-light); color: var(--danger); border: 1px solid rgba(239,68,68,0.3); }
-.btn-reject:hover { background: var(--danger); color: white; border-color: var(--danger); }
+
+.approval-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.reassign-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.action-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.action-btn--approve {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(34, 197, 94, 0.28);
+}
+
+.action-btn--approve:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(34, 197, 94, 0.35);
+}
+
+.action-btn--reject {
+  background: var(--bg-primary);
+  color: var(--danger);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.action-btn--reject:hover {
+  background: var(--danger-light);
+  transform: translateY(-1px);
+}
+
+.action-btn--outline {
+  white-space: nowrap;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+  min-height: 42px;
+}
+
+.action-btn--outline:not(:disabled):hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  transform: translateY(-1px);
+}
 
 .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
 .empty-icon { margin-bottom: 16px; opacity: 0.3; }

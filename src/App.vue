@@ -73,6 +73,7 @@ const currentPageTitle = computed(() => {
     '/execucao-tecnica': 'Execução Técnica',
     '/usuarios': 'Usuários',
     '/relatorios': 'Relatórios',
+    '/integracoes': 'Integrações',
     '/acesso-negado': 'Acesso Negado',
   }
   return titles[path] || 'Dashboard'

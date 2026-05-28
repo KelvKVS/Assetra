@@ -325,11 +325,16 @@ onMounted(async () => {
 <style scoped>
 .login-page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--bg-primary);
-  padding: 20px;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px))
+    max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .login-container {
@@ -342,7 +347,8 @@ onMounted(async () => {
   overflow: hidden;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   border: 1px solid var(--border-light);
-  min-height: 650px;
+  min-height: min(650px, calc(100dvh - 32px));
+  box-sizing: border-box;
 }
 
 /* Left Side - Branding */
@@ -414,12 +420,14 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   background: var(--bg-card);
+  min-width: 0;
 }
 
 .login-form-content {
   width: 100%;
   max-width: 420px;
   margin: 0 auto;
+  min-width: 0;
 }
 
 .login-header {
@@ -449,16 +457,20 @@ onMounted(async () => {
 .form-group label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px 8px;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-secondary);
+  line-height: 1.35;
 }
 
 .label-optional {
   font-size: 11px;
   font-weight: 500;
   color: var(--text-muted);
+  flex: 1 1 100%;
+  padding-left: 24px;
 }
 
 .field-hint {
@@ -542,8 +554,10 @@ onMounted(async () => {
 
 .input-field {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 12px 16px;
-  font-size: 15px;
+  font-size: 16px;
   border: 2px solid var(--border-light);
   border-radius: 10px;
   background: var(--bg-primary);
@@ -615,11 +629,14 @@ onMounted(async () => {
 }
 
 .demo-user {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: 8px 10px;
   padding: 10px 12px;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   background: var(--bg-primary);
   border: 1px solid transparent;
   border-radius: 8px;
@@ -657,10 +674,13 @@ onMounted(async () => {
 .demo-user code {
   font-size: 12px;
   color: var(--text-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .demo-slug {
-  margin-left: auto;
   font-size: 10px;
   font-weight: 800;
   padding: 2px 8px;
@@ -669,14 +689,6 @@ onMounted(async () => {
   color: var(--text-secondary);
   text-transform: lowercase;
   flex-shrink: 0;
-}
-
-.demo-user code {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 @keyframes spin {
@@ -689,24 +701,125 @@ onMounted(async () => {
 
 /* Responsividade */
 @media (max-width: 900px) {
+  .login-page {
+    align-items: flex-start;
+  }
+
   .login-container {
     grid-template-columns: 1fr;
     max-width: 520px;
     min-height: 0;
+    margin: auto;
   }
-  .login-branding { display: none; }
-  .login-form-section { padding: 36px 28px; }
+
+  .login-branding {
+    display: none;
+  }
+
+  .login-form-section {
+    padding: 36px 28px;
+  }
 }
 
 @media (max-width: 520px) {
-  .login-page { padding: 12px; }
-  .login-container { border-radius: 14px; }
-  .login-form-section { padding: 28px 20px; }
-  .login-header h2 { font-size: 22px; }
-  .input-field { padding: 11px 14px; font-size: 14px; }
-  .login-btn { padding: 12px; font-size: 15px; }
-  .demo-credentials { padding: 14px; }
-  .demo-user { padding: 8px 10px; gap: 8px; }
-  .demo-user code { font-size: 11px; }
+  .login-page {
+    padding: max(10px, env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-right, 0px))
+      max(10px, env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px));
+  }
+
+  .login-container {
+    border-radius: 14px;
+    max-width: 100%;
+  }
+
+  .login-form-section {
+    padding: 24px 16px;
+  }
+
+  .login-header {
+    margin-bottom: 22px;
+  }
+
+  .login-header h2 {
+    font-size: 22px;
+  }
+
+  .login-form {
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+
+  .input-field {
+    padding: 11px 14px;
+  }
+
+  .login-btn,
+  .google-btn {
+    padding: 12px;
+    font-size: 15px;
+    min-height: 46px;
+  }
+
+  .demo-credentials {
+    padding: 14px 12px;
+  }
+
+  .demo-user {
+    padding: 8px 10px;
+    gap: 6px 8px;
+  }
+
+  .demo-user code {
+    font-size: 11px;
+  }
+
+  .role-tag {
+    min-width: 48px;
+    font-size: 9px;
+  }
+}
+
+@media (max-width: 380px) {
+  .login-form-section {
+    padding: 20px 14px;
+  }
+
+  .login-header h2 {
+    font-size: 20px;
+  }
+
+  .form-group label {
+    font-size: 13px;
+  }
+
+  .label-optional {
+    padding-left: 22px;
+    font-size: 10px;
+  }
+
+  .demo-user {
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      'role email'
+      'slug slug';
+  }
+
+  .demo-user .role-tag {
+    grid-area: role;
+  }
+
+  .demo-user code {
+    grid-area: email;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    word-break: break-all;
+    font-size: 10px;
+  }
+
+  .demo-slug {
+    grid-area: slug;
+    justify-self: start;
+  }
 }
 </style>

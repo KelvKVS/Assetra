@@ -26,7 +26,13 @@ async function verifyViaTokenInfo(credential, clientId) {
   if (!email) {
     throw new AppError(401, 'Não foi possível obter o e-mail da conta Google.')
   }
-  return { email, name, googleSubject: data.sub ? String(data.sub) : undefined }
+  const picture = String(data.picture ?? '').trim()
+  return {
+    email,
+    name,
+    googleSubject: data.sub ? String(data.sub) : undefined,
+    picture: /^https?:\/\//i.test(picture) ? picture : undefined,
+  }
 }
 
 /**
@@ -64,6 +70,7 @@ export async function verifyGoogleIdToken(credential, expectedEmail) {
       email,
       name,
       googleSubject: payload?.sub ? String(payload.sub) : undefined,
+      picture: typeof payload?.picture === 'string' ? payload.picture.trim() : undefined,
     }
   } catch (err) {
     if (err instanceof AppError) throw err

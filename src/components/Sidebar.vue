@@ -75,6 +75,10 @@
           <BarChart3 :size="20" :stroke-width="2" />
           <span>Relatórios</span>
         </RouterLink>
+        <RouterLink v-if="isAdmin" to="/integracoes" class="nav-item">
+          <PlugZap :size="20" :stroke-width="2" />
+          <span>Integrações</span>
+        </RouterLink>
       </div>
     </nav>
 
@@ -103,6 +107,7 @@ import {
   Settings,
   Users,
   BarChart3,
+  PlugZap,
   Sun,
   Moon,
   Box,

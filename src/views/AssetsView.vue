@@ -205,9 +205,9 @@
           :aria-label="`Ver fotos de ${asset.tag}`"
           @click.stop="openGallery(asset, coverPhoto(asset)!)"
         >
-          <img :src="coverPhoto(asset)!.url" :alt="coverPhoto(asset)!.originalName ?? asset.tag" />
-        </button>
-        <div class="asset-header" :class="{ 'asset-header--with-cover': coverPhoto(asset) }">
+            <AssetImage :attachment="coverPhoto(asset)!" :alt="coverPhoto(asset)!.originalName ?? asset.tag" />
+          </button>
+          <div class="asset-header" :class="{ 'asset-header--with-cover': coverPhoto(asset) }">
             <div v-if="!coverPhoto(asset)" class="asset-icon">
               <Monitor :size="24" :stroke-width="2" />
             </div>
@@ -265,7 +265,7 @@
             :aria-label="`Ver fotos de ${asset.tag}`"
             @click.stop="openGallery(asset, coverPhoto(asset)!)"
           >
-            <img :src="coverPhoto(asset)!.url" :alt="coverPhoto(asset)!.originalName ?? asset.tag" />
+            <AssetImage :attachment="coverPhoto(asset)!" :alt="coverPhoto(asset)!.originalName ?? asset.tag" />
           </button>
           <div v-else class="compact-thumb compact-thumb--empty" aria-hidden="true">
             <Monitor :size="22" :stroke-width="2" />
@@ -400,6 +400,7 @@ import { type Asset, type AssetStatus, type AttachmentRef } from '../types/asset
 import { useAuthStore } from '../stores/auth'
 import { useInventoryStore } from '../stores/inventory'
 import { useConfirmAction } from '../composables/useConfirmAction'
+import AssetImage from '../components/AssetImage.vue'
 import { imageAttachments, useImageLightbox } from '../composables/useImageLightbox'
 import { prepareAttachmentsForApi } from '../utils/attachmentPayload'
 import { UPLOAD_LIMITS_HINT, mergeUploadFiles } from '../utils/uploadLimits'

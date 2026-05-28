@@ -15,7 +15,7 @@ router.get(
   '/',
   authMiddleware,
   asyncHandler(async (req, res) => {
-    const assets = await listAssetsByTenant(req.user.tenantId)
+    const assets = await listAssetsByTenant(req.user.tenantId, req)
     res.json(assets)
   }),
 )

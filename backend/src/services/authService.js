@@ -1,22 +1,8 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { AppError } from '../utils/AppError.js'
+import { serializeSessionUser } from '../utils/userAvatar.js'
 import { verifyGoogleIdToken } from './googleTokenService.js'
-
-function buildSessionUser(user) {
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    department: user.department ?? null,
-    tenantId: user.tenantId,
-    tenant: {
-      slug: user.tenant.slug,
-      name: user.tenant.name,
-    },
-  }
-}
 
 function signSessionToken(user) {
   const secret = process.env.JWT_SECRET
@@ -109,7 +95,7 @@ export async function authenticateUser(prisma, input) {
   const token = signSessionToken(user)
   return {
     token,
-    user: buildSessionUser(user),
+    user: serializeSessionUser(user),
   }
 }
 
@@ -123,7 +109,7 @@ function mapTenantChoices(users) {
 /**
  * Resolve utilizador Google pelo e-mail (sem auto-cadastro).
  */
-export async function resolveGoogleLoginUser(prisma, { email, tenantSlug }) {
+export async function resolveGoogleLoginUser(prisma, { email, tenantSlug, picture }) {
   const normalizedEmail = String(email ?? '')
     .trim()
     .toLowerCase()
@@ -164,8 +150,22 @@ export async function resolveGoogleLoginUser(prisma, { email, tenantSlug }) {
     })
   }
 
+  const pictureUrl = String(picture ?? '').trim()
+  const shouldApplyGoogleAvatar =
+    /^https?:\/\//i.test(pictureUrl) &&
+    !String(user.avatarFilename ?? '').trim() &&
+    !String(user.avatarExternalUrl ?? '').trim()
+
+  if (shouldApplyGoogleAvatar) {
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { avatarExternalUrl: pictureUrl },
+      include: { tenant: true },
+    })
+  }
+
   const token = signSessionToken(user)
-  return { token, user: buildSessionUser(user) }
+  return { token, user: serializeSessionUser(user) }
 }
 
 /**
@@ -176,5 +176,6 @@ export async function authenticateGoogleUser(prisma, input) {
   return resolveGoogleLoginUser(prisma, {
     email: verified.email,
     tenantSlug: input.tenantSlug,
+    picture: verified.picture,
   })
 }

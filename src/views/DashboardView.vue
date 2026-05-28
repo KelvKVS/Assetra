@@ -44,47 +44,7 @@
         </div>
       </div>
 
-      <div class="charts-grid">
-        <div class="chart-card">
-          <h3>Status dos ativos</h3>
-          <div class="donut" :style="donutStyle">
-            <span>{{ inventory.assets.length }}</span>
-          </div>
-          <ul class="legend-list">
-            <li><span class="dot dot-blue"></span>Em uso: <strong>{{ inUseAssets }}</strong></li>
-            <li><span class="dot dot-green"></span>Disponíveis: <strong>{{ availableAssets }}</strong></li>
-            <li><span class="dot dot-amber"></span>Em manutenção: <strong>{{ maintenanceAssets }}</strong></li>
-          </ul>
-        </div>
-
-        <div class="chart-card">
-          <h3>Manutenções por prioridade</h3>
-          <div v-if="maintenanceByPriority.length" class="bar-list">
-            <div v-for="item in maintenanceByPriority" :key="item.label" class="bar-row">
-              <span class="bar-label">{{ item.label }}</span>
-              <div class="bar-track">
-                <div class="bar-fill bar-fill-priority" :style="{ width: `${item.percent}%` }"></div>
-              </div>
-              <strong class="bar-value">{{ item.value }}</strong>
-            </div>
-          </div>
-          <p v-else class="muted">Sem manutenções registradas.</p>
-        </div>
-
-        <div class="chart-card">
-          <h3>Carga por técnico</h3>
-          <div v-if="workloadByTechnician.length" class="bar-list">
-            <div v-for="item in workloadByTechnician" :key="item.label" class="bar-row">
-              <span class="bar-label">{{ item.label }}</span>
-              <div class="bar-track">
-                <div class="bar-fill bar-fill-workload" :style="{ width: `${item.percent}%` }"></div>
-              </div>
-              <strong class="bar-value">{{ item.value }}</strong>
-            </div>
-          </div>
-          <p v-else class="muted">Sem técnicos atribuídos no momento.</p>
-        </div>
-      </div>
+      <DashboardCharts variant="admin" />
 
       <section class="panel">
         <header class="panel-header">
@@ -108,6 +68,7 @@
     <template v-else-if="isManager">
       <div class="welcome-banner">
         <div>
+          <span class="banner-chip">Painel de gestão</span>
           <h2>Olá, {{ firstName }} 👋</h2>
           <p>Centro de decisão de <strong>{{ tenantName }}</strong>. Aprove pedidos e acompanhe a operação.</p>
         </div>
@@ -146,6 +107,8 @@
           </div>
         </div>
       </div>
+
+      <DashboardCharts variant="manager" />
 
       <div class="cols-2">
         <section class="panel">
@@ -383,6 +346,7 @@ import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useInventoryStore } from '../stores/inventory'
 import { assetsAssignedToEmail } from '../utils/userScope'
+import DashboardCharts from '../components/dashboard/DashboardCharts.vue'
 import {
   Monitor,
   Wrench,
@@ -435,53 +399,6 @@ const tenantName = computed(() => authStore.user?.tenant?.name ?? 'Assetra')
 /* === Admin === */
 const activeUsersCount = computed(() => inventory.users.filter((u) => u.status === 'Ativo').length)
 const openMaintenancesCount = computed(() => inventory.maintenances.filter((m) => m.status !== 'Concluída').length)
-const inUseAssets = computed(() => inventory.assets.filter((i) => i.status === 'Em uso').length)
-const availableAssets = computed(() => inventory.assets.filter((i) => i.status === 'Disponível').length)
-const maintenanceAssets = computed(() => inventory.assets.filter((i) => i.status === 'Em manutenção').length)
-
-const donutStyle = computed(() => {
-  const total = inventory.assets.length || 1
-  const inUse = (inUseAssets.value / total) * 100
-  const available = (availableAssets.value / total) * 100
-  const maintenance = 100 - inUse - available
-  return {
-    background: `conic-gradient(
-      #3b82f6 0% ${inUse}%,
-      #22c55e ${inUse}% ${inUse + available}%,
-      #f59e0b ${inUse + available}% ${inUse + available + maintenance}%
-    )`,
-  }
-})
-
-const maintenanceByPriority = computed(() => {
-  const m = new Map<string, number>()
-  inventory.maintenances.forEach((row) => {
-    const label = String(row.priority ?? 'Média').trim() || 'Média'
-    m.set(label, (m.get(label) ?? 0) + 1)
-  })
-  const raw = Array.from(m.entries())
-    .map(([label, value]) => ({ label, value }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 5)
-  const max = raw[0]?.value ?? 1
-  return raw.map((it) => ({ ...it, percent: Math.round((it.value / max) * 100) }))
-})
-
-const workloadByTechnician = computed(() => {
-  const m = new Map<string, number>()
-  inventory.maintenances
-    .filter((row) => row.status !== 'Concluída')
-    .forEach((row) => {
-      const label = String(row.assignedTechnicianName || row.assignedTechnicianEmail || 'Não atribuído').trim()
-      m.set(label, (m.get(label) ?? 0) + 1)
-    })
-  const raw = Array.from(m.entries())
-    .map(([label, value]) => ({ label, value }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 6)
-  const max = raw[0]?.value ?? 1
-  return raw.map((it) => ({ ...it, percent: Math.round((it.value / max) * 100) }))
-})
 
 /* === Gestor === */
 const pendingApprovals = computed(() => inventory.approvals.filter((a) => a.status === 'Pendente'))
@@ -588,33 +505,6 @@ const priorityClass = (p: string) =>
 .stat-label { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
 .stat-card strong { font-size: 26px; font-weight: 800; color: var(--text-primary); }
 
-/* Charts (admin) */
-.charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
-.chart-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 12px; padding: 22px; }
-.chart-card h3 { margin: 0 0 16px; font-size: 16px; font-weight: 700; color: var(--text-primary); }
-
-.donut {
-  width: 160px; height: 160px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  margin: 8px auto 16px; position: relative;
-}
-.donut::after {
-  content: ''; position: absolute; inset: 22px; background: var(--bg-card); border-radius: 50%;
-}
-.donut span { position: relative; font-size: 22px; font-weight: 800; color: var(--text-primary); z-index: 1; }
-
-.legend-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-secondary); }
-.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
-.dot-blue { background: #3b82f6; } .dot-green { background: #22c55e; } .dot-amber { background: #f59e0b; }
-
-.bar-list { display: flex; flex-direction: column; gap: 12px; }
-.bar-row { display: grid; grid-template-columns: 120px 1fr 36px; gap: 10px; align-items: center; font-size: 13px; }
-.bar-label { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bar-track { height: 8px; background: var(--bg-hover); border-radius: 4px; overflow: hidden; }
-.bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), #8b5cf6); border-radius: 4px; }
-.bar-fill.bar-fill-priority { background: linear-gradient(90deg, #f59e0b, #ef4444); }
-.bar-fill.bar-fill-workload { background: linear-gradient(90deg, #22c55e, #14b8a6); }
-.bar-value { color: var(--text-primary); font-weight: 700; text-align: right; }
-
 /* Painéis Gestor/Técnico */
 .cols-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
 
@@ -661,8 +551,7 @@ const priorityClass = (p: string) =>
 
 @media (max-width: 768px) {
   .welcome-banner { flex-direction: column; align-items: flex-start; }
-  .stats-grid, .charts-grid, .cols-2 { grid-template-columns: 1fr; }
-  .bar-row { grid-template-columns: 100px 1fr 30px; }
+  .stats-grid, .cols-2 { grid-template-columns: 1fr; }
   .list-main .muted { max-width: 100%; }
 }
 </style>

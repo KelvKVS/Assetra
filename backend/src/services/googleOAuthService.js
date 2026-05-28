@@ -103,7 +103,11 @@ export async function exchangeGoogleCodeForEmail(code) {
     if (!email) {
       throw new AppError(401, 'Não foi possível obter o e-mail da conta Google.')
     }
-    return email
+    const picture = String(payload?.picture ?? '').trim()
+    return {
+      email,
+      picture: /^https?:\/\//i.test(picture) ? picture : undefined,
+    }
   } catch (err) {
     if (err instanceof AppError) throw err
     throw new AppError(

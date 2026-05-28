@@ -147,11 +147,49 @@ export const approvalCreateSchema = z.object({
 export const approvalRespondSchema = z.object({
   decision: z.enum(['APPROVED', 'REJECTED']),
   notes: z.string().max(500).optional(),
+  /** Ao aprovar nova solicitação de manutenção, define o técnico executor. */
+  assignedTechnicianEmail: z.string().email().max(120).optional(),
 })
 
 export const passwordVerifySchema = z.object({
   password: z.string().min(1).max(120),
 })
+
+export const avatarUpdateSchema = z.object({
+  filename: z.string().min(1).max(200),
+})
+
+const integrationKindEnum = z.enum(['FINANCE', 'HR', 'PROCUREMENT', 'HELPDESK', 'SSO', 'BI', 'MONITORING'])
+const integrationAuthTypeEnum = z.enum(['None', 'Bearer', 'Basic', 'ApiKey', 'OAuth2', 'Custom'])
+const jsonMapSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+
+function hasIntegrationEndpointOrCredentials(data) {
+  const baseUrl = String(data.baseUrl ?? '').trim()
+  const endpointPath = String(data.endpointPath ?? '').trim()
+  const authConfig = data.authConfig ?? {}
+  const hasSecret = Object.values(authConfig).some((value) => String(value ?? '').trim())
+  return Boolean(baseUrl || endpointPath || hasSecret || data.authType === 'None')
+}
+
+const adminIntegrationBaseSchema = z.object({
+  name: z.string().min(2).max(120),
+  kind: integrationKindEnum,
+  baseUrl: z.union([z.string().url().max(500), z.literal('')]).optional(),
+  endpointPath: z.string().max(300).optional(),
+  authType: integrationAuthTypeEnum.optional(),
+  authConfig: jsonMapSchema.optional(),
+  extraHeaders: jsonMapSchema.optional(),
+  notes: z.string().max(1000).optional(),
+  active: z.boolean().optional(),
+})
+
+export const adminIntegrationCreateSchema = adminIntegrationBaseSchema.refine(hasIntegrationEndpointOrCredentials, {
+  message: 'Informe URL, endpoint ou credenciais (token/chave).',
+})
+
+export const adminIntegrationUpdateSchema = adminIntegrationBaseSchema
+  .partial()
+  .refine((d) => Object.keys(d).length > 0, { message: 'Informe ao menos um campo para atualizar.' })
 
 export const taskCompleteSchema = z.object({
   notes: z.string().max(500).optional(),

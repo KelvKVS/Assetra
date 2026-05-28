@@ -76,7 +76,7 @@
             :aria-label="`Ver fotos de ${asset.tag}`"
             @click.stop="openGallery(asset, coverPhoto(asset)!)"
           >
-            <img :src="coverPhoto(asset)!.url" :alt="coverPhoto(asset)!.originalName ?? asset.tag" />
+            <AssetImage :attachment="coverPhoto(asset)!" :alt="coverPhoto(asset)!.originalName ?? asset.tag" />
           </button>
           <div class="asset-header" :class="{ 'asset-header--with-cover': coverPhoto(asset) }">
             <div v-if="!coverPhoto(asset)" class="asset-icon">
@@ -104,7 +104,7 @@
             class="compact-thumb"
             @click.stop="openGallery(asset, coverPhoto(asset)!)"
           >
-            <img :src="coverPhoto(asset)!.url" :alt="coverPhoto(asset)!.originalName ?? asset.tag" />
+            <AssetImage :attachment="coverPhoto(asset)!" :alt="coverPhoto(asset)!.originalName ?? asset.tag" />
           </button>
           <div v-else class="compact-thumb compact-thumb--empty"><Monitor :size="22" /></div>
           <div class="compact-body">
@@ -136,6 +136,7 @@ import { useAssetViewMode } from '../composables/useAssetViewMode'
 import { useAuthStore } from '../stores/auth'
 import { useInventoryStore } from '../stores/inventory'
 import { assetsAssignedToEmail } from '../utils/userScope'
+import AssetImage from '../components/AssetImage.vue'
 import { imageAttachments, useImageLightbox } from '../composables/useImageLightbox'
 import type { Asset, AttachmentRef } from '../types/assetra'
 import { Monitor, Search, CheckCircle, Wrench, Shield, MapPin, LayoutGrid, LayoutList } from 'lucide-vue-next'

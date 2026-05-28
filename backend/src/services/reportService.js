@@ -2,6 +2,7 @@ import prisma from '../lib/prisma.js'
 import Asset from '../models/Asset.js'
 import Maintenance from '../models/Maintenance.js'
 import Movement from '../models/Movement.js'
+import { hasActiveFinanceIntegration } from './financeIntegrationService.js'
 
 function normalizeFilters(raw = {}) {
   const startDate = String(raw.startDate ?? '').trim()
@@ -72,6 +73,7 @@ function toAssetDto(row) {
 }
 
 export async function buildReportsSummary(tenantId, rawFilters = {}) {
+  const financeIntegrationEnabled = await hasActiveFinanceIntegration(tenantId)
   const filters = normalizeFilters(rawFilters)
   const assets = await Asset.find({ tenantId }).lean()
   const scopedAssets = applySectorToAssets(assets, filters.sector)
@@ -130,6 +132,9 @@ export async function buildReportsSummary(tenantId, rawFilters = {}) {
         pending: pendingMaintenances,
       },
     },
+    integrations: {
+      financeEnabled: financeIntegrationEnabled,
+    },
     exportsPreview: {
       assets: scopedAssets.map(toAssetDto),
       movements: filteredMovements.map(toMovementDto),
@@ -142,7 +147,10 @@ export async function buildReportExport(tenantId, rawFilters = {}, type = 'locat
   const summary = await buildReportsSummary(tenantId, rawFilters)
   if (type === 'location') return summary.exportsPreview.assets
   if (type === 'movements') return summary.exportsPreview.movements
-  if (type === 'maintenance-costs') return summary.exportsPreview.maintenances
+  if (type === 'maintenance-costs') {
+    if (!summary.integrations.financeEnabled) return []
+    return summary.exportsPreview.maintenances
+  }
   if (type === 'users') {
     const users = await prisma.user.findMany({
       where: { tenantId, active: true },

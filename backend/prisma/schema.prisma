@@ -18,6 +18,7 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   users     User[]
+  financeIntegrations FinanceIntegration[]
 
   @@map("tenants")
 }
@@ -31,6 +32,10 @@ model User {
   role         String   @default("TECNICO")
   /// Área/setor da empresa (ex.: RH, Financeiro) — definido pelo ADM
   department   String?
+  /// Nome do ficheiro em /uploads (foto de perfil definida pelo próprio utilizador)
+  avatarFilename String?
+  /// URL externa da foto (preenchida a partir do Google no primeiro login, se não houver foto local)
+  avatarExternalUrl String?
   active       Boolean  @default(true)
   tenantId     String
   tenant       Tenant   @relation(fields: [tenantId], references: [id])
@@ -39,4 +44,26 @@ model User {
 
   @@unique([tenantId, email])
   @@map("users")
+}
+
+model FinanceIntegration {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  kind         String   @default("FINANCE")
+  baseUrl      String   @default("")
+  endpointPath String?
+  authType     String   @default("Bearer")
+  /// JSON com credenciais (token, apiKey, clientId, etc.)
+  authConfig   String   @default("{}")
+  /// JSON com cabeçalhos HTTP adicionais
+  extraHeaders String   @default("{}")
+  notes        String?
+  active       Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, active])
+  @@map("finance_integrations")
 }

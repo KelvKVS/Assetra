@@ -3,7 +3,14 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { authMiddleware, optionalAuthMiddleware } from '../middlewares/auth.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
-import { googleAuthSchema, loginSchema, passwordVerifySchema } from '../schemas/index.js'
+import {
+  avatarUpdateSchema,
+  googleAuthSchema,
+  loginSchema,
+  passwordVerifySchema,
+} from '../schemas/index.js'
+import { removeMyAvatar, updateMyAvatar } from '../services/profileService.js'
+import { serializeSessionUser } from '../utils/userAvatar.js'
 import {
   authenticateGoogleUser,
   authenticateUser,
@@ -94,10 +101,11 @@ router.get(
     }
 
     try {
-      const email = await exchangeGoogleCodeForEmail(code)
+      const googleData = await exchangeGoogleCodeForEmail(code)
       const { token, user } = await resolveGoogleLoginUser(prisma, {
-        email,
+        email: googleData.email,
         tenantSlug: statePayload?.tenantSlug,
+        picture: googleData.picture,
       })
       res.clearCookie('google_tenant_pick', getCookieOptions())
       res.cookie('token', token, getCookieOptions())
@@ -174,20 +182,29 @@ router.get(
       res.clearCookie('token', getCookieOptions())
       return res.json({ user: null })
     }
-    return res.json({
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        department: user.department ?? null,
-        tenantId: user.tenantId,
-        tenant: {
-          slug: user.tenant.slug,
-          name: user.tenant.name,
-        },
-      },
-    })
+    return res.json({ user: serializeSessionUser(user) })
+  }),
+)
+
+router.patch(
+  '/me/avatar',
+  authMiddleware,
+  asyncHandler(async (req, res) => {
+    const parsed = avatarUpdateSchema.safeParse(req.body)
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Dados inválidos.', issues: parsed.error.flatten() })
+    }
+    const sessionUser = await updateMyAvatar(req.user.sub, parsed.data.filename)
+    return res.json({ user: sessionUser })
+  }),
+)
+
+router.delete(
+  '/me/avatar',
+  authMiddleware,
+  asyncHandler(async (req, res) => {
+    const sessionUser = await removeMyAvatar(req.user.sub)
+    return res.json({ user: sessionUser })
   }),
 )
 

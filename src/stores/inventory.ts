@@ -3,7 +3,7 @@ import api from '../services/api'
 import uploadApi from '../services/uploadApi'
 import { validateUploadFiles } from '../utils/uploadLimits'
 import type { Asset, AssetStatus, AttachmentRef } from '../types/assetra'
-import { normalizeAttachments } from '../utils/mediaUrl'
+import { mergeAttachments, normalizeAttachments } from '../utils/mediaUrl'
 import { useAuthStore } from './auth'
 import { useNotificationsStore } from './notifications'
 
@@ -96,11 +96,14 @@ export const useInventoryStore = defineStore('inventory', {
       this.error = ''
     },
     async fetchAssets() {
+      const mediaSnapshot = new Map(
+        this.assets.map((a) => [String(a.id ?? a.tag), a.attachments] as const),
+      )
       const { data } = await api.get<AssetWithId[]>('/assets')
       this.assets = data.map((a) => ({
         ...a,
         status: a.status as AssetStatus,
-        attachments: normalizeAttachments(a.attachments),
+        attachments: mergeAttachments(mediaSnapshot.get(String(a.id ?? a.tag)), a.attachments),
       }))
     },
     async fetchMovements() {
@@ -158,12 +161,46 @@ export const useInventoryStore = defineStore('inventory', {
       await this.fetchAssets()
     },
     async createMovement(payload: Omit<MovementRow, 'id' | 'date'>) {
+      const tagKey = payload.assetTag.trim().toLowerCase()
+      const mediaSnapshot = new Map(
+        this.assets.map((a) => [a.tag.trim().toLowerCase(), a.attachments] as const),
+      )
       await api.post('/movements', payload)
-      await Promise.all([this.fetchMovements(), this.fetchAssets()])
+      await this.fetchMovements()
+      await this.fetchAssets()
+      const idx = this.assets.findIndex((a) => a.tag.trim().toLowerCase() === tagKey)
+      if (idx < 0) return
+      const current = this.assets[idx]
+      const prevMedia = mediaSnapshot.get(tagKey)
+      this.assets[idx] = {
+        ...current,
+        sector: payload.destination.trim(),
+        assignedTo: payload.responsible.includes('@')
+          ? payload.responsible.trim().toLowerCase()
+          : current.assignedTo,
+        attachments: mergeAttachments(prevMedia, current.attachments) ?? prevMedia,
+      }
     },
     async updateMovement(id: string, payload: Partial<Omit<MovementRow, 'id'>>) {
+      const tagKey = payload.assetTag?.trim().toLowerCase()
+      const mediaSnapshot =
+        payload.destination != null
+          ? new Map(this.assets.map((a) => [a.tag.trim().toLowerCase(), a.attachments] as const))
+          : null
       await api.patch(`/movements/${id}`, payload)
       await this.fetchMovements()
+      if (payload.destination == null) return
+      await this.fetchAssets()
+      if (!tagKey) return
+      const idx = this.assets.findIndex((a) => a.tag.trim().toLowerCase() === tagKey)
+      if (idx < 0) return
+      const current = this.assets[idx]
+      const prevMedia = mediaSnapshot?.get(tagKey)
+      this.assets[idx] = {
+        ...current,
+        sector: payload.destination?.trim() ?? current.sector,
+        attachments: mergeAttachments(prevMedia, current.attachments) ?? prevMedia,
+      }
     },
     async deleteMovement(id: string) {
       await api.delete(`/movements/${id}`)
@@ -256,9 +293,26 @@ export const useInventoryStore = defineStore('inventory', {
       }
       void useNotificationsStore().fetchNotifications()
     },
-    async respondApproval(id: string, decision: 'APPROVED' | 'REJECTED', notes?: string) {
-      await api.post(`/approvals/${id}/respond`, { decision, notes })
-      await Promise.all([this.fetchApprovals(), this.fetchAssets(), this.fetchMovements()])
+    async respondApproval(
+      id: string,
+      decision: 'APPROVED' | 'REJECTED',
+      notes?: string,
+      assignedTechnicianEmail?: string,
+    ) {
+      await api.post(`/approvals/${id}/respond`, {
+        decision,
+        notes,
+        ...(assignedTechnicianEmail?.trim()
+          ? { assignedTechnicianEmail: assignedTechnicianEmail.trim().toLowerCase() }
+          : {}),
+      })
+      await Promise.all([
+        this.fetchApprovals(),
+        this.fetchAssets(),
+        this.fetchMovements(),
+        this.fetchMaintenances(),
+        this.fetchTasksSafe(),
+      ])
       void useNotificationsStore().fetchNotifications()
     },
     async fetchTasksSafe() {

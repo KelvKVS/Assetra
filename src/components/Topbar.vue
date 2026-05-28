@@ -60,13 +60,15 @@
 
             v-model="searchQuery"
 
-            type="search"
+            type="text"
 
             placeholder="Busca rápida: ativos, pessoas, manutenções..."
 
             class="search-input"
 
             autocomplete="off"
+
+            enterkeyhint="search"
 
             role="combobox"
 
@@ -83,21 +85,13 @@
           />
 
           <button
-
             v-if="searchQuery"
-
             type="button"
-
             class="search-clear"
-
             aria-label="Limpar busca"
-
             @click="clearSearch"
-
           >
-
             <X :size="14" />
-
           </button>
 
         </div>
@@ -162,7 +156,7 @@
 
 
 
-      <div v-if="authStore.user" class="user-profile">
+      <div v-if="authStore.user" class="user-profile-wrap">
 
         <div class="notifications" ref="notificationsRef">
 
@@ -270,26 +264,32 @@
 
         </div>
 
-        <div class="user-avatar">{{ userInitial }}</div>
+        <button
+          type="button"
+          class="user-profile"
+          aria-haspopup="dialog"
+          :aria-expanded="profileOpen"
+          title="Ver perfil"
+          @click="profileOpen = true"
+        >
+          <div class="user-avatar">
+            <img v-if="avatarDisplayUrl" :src="avatarDisplayUrl" :alt="`Foto de ${authStore.user.name}`" />
+            <span v-else>{{ userInitial }}</span>
+          </div>
 
-        <div class="user-info">
-
-          <strong>{{ authStore.user.name }}</strong>
-
-          <small class="user-meta">
-
-            {{ roleLabel }}<template v-if="authStore.user.department"> · {{ authStore.user.department }}</template><template v-if="authStore.user.tenant"> · {{ authStore.user.tenant.name }}</template>
-
-          </small>
-
-        </div>
-
-        <button class="logout-btn" type="button" @click="handleLogout" title="Sair">
-
-          <LogOut :size="18" />
-
+          <div class="user-info">
+            <strong>{{ authStore.user.name }}</strong>
+            <small class="user-meta">
+              {{ roleLabel }}<template v-if="authStore.user.department"> · {{ authStore.user.department }}</template><template v-if="authStore.user.tenant"> · {{ authStore.user.tenant.name }}</template>
+            </small>
+          </div>
         </button>
 
+        <button class="logout-btn" type="button" @click.stop="handleLogout" title="Sair">
+          <LogOut :size="18" />
+        </button>
+
+        <ProfilePanel v-model:open="profileOpen" />
       </div>
 
     </div>
@@ -316,6 +316,8 @@ import { useSidebar } from '../composables/useSidebar'
 
 import { useGlobalSearch, type GlobalSearchItem, type GlobalSearchKind } from '../composables/useGlobalSearch'
 
+import ProfilePanel from './ProfilePanel.vue'
+import { resolveMediaUrl } from '../utils/mediaUrl'
 import { Search, LogOut, Menu, Bell, X, User, Monitor, Wrench, ArrowLeftRight, ClipboardCheck, FileText } from 'lucide-vue-next'
 
 
@@ -351,6 +353,7 @@ const notificationsStore = useNotificationsStore()
 const router = useRouter()
 
 const notificationsOpen = ref(false)
+const profileOpen = ref(false)
 
 const searchOpen = ref(false)
 
@@ -377,6 +380,7 @@ type UiNotification = NotificationItem & {
 
 
 const userInitial = computed(() => authStore.user?.name?.charAt(0).toUpperCase() ?? 'U')
+const avatarDisplayUrl = computed(() => resolveMediaUrl(authStore.user?.avatarUrl ?? '') || '')
 
 
 
@@ -1086,98 +1090,76 @@ const handleLogout = async () => {
 
 }
 
-
-
 .search-clear {
-
   position: absolute;
-
   right: 8px;
-
   top: 50%;
-
   transform: translateY(-50%);
-
   display: flex;
-
   align-items: center;
-
   justify-content: center;
-
   width: 24px;
-
   height: 24px;
-
   border: none;
-
   border-radius: 6px;
-
   background: transparent;
-
   color: #9ca3af;
-
   cursor: pointer;
-
 }
-
-
 
 .search-clear:hover {
-
   background: #374151;
-
-  color: #fff;
-
+  color: #e5e7eb;
 }
 
-
+.user-profile-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
 
 .user-profile {
-
   display: flex;
-
   align-items: center;
-
   gap: 8px;
-
   padding: 6px 10px;
-
   background: #1f2937;
-
   border-radius: 12px;
-
   border: 1px solid #374151;
-
   min-width: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
 
+.user-profile:hover {
+  border-color: #3b82f6;
+  background: #243044;
 }
 
 
 
 .user-avatar {
-
   width: 36px;
-
   height: 36px;
-
   border-radius: 50%;
-
   background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-
   display: flex;
-
   align-items: center;
-
   justify-content: center;
-
   font-weight: 700;
-
   font-size: 14px;
-
   color: #fff;
-
   flex-shrink: 0;
+  overflow: hidden;
+}
 
+.user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 

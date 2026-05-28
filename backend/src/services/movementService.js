@@ -49,6 +49,7 @@ async function applyAssetRelocation(tenantId, userId, { assetTag, origin, destin
     userId,
     details: `Local: ${originLabel} → ${dest}${resp ? ` · Resp.: ${resp}` : ''}`,
   })
+
   await asset.save()
   return asset
 }

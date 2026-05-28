@@ -59,6 +59,7 @@ router.post(
       req.params.id,
       parsed.data.decision,
       parsed.data.notes,
+      parsed.data.assignedTechnicianEmail,
     )
     res.json(row)
   }),

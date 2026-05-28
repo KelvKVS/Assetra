@@ -140,12 +140,20 @@ const confirm = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px))
+    max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   z-index: 2000;
   animation: pcm-fade 0.18s ease-out;
 }
 
 .pcm-modal {
-  width: min(420px, 92%);
+  width: min(420px, 100%);
+  max-height: min(90dvh, calc(100dvh - 32px));
+  overflow-y: auto;
+  margin: auto;
+  flex-shrink: 0;
   background:
     radial-gradient(circle at top right, rgba(59,130,246,0.14), transparent 60%),
     var(--bg-card);
@@ -235,7 +243,7 @@ const confirm = async () => {
   background: var(--bg-primary);
   border: 1px solid var(--border-light);
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--text-primary);
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -335,20 +343,25 @@ const confirm = async () => {
 }
 
 @media (max-width: 480px) {
-  .pcm-overlay {
-    padding: 10px;
-    align-items: flex-end;
+  .pcm-header {
+    gap: 10px;
+  }
+
+  .pcm-header h3 {
+    font-size: 15px;
+  }
+
+  .pcm-subtitle {
+    font-size: 12px;
   }
 
   .pcm-modal {
-    width: 100%;
-    max-height: 92vh;
-    border-radius: 14px 14px 0 0;
     padding: 18px;
+    border-radius: 14px;
   }
 
   .pcm-actions {
-    flex-direction: column;
+    flex-direction: column-reverse;
     align-items: stretch;
   }
 
@@ -356,6 +369,7 @@ const confirm = async () => {
   .pcm-btn-primary {
     width: 100%;
     justify-content: center;
+    min-height: 44px;
   }
 }
 </style>
