@@ -48,7 +48,7 @@
           </div>
         </template>
 
-        <template v-else-if="assetStep === 2">
+        <template v-else>
           <div class="form-group field">
             <label>Status</label>
             <select v-model="newAsset.status" required>
@@ -80,13 +80,6 @@
               </button>
             </div>
           </div>
-          <div class="form-actions">
-            <button type="button" class="btn-secondary" @click="goToAssetStep(1)">Voltar</button>
-            <button type="button" class="btn-primary" @click="goToAssetStep(3)">Continuar</button>
-          </div>
-        </template>
-
-        <template v-else>
           <div class="form-group field field-wide">
             <label>Fotos do ativo</label>
             <div class="upload-shell">
@@ -120,7 +113,7 @@
             </div>
           </div>
           <div class="form-actions">
-            <button type="button" class="btn-secondary" :disabled="isSaving" @click="goToAssetStep(2)">Voltar</button>
+            <button type="button" class="btn-secondary" :disabled="isSaving" @click="goToAssetStep(1)">Voltar</button>
             <button type="submit" class="btn-primary" :disabled="isSaving">
               {{ isSaving ? 'A guardar...' : 'Cadastrar' }}
             </button>
@@ -451,7 +444,7 @@ const statusFilter = ref<'all' | AssetStatus>('all')
 
 const showForm = ref(false)
 const assetStep = ref(1)
-const assetStepLabels = ['Dados básicos', 'Status e responsável', 'Fotos e revisão']
+const assetStepLabels = ['Dados básicos', 'Status e revisão']
 const formError = ref('')
 const isSaving = ref(false)
 const editingAssetId = ref<string | null>(null)

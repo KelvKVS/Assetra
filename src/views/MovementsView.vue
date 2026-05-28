@@ -19,90 +19,77 @@
         <span class="form-eyebrow">Nova movimentação</span>
         <h3>Registrar movimentação</h3>
       </div>
-      <ol class="wizard-steps">
-        <li v-for="(label, idx) in movementStepLabels" :key="label" :class="{ active: movementStep === idx + 1, done: movementStep > idx + 1 }">
-          <span>{{ idx + 1 }}</span>{{ label }}
-        </li>
-      </ol>
       <form @submit.prevent="addMovement" class="movement-form modern-form">
-        <template v-if="movementStep === 1">
-          <div class="form-group field">
-            <label>Tag do ativo</label>
-            <input
-              v-model.trim="newMovement.assetTag"
-              type="text"
-              placeholder="Ex.: AST-200"
-              required
-              @focus="isAssetInputFocused = true"
-              @blur="hideAssetSuggestions"
-            />
-            <div v-if="showAssetSuggestions" class="suggestion-panel">
-              <button
-                v-for="asset in filteredAssetSuggestions"
-                :key="`asset-${asset.id}`"
-                type="button"
-                class="suggestion-item"
-                @mousedown.prevent="pickMovementAsset(asset.tag)"
-              >
-                <strong>{{ asset.tag }}</strong>
-                <span>{{ asset.description }}</span>
-              </button>
-            </div>
+        <div class="form-group field">
+          <label>Tag do ativo</label>
+          <input
+            v-model.trim="newMovement.assetTag"
+            type="text"
+            placeholder="Ex.: AST-200"
+            required
+            @focus="isAssetInputFocused = true"
+            @blur="hideAssetSuggestions"
+          />
+          <div v-if="showAssetSuggestions" class="suggestion-panel">
+            <button
+              v-for="asset in filteredAssetSuggestions"
+              :key="`asset-${asset.id}`"
+              type="button"
+              class="suggestion-item"
+              @mousedown.prevent="pickMovementAsset(asset.tag)"
+            >
+              <strong>{{ asset.tag }}</strong>
+              <span>{{ asset.description }}</span>
+            </button>
           </div>
-          <div class="form-group field">
-            <label>Origem</label>
-            <input v-model.trim="newMovement.origin" type="text" list="origin-suggestions" placeholder="Local de origem" required />
-            <datalist id="origin-suggestions">
-              <option v-for="sector in sectorSuggestions" :key="`origin-${sector}`" :value="sector"></option>
-            </datalist>
+        </div>
+        <div class="form-group field">
+          <label>Origem</label>
+          <input v-model.trim="newMovement.origin" type="text" list="origin-suggestions" placeholder="Local de origem" required />
+          <datalist id="origin-suggestions">
+            <option v-for="sector in sectorSuggestions" :key="`origin-${sector}`" :value="sector"></option>
+          </datalist>
+        </div>
+        <div class="form-group field">
+          <label>Destino</label>
+          <input
+            v-model.trim="newMovement.destination"
+            type="text"
+            list="destination-suggestions"
+            placeholder="Local de destino"
+            required
+          />
+          <datalist id="destination-suggestions">
+            <option v-for="sector in sectorSuggestions" :key="`destination-${sector}`" :value="sector"></option>
+          </datalist>
+        </div>
+        <div class="form-group field">
+          <label>Responsável</label>
+          <input
+            v-model.trim="newMovement.responsible"
+            type="text"
+            placeholder="Nome ou email"
+            required
+            @focus="isResponsibleInputFocused = true"
+            @blur="hideResponsibleSuggestions"
+          />
+          <div v-if="showResponsibleSuggestions" class="suggestion-panel">
+            <button
+              v-for="user in filteredResponsibleSuggestions"
+              :key="`responsible-${user.id}`"
+              type="button"
+              class="suggestion-item"
+              @mousedown.prevent="pickResponsible(user.email)"
+            >
+              <strong>{{ user.name }}</strong>
+              <span>{{ user.email }}</span>
+            </button>
           </div>
-          <div class="form-actions field-wide">
-            <button type="button" class="btn-primary" @click="goToMovementStep(2)">Continuar</button>
-          </div>
-        </template>
-        <template v-else>
-          <div class="form-group field">
-            <label>Destino</label>
-            <input
-              v-model.trim="newMovement.destination"
-              type="text"
-              list="destination-suggestions"
-              placeholder="Local de destino"
-              required
-            />
-            <datalist id="destination-suggestions">
-              <option v-for="sector in sectorSuggestions" :key="`destination-${sector}`" :value="sector"></option>
-            </datalist>
-          </div>
-          <div class="form-group field">
-            <label>Responsável</label>
-            <input
-              v-model.trim="newMovement.responsible"
-              type="text"
-              placeholder="Nome ou email"
-              required
-              @focus="isResponsibleInputFocused = true"
-              @blur="hideResponsibleSuggestions"
-            />
-            <div v-if="showResponsibleSuggestions" class="suggestion-panel">
-              <button
-                v-for="user in filteredResponsibleSuggestions"
-                :key="`responsible-${user.id}`"
-                type="button"
-                class="suggestion-item"
-                @mousedown.prevent="pickResponsible(user.email)"
-              >
-                <strong>{{ user.name }}</strong>
-                <span>{{ user.email }}</span>
-              </button>
-            </div>
-          </div>
-          <div class="form-actions field-wide">
-            <button type="button" class="btn-secondary" @click="goToMovementStep(1)">Voltar</button>
-            <button type="submit" class="btn-primary">Registrar</button>
-            <button type="button" class="btn-secondary" @click="closeMovementForm">Cancelar</button>
-          </div>
-        </template>
+        </div>
+        <div class="form-actions field-wide">
+          <button type="submit" class="btn-primary">Registrar</button>
+          <button type="button" class="btn-secondary" @click="closeMovementForm">Cancelar</button>
+        </div>
       </form>
       <p v-if="movementError" class="error-message">{{ movementError }}</p>
     </div>
@@ -222,8 +209,6 @@ const authStore = useAuthStore()
 const { pageSearch, matchesPageSearch } = useLocalPageSearch()
 
 const showForm = ref(false)
-const movementStep = ref(1)
-const movementStepLabels = ['Ativo e origem', 'Destino e responsável']
 const movementError = ref('')
 const editingMovementId = ref<string | null>(null)
 const isAssetInputFocused = ref(false)
@@ -309,24 +294,11 @@ const hideResponsibleSuggestions = () => {
 
 const toggleMovementForm = () => {
   showForm.value = !showForm.value
-  if (showForm.value) {
-    movementStep.value = 1
-    movementError.value = ''
-  }
+  if (showForm.value) movementError.value = ''
 }
 
 const closeMovementForm = () => {
   showForm.value = false
-  movementStep.value = 1
-}
-
-const goToMovementStep = (step: number) => {
-  if (step === 2 && (!newMovement.assetTag.trim() || !newMovement.origin.trim())) {
-    movementError.value = 'Preencha ativo e origem para continuar.'
-    return
-  }
-  movementError.value = ''
-  movementStep.value = step
 }
 
 const filteredMovements = computed(() =>
@@ -404,39 +376,6 @@ const saveMovementEdit = async () => {
   color: var(--primary);
 }
 
-.wizard-steps {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  list-style: none;
-  margin: 0 0 14px;
-  padding: 0;
-}
-.wizard-steps li {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--text-muted);
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border-light);
-}
-.wizard-steps li span {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 11px;
-  font-weight: 700;
-  background: var(--bg-primary);
-}
-.wizard-steps li.active {
-  color: var(--primary);
-  border-color: var(--primary);
-  background: var(--primary-light);
-}
 
 .btn-primary {
   display: flex;
