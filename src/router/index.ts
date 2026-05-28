@@ -31,7 +31,7 @@ const router = createRouter({
     { path: '/aprovacoes', name: 'approvals', component: ApprovalsView, meta: { requiresAuth: true, roles: ['ADM', 'GESTOR'] } },
     { path: '/solicitacoes', name: 'my-requests', component: MyRequestsView, meta: { requiresAuth: true } },
     { path: '/execucao-tecnica', name: 'technician-tasks', component: TechnicianTasksView, meta: { requiresAuth: true, roles: ['TECNICO'] } },
-    { path: '/usuarios', name: 'users', component: UsersView, meta: { requiresAuth: true, roles: ['ADM'] } },
+    { path: '/usuarios', name: 'users', component: UsersView, meta: { requiresAuth: true, roles: ['ADM', 'GESTOR'] } },
     { path: '/relatorios', name: 'reports', component: ReportsView, meta: { requiresAuth: true, roles: ['ADM', 'GESTOR'] } },
     { path: '/acesso-negado', name: 'forbidden', component: ForbiddenView, meta: { requiresAuth: true } },
   ],

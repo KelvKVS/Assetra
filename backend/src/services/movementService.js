@@ -1,5 +1,6 @@
 import Movement from '../models/Movement.js'
 import { AppError } from '../utils/AppError.js'
+import { findAssetByTag } from './assetService.js'
 
 function formatDatePt(d) {
   if (!d) return ''
@@ -19,26 +20,65 @@ function toDto(doc) {
   }
 }
 
+/**
+ * Atualiza o setor do ativo para o destino da movimentação (localização atual).
+ */
+async function applyAssetRelocation(tenantId, userId, { assetTag, origin, destination, responsible }) {
+  const tag = String(assetTag ?? '').trim()
+  const dest = String(destination ?? '').trim()
+  if (!tag || !dest) {
+    throw new AppError(400, 'Tag do ativo e destino são obrigatórios.')
+  }
+
+  const asset = await findAssetByTag(tenantId, tag)
+  if (!asset) {
+    throw new AppError(404, `Ativo "${tag}" não encontrado.`)
+  }
+
+  const previousSector = asset.sector
+  asset.sector = dest
+
+  const resp = String(responsible ?? '').trim()
+  if (resp.includes('@')) {
+    asset.assignedTo = resp.toLowerCase()
+  }
+
+  const originLabel = String(origin ?? '').trim() || previousSector
+  asset.history.push({
+    action: 'MOVIMENTAÇÃO',
+    userId,
+    details: `Local: ${originLabel} → ${dest}${resp ? ` · Resp.: ${resp}` : ''}`,
+  })
+  await asset.save()
+  return asset
+}
+
 export async function listMovementsForTenant(tenantId) {
   const rows = await Movement.find({ tenantId }).sort({ occurredAt: -1, createdAt: -1 })
   return rows.map(toDto)
 }
 
-/**
- * Cria registo de movimentação. O `dto` deve coincidir com `movementCreateSchema`:
- * `{ assetTag, origin, destination, responsible }`.
- * (Não existe `registerMovement` nem campos `newLocation`/`assignedTo` neste fluxo.)
- */
 export async function createMovement(tenantId, userId, dto) {
+  const asset = await findAssetByTag(tenantId, dto.assetTag.trim())
+  const origin = String(dto.origin ?? '').trim() || asset?.sector || ''
+
   const m = new Movement({
     tenantId,
     assetTag: dto.assetTag.trim(),
-    origin: dto.origin.trim(),
+    origin,
     destination: dto.destination.trim(),
     responsible: dto.responsible.trim(),
     occurredAt: new Date(),
   })
   await m.save()
+
+  await applyAssetRelocation(tenantId, userId, {
+    assetTag: dto.assetTag,
+    origin,
+    destination: dto.destination,
+    responsible: dto.responsible,
+  })
+
   return toDto(m)
 }
 
@@ -55,7 +95,7 @@ function parseDisplayDate(s) {
   return Number.isNaN(t) ? null : new Date(t)
 }
 
-export async function updateMovement(tenantId, movementId, dto) {
+export async function updateMovement(tenantId, movementId, dto, userId = null) {
   const m = await Movement.findOne({ _id: movementId, tenantId })
   if (!m) {
     throw new AppError(404, 'Movimentação não encontrada.')
@@ -69,6 +109,16 @@ export async function updateMovement(tenantId, movementId, dto) {
     if (dt) m.occurredAt = dt
   }
   await m.save()
+
+  if (dto.destination != null && userId) {
+    await applyAssetRelocation(tenantId, userId, {
+      assetTag: m.assetTag,
+      origin: m.origin,
+      destination: m.destination,
+      responsible: m.responsible,
+    })
+  }
+
   return toDto(m)
 }
 
@@ -77,4 +127,14 @@ export async function deleteMovement(tenantId, movementId) {
   if (!r) {
     throw new AppError(404, 'Movimentação não encontrada.')
   }
+}
+
+/** Usado ao aprovar solicitação de movimentação. */
+export async function registerMovementFromApproval(tenantId, userId, payload) {
+  return createMovement(tenantId, userId, payload)
+}
+
+export function parseDestinationFromDescription(description) {
+  const match = String(description ?? '').match(/\(destino:\s*([^)]+)\)/i)
+  return match?.[1]?.trim() ?? ''
 }

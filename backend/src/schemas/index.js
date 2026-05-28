@@ -139,6 +139,7 @@ export const approvalCreateSchema = z.object({
   maintenanceId: z.string().min(1).max(64).optional(),
   assetTag: z.string().min(1).max(40),
   description: z.string().min(1).max(500),
+  destinationSector: z.string().min(1).max(200).optional(),
   feedback: z.string().max(2000).optional(),
   attachments: z.array(attachmentRefSchema).max(6).optional(),
 })

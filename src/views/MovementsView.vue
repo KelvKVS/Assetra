@@ -90,6 +90,7 @@
           <button type="button" class="btn-secondary" @click="showForm = false">Cancelar</button>
         </div>
       </form>
+      <p v-if="movementError" class="error-message">{{ movementError }}</p>
     </div>
 
     <!-- Search Bar -->
@@ -201,6 +202,7 @@ const confirm = useConfirmAction()
 const authStore = useAuthStore()
 
 const showForm = ref(false)
+const movementError = ref('')
 const search = ref('')
 const editingMovementId = ref<string | null>(null)
 const isAssetInputFocused = ref(false)
@@ -265,6 +267,8 @@ const sectorSuggestions = computed(() =>
 )
 const pickMovementAsset = (tag: string) => {
   newMovement.assetTag = tag
+  const asset = inventory.assets.find((a) => a.tag.toLowerCase() === tag.toLowerCase())
+  if (asset?.sector) newMovement.origin = asset.sector
   isAssetInputFocused.value = false
 }
 const pickResponsible = (value: string) => {
@@ -293,14 +297,20 @@ const filteredMovements = computed(() => {
 })
 
 const addMovement = async () => {
+  movementError.value = ''
   const ok = await confirm.ask('Confirme com a sua senha para registar esta movimentação.')
   if (!ok) return
-  await inventory.createMovement({ ...newMovement })
-  newMovement.assetTag = ''
-  newMovement.origin = ''
-  newMovement.destination = ''
-  newMovement.responsible = ''
-  showForm.value = false
+  try {
+    await inventory.createMovement({ ...newMovement })
+    newMovement.assetTag = ''
+    newMovement.origin = ''
+    newMovement.destination = ''
+    newMovement.responsible = ''
+    showForm.value = false
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: { message?: string } } }
+    movementError.value = ax?.response?.data?.message ?? 'Não foi possível registar a movimentação.'
+  }
 }
 
 const removeMovement = async (id: string) => {
@@ -461,6 +471,16 @@ const saveMovementEdit = async () => {
 }
 .suggestion-item:hover {
   background: var(--bg-hover);
+}
+
+.error-message {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--danger-light);
+  color: var(--danger);
+  border-radius: 8px;
+  border-left: 3px solid var(--danger);
+  font-size: 14px;
 }
 
 .search-bar {

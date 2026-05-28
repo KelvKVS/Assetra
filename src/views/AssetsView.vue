@@ -136,6 +136,11 @@
       </div>
     </div>
 
+    <p v-if="assignedFilter" class="assigned-filter-banner">
+      A mostrar ativos do responsável <strong>{{ route.query.assigned }}</strong>
+      <RouterLink :to="{ name: 'assets' }" class="assigned-filter-clear">Ver todos</RouterLink>
+    </p>
+
     <!-- Filtros e visualização -->
     <div class="list-toolbar">
       <div class="search-bar search-bar--page">
@@ -388,6 +393,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { usePageSearch } from '../composables/usePageSearch'
 import { useAssetViewMode } from '../composables/useAssetViewMode'
 import { type Asset, type AssetStatus, type AttachmentRef } from '../types/assetra'
@@ -397,6 +403,7 @@ import { useConfirmAction } from '../composables/useConfirmAction'
 import { imageAttachments, useImageLightbox } from '../composables/useImageLightbox'
 import { prepareAttachmentsForApi } from '../utils/attachmentPayload'
 import { UPLOAD_LIMITS_HINT, mergeUploadFiles } from '../utils/uploadLimits'
+import { RouterLink } from 'vue-router'
 import { Plus, Search, Monitor, CheckCircle, Package, Wrench, MapPin, Edit, Trash2, X, Paperclip, LayoutGrid, LayoutList } from 'lucide-vue-next'
 
 const uploadLimitsHint = UPLOAD_LIMITS_HINT
@@ -405,7 +412,9 @@ const confirm = useConfirmAction()
 const imageLightbox = useImageLightbox()
 const openGallery = (asset: Asset, clicked?: AttachmentRef) => imageLightbox.openFromAsset(asset, clicked)
 
+const route = useRoute()
 const authStore = useAuthStore()
+const assignedFilter = computed(() => String(route.query.assigned ?? '').trim().toLowerCase())
 const canManageAssets = computed(() => ['ADM', 'GESTOR'].includes(authStore.user?.role ?? ''))
 
 const { searchQuery, setPlaceholder, clear: clearSearch } = usePageSearch()
@@ -444,6 +453,10 @@ const newAsset = reactive<Asset>({
 const filteredAssets = computed(() => {
   const term = searchQuery.value.toLowerCase()
   return assets.value.filter((asset) => {
+    if (assignedFilter.value) {
+      const email = (asset.assignedTo ?? '').trim().toLowerCase()
+      if (email !== assignedFilter.value) return false
+    }
     if (statusFilter.value !== 'all' && asset.status !== statusFilter.value) return false
     if (!term) return true
     return [asset.tag, asset.description, asset.sector, asset.status, asset.assignedTo ?? ''].some((value) =>
@@ -1035,6 +1048,31 @@ const saveAssetEdit = async () => {
   font-size: 14px;
   color: var(--text-primary);
   outline: none;
+}
+
+.assigned-filter-banner {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--primary);
+  background: var(--primary-light);
+  font-size: 14px;
+  color: var(--text-primary);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.assigned-filter-clear {
+  margin-left: auto;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.assigned-filter-clear:hover {
+  text-decoration: underline;
 }
 
 .list-toolbar {

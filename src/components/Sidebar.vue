@@ -65,13 +65,13 @@
         </RouterLink>
       </div>
 
-      <div class="nav-section" v-if="isAdmin">
-        <span class="nav-section-title">Administração</span>
+      <div class="nav-section" v-if="isAdmin || isManager">
+        <span class="nav-section-title">{{ isAdmin ? 'Administração' : 'Gestão' }}</span>
         <RouterLink to="/usuarios" class="nav-item">
           <Users :size="20" :stroke-width="2" />
           <span>Usuários</span>
         </RouterLink>
-        <RouterLink to="/relatorios" class="nav-item">
+        <RouterLink v-if="isAdmin" to="/relatorios" class="nav-item">
           <BarChart3 :size="20" :stroke-width="2" />
           <span>Relatórios</span>
         </RouterLink>

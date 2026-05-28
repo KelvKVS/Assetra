@@ -43,7 +43,7 @@ router.patch(
     if (!parsed.success) {
       return res.status(400).json({ message: 'Dados inválidos.', issues: parsed.error.flatten() })
     }
-    const row = await updateMovement(req.user.tenantId, req.params.id, parsed.data)
+    const row = await updateMovement(req.user.tenantId, req.params.id, parsed.data, req.user.sub)
     res.json(row)
   }),
 )

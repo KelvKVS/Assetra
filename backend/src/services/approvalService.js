@@ -2,6 +2,8 @@ import Approval from '../models/Approval.js'
 import Maintenance from '../models/Maintenance.js'
 import { AppError } from '../utils/AppError.js'
 import { refreshAssetStatusForTag } from './maintenanceService.js'
+import { findAssetByTag } from './assetService.js'
+import { parseDestinationFromDescription, registerMovementFromApproval } from './movementService.js'
 import { logAudit } from './auditService.js'
 import { publishDomainEventSafely } from '../lib/eventBus.js'
 import { enrichAttachmentUrls } from '../utils/enrichAttachments.js'
@@ -37,6 +39,7 @@ function toDto(doc) {
     assetTag: o.assetTag,
     description: o.description,
     feedback: o.feedback ?? '',
+    destinationSector: o.destinationSector ?? '',
     attachments: enrichAttachmentUrls(null, o.attachments, o.tenantId),
     status: o.status,
     requestedBy: o.requestedBy ?? '',
@@ -79,6 +82,13 @@ export async function createApproval(tenantId, user, dto) {
 
   const normalizedType = String(dto.type ?? '').trim()
   const normalizedMaintenanceId = String(dto.maintenanceId ?? '').trim()
+  if (normalizedType === 'Movimentação') {
+    const dest =
+      dto.destinationSector?.trim() || parseDestinationFromDescription(dto.description)
+    if (!dest) {
+      throw new AppError(400, 'Indique o setor de destino para a movimentação.')
+    }
+  }
   if (normalizedType === 'Manutenção') {
     const duplicateQuery = normalizedMaintenanceId
       ? { tenantId, type: 'Manutenção', maintenanceId: normalizedMaintenanceId, status: 'Pendente' }
@@ -102,6 +112,8 @@ export async function createApproval(tenantId, user, dto) {
     assetTag: dto.assetTag.trim(),
     description: dto.description.trim(),
     feedback: dto.feedback?.trim() || undefined,
+    destinationSector:
+      normalizedType === 'Movimentação' ? dto.destinationSector?.trim() || undefined : undefined,
     attachments: sanitizeAttachmentsForDb(dto.attachments),
     requestedBy: user?.sub,
     requestedByName: user?.name,
@@ -152,6 +164,25 @@ export async function respondToApproval(tenantId, user, approvalId, decision, no
   a.decidedAt = new Date()
   a.notes = notes ?? ''
   await a.save()
+
+  if (decision === 'APPROVED' && String(a.type) === 'Movimentação') {
+    const destination =
+      String(a.destinationSector ?? '').trim() || parseDestinationFromDescription(a.description)
+    if (!destination) {
+      throw new AppError(
+        400,
+        'Não foi possível aplicar a movimentação: setor de destino em falta na solicitação.',
+      )
+    }
+    const asset = await findAssetByTag(tenantId, a.assetTag)
+    const origin = asset?.sector ?? ''
+    await registerMovementFromApproval(tenantId, user?.sub, {
+      assetTag: a.assetTag,
+      origin,
+      destination,
+      responsible: a.requestedByName || a.requestedBy || 'Solicitante',
+    })
+  }
 
   if (String(a.type) === 'Manutenção' && String(a.maintenanceId ?? '').trim()) {
     const maintenance = await Maintenance.findOne({ _id: String(a.maintenanceId).trim(), tenantId })

@@ -18,6 +18,8 @@ const approvalSchema = new mongoose.Schema(
     maintenanceId: { type: String, default: '' },
     assetTag: { type: String, required: true },
     description: { type: String, required: true },
+    /** Setor de destino (solicitações de movimentação). */
+    destinationSector: { type: String },
     /** Justificativa / contexto adicional do solicitante. */
     feedback: { type: String },
     /** Anexos (fotos, prints, PDFs) carregados via /api/uploads. */

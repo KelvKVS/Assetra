@@ -158,7 +158,7 @@ export const useInventoryStore = defineStore('inventory', {
     },
     async createMovement(payload: Omit<MovementRow, 'id' | 'date'>) {
       await api.post('/movements', payload)
-      await this.fetchMovements()
+      await Promise.all([this.fetchMovements(), this.fetchAssets()])
     },
     async updateMovement(id: string, payload: Partial<Omit<MovementRow, 'id'>>) {
       await api.patch(`/movements/${id}`, payload)
@@ -241,6 +241,7 @@ export const useInventoryStore = defineStore('inventory', {
       maintenanceId?: string
       assetTag: string
       description: string
+      destinationSector?: string
       feedback?: string
       attachments?: AttachmentRef[]
     }) {
@@ -255,7 +256,7 @@ export const useInventoryStore = defineStore('inventory', {
     },
     async respondApproval(id: string, decision: 'APPROVED' | 'REJECTED', notes?: string) {
       await api.post(`/approvals/${id}/respond`, { decision, notes })
-      await this.fetchApprovals()
+      await Promise.all([this.fetchApprovals(), this.fetchAssets(), this.fetchMovements()])
     },
     async fetchTasksSafe() {
       try {

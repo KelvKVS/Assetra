@@ -4,16 +4,18 @@
       <div class="hero-text">
         <span class="hero-eyebrow">Administração</span>
         <h2>Usuários e Perfis</h2>
-        <p class="muted">Gestão de acesso por perfil</p>
+        <p class="muted">
+          {{ isAdmin ? 'Gestão de acesso por perfil' : 'Consulta de utilizadores e ativos atribuídos' }}
+        </p>
       </div>
-      <button class="btn-primary" @click="showForm = !showForm">
+      <button v-if="isAdmin" class="btn-primary" @click="showForm = !showForm">
         <Plus :size="18" :stroke-width="2.5" />
         {{ showForm ? 'Fechar' : 'Novo Usuário' }}
       </button>
     </header>
 
     <!-- Add User Form -->
-    <div v-if="showForm" class="form-card form-card-elevated">
+    <div v-if="isAdmin && showForm" class="form-card form-card-elevated">
       <div class="form-head">
         <span class="form-eyebrow">Novo usuário</span>
         <h3>Cadastrar novo usuário</h3>
@@ -161,8 +163,17 @@
             <span v-else class="account-badge google">Google</span>
             <span v-if="user.department" class="department-badge">{{ user.department }}</span>
           </div>
+          <RouterLink
+            class="user-assets-toggle"
+            :to="{ name: 'assets', query: { assigned: user.email } }"
+            :title="`Ver ativos de ${user.name}`"
+          >
+            <Monitor :size="14" :stroke-width="2.5" />
+            Ativos atribuídos
+            <span class="user-assets-count">{{ assetsForUser(user).length }}</span>
+          </RouterLink>
         </div>
-        <div class="user-actions">
+        <div v-if="isAdmin" class="user-actions">
           <button class="btn-icon" @click="startUserEdit(user)" title="Editar">
             <Edit :size="18" :stroke-width="2.5" />
           </button>
@@ -264,7 +275,10 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 import { type DirectoryUser, useInventoryStore } from '../stores/inventory'
+import { assetsAssignedToEmail } from '../utils/userScope'
 import { roleLabelPt } from '../utils/roleLabels'
 import { isDemoAssetraEmail } from '../utils/emailPolicy'
 import { useConfirmAction } from '../composables/useConfirmAction'
@@ -277,8 +291,12 @@ import {
   Users,
   Edit,
   Trash2,
-  X
+  X,
+  Monitor,
 } from 'lucide-vue-next'
+
+const authStore = useAuthStore()
+const isAdmin = computed(() => authStore.user?.role === 'ADM')
 
 const confirm = useConfirmAction()
 
@@ -319,6 +337,9 @@ const editUser = reactive({
 })
 
 const inventory = useInventoryStore()
+
+const assetsForUser = (user: DirectoryUser) =>
+  assetsAssignedToEmail(inventory.assets, user.email)
 
 const departmentOptions = ref<string[]>([...DEFAULT_DEPARTMENTS])
 const departmentSelect = ref('RH')
@@ -411,6 +432,7 @@ async function checkEmailAvailability() {
 }
 
 onMounted(async () => {
+  void inventory.fetchAssets()
   try {
     departmentOptions.value = await inventory.fetchDepartmentOptions()
   } catch {
@@ -880,7 +902,8 @@ const saveUserEdit = async () => {
   border-radius: 12px;
   padding: 20px;
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: 16px;
   transition: all 0.2s ease;
 }
@@ -933,6 +956,42 @@ const saveUserEdit = async () => {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.user-assets-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.user-assets-toggle:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+.user-assets-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 11px;
 }
 
 .profile-badge {

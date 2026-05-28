@@ -661,6 +661,7 @@ const onSubmit = async () => {
       type: form.type,
       assetTag: form.assetTag,
       description,
+      destinationSector: form.type === 'Movimentação' ? form.destinationSector.trim() : undefined,
       feedback,
       attachments,
     })
