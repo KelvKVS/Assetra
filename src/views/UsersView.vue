@@ -8,7 +8,7 @@
           {{ isAdmin ? 'Gestão de acesso por perfil' : 'Consulta de utilizadores e ativos atribuídos' }}
         </p>
       </div>
-      <button v-if="isAdmin" class="btn-primary" @click="showForm = !showForm">
+      <button v-if="isAdmin" class="btn-primary" @click="toggleUserForm">
         <Plus :size="18" :stroke-width="2.5" />
         {{ showForm ? 'Fechar' : 'Novo Usuário' }}
       </button>
@@ -20,6 +20,11 @@
         <span class="form-eyebrow">Novo usuário</span>
         <h3>Cadastrar novo usuário</h3>
       </div>
+      <ol class="wizard-steps">
+        <li v-for="(label, idx) in userStepLabels" :key="label" :class="{ active: userStep === idx + 1, done: userStep > idx + 1 }">
+          <span>{{ idx + 1 }}</span>{{ label }}
+        </li>
+      </ol>
       <div class="registration-mode field-wide">
         <button
           type="button"
@@ -47,6 +52,7 @@
       </p>
 
       <form @submit.prevent="addUser" class="user-form modern-form">
+        <template v-if="userStep === 1">
         <div class="form-group field">
           <label>Nome completo</label>
           <input v-model.trim="newUser.name" type="text" placeholder="Nome completo" required />
@@ -73,6 +79,11 @@
             <option value="FUNCIONARIO">Funcionário</option>
           </select>
         </div>
+        <div class="form-actions field-wide">
+          <button type="button" class="btn-primary" @click="goToUserStep(2)">Continuar</button>
+        </div>
+        </template>
+        <template v-else>
         <div class="form-group field">
           <label>
             Área / setor
@@ -125,11 +136,13 @@
           </div>
         </template>
         <div class="form-actions field-wide">
+          <button type="button" class="btn-secondary" @click="goToUserStep(1)">Voltar</button>
           <button type="submit" class="btn-primary">
             {{ registrationMode === 'google' ? 'Cadastrar (login Google)' : 'Cadastrar demo' }}
           </button>
-          <button type="button" class="btn-secondary" @click="showForm = false">Cancelar</button>
+          <button type="button" class="btn-secondary" @click="closeUserForm">Cancelar</button>
         </div>
+        </template>
       </form>
       <p v-if="formError" class="error-message">{{ formError }}</p>
     </div>
@@ -307,6 +320,8 @@ const confirm = useConfirmAction()
 const { pageSearch, matchesPageSearch } = useLocalPageSearch()
 
 const showForm = ref(false)
+const userStep = ref(1)
+const userStepLabels = ['Dados iniciais', 'Acesso e segurança']
 const formError = ref('')
 const editingUserId = ref<string | null>(null)
 const registrationMode = ref<'google' | 'demo'>('google')
@@ -396,6 +411,28 @@ function setRegistrationMode(mode: 'google' | 'demo') {
     newUser.email = ''
     newUser.name = ''
   }
+}
+
+function toggleUserForm() {
+  showForm.value = !showForm.value
+  if (showForm.value) {
+    userStep.value = 1
+    formError.value = ''
+  }
+}
+
+function closeUserForm() {
+  showForm.value = false
+  userStep.value = 1
+}
+
+function goToUserStep(step: number) {
+  if (step === 2 && (!newUser.name.trim() || !newUser.email.trim())) {
+    formError.value = 'Preencha nome e e-mail para continuar.'
+    return
+  }
+  formError.value = ''
+  userStep.value = step
 }
 
 async function checkEmailAvailability() {
@@ -507,7 +544,7 @@ const addUser = async () => {
     newUser.confirmPassword = ''
     registrationMode.value = 'google'
     emailStatus.value = { message: '', available: false, formatValid: false }
-    showForm.value = false
+    closeUserForm()
   } catch (e: unknown) {
     const ax = e as { response?: { data?: { message?: string } } }
     formError.value = ax?.response?.data?.message ?? 'Erro ao cadastrar usuário.'
@@ -701,6 +738,39 @@ const saveUserEdit = async () => {
   letter-spacing: 0.12em;
   color: var(--primary);
   text-transform: uppercase;
+}
+.wizard-steps {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+}
+.wizard-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-light);
+}
+.wizard-steps li span {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--bg-primary);
+}
+.wizard-steps li.active {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--primary-light);
 }
 
 .form-card h3 {

@@ -3,12 +3,15 @@ import { authMiddleware, authorize } from '../middlewares/auth.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import {
   adminIntegrationCreateSchema,
+  adminIntegrationTestSchema,
   adminIntegrationUpdateSchema,
 } from '../schemas/index.js'
 import {
   createAdminIntegration,
   deleteAdminIntegration,
   listAdminIntegrations,
+  testAdminIntegrationById,
+  testAdminIntegrationPayload,
   updateAdminIntegration,
 } from '../services/financeIntegrationService.js'
 
@@ -21,6 +24,38 @@ router.get(
   asyncHandler(async (req, res) => {
     const rows = await listAdminIntegrations(req.user.tenantId)
     res.json(rows)
+  }),
+)
+
+router.post(
+  '/test',
+  authMiddleware,
+  authorize(['ADM']),
+  asyncHandler(async (req, res) => {
+    const parsed = adminIntegrationTestSchema.safeParse(req.body)
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Dados inválidos.', issues: parsed.error.flatten() })
+    }
+    const result = await testAdminIntegrationPayload(parsed.data)
+    res.json(result)
+  }),
+)
+
+router.post(
+  '/:id/test',
+  authMiddleware,
+  authorize(['ADM']),
+  asyncHandler(async (req, res) => {
+    const parsed = adminIntegrationTestSchema.partial().safeParse(req.body)
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Dados inválidos.', issues: parsed.error.flatten() })
+    }
+    const result = await testAdminIntegrationById(
+      req.user.tenantId,
+      String(req.params.id ?? ''),
+      parsed.data,
+    )
+    res.json(result)
   }),
 )
 

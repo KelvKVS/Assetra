@@ -1,105 +1,132 @@
 <template>
   <div class="assets-page">
     <!-- Header Section -->
-    <div class="page-header">
-      <div>
+    <header class="hero">
+      <div class="hero-text">
+        <span class="hero-eyebrow">Inventário</span>
         <h2>Ativos de TI</h2>
         <p class="muted">
           Cadastro e acompanhamento de equipamentos
           <template v-if="!canManageAssets"> · Apenas gestores e administradores podem criar, editar ou excluir.</template>
         </p>
       </div>
-      <button v-if="canManageAssets" class="btn-primary" @click="showForm = !showForm">
-        <Plus :size="18" :stroke-width="2.5" />
-        {{ showForm ? 'Fechar' : 'Novo Ativo' }}
-      </button>
-    </div>
+      <div class="hero-actions">
+        <button v-if="canManageAssets" class="btn-primary" @click="toggleAssetForm">
+          <Plus :size="18" :stroke-width="2.5" />
+          {{ showForm ? 'Fechar' : 'Novo Ativo' }}
+        </button>
+      </div>
+    </header>
 
     <!-- Add Asset Form -->
-    <div v-if="canManageAssets && showForm" class="form-card">
-      <h3>Cadastrar novo ativo</h3>
-      <form @submit.prevent="addAsset" class="asset-form">
-        <div class="form-group">
-          <label>Tag</label>
-          <input v-model.trim="newAsset.tag" type="text" placeholder="Ex: AST-200" required />
-        </div>
-        <div class="form-group">
-          <label>Descrição</label>
-          <input v-model.trim="newAsset.description" type="text" placeholder="Descrição do ativo" required />
-        </div>
-        <div class="form-group">
-          <label>Setor</label>
-          <input v-model.trim="newAsset.sector" type="text" placeholder="Setor" required />
-        </div>
-        <div class="form-group">
-          <label>Status</label>
-          <select v-model="newAsset.status" required>
-            <option>Em uso</option>
-            <option>Disponível</option>
-            <option>Em manutenção</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Responsável (e-mail)</label>
-          <input
-            v-model.trim="newAsset.assignedTo"
-            type="email"
-            autocomplete="off"
-            placeholder="ex.: gestor@assetra.local (opcional)"
-            @focus="isCreateResponsibleFocused = true"
-            @blur="hideCreateResponsibleSuggestions"
-          />
-          <div v-if="showCreateResponsibleSuggestions" class="suggestion-panel">
-            <button
-              v-for="user in filteredCreateResponsibleSuggestions"
-              :key="`create-user-${user.id}`"
-              type="button"
-              class="suggestion-item"
-              @mousedown.prevent="pickCreateResponsible(user.email)"
-            >
-              <strong>{{ user.name }}</strong>
-              <span>{{ user.email }}</span>
-            </button>
+    <div v-if="canManageAssets && showForm" class="form-card form-card-elevated">
+      <div class="form-head">
+        <span class="form-eyebrow">Novo ativo</span>
+        <h3>Cadastrar novo ativo</h3>
+      </div>
+      <ol class="wizard-steps">
+        <li v-for="(label, idx) in assetStepLabels" :key="label" :class="{ active: assetStep === idx + 1, done: assetStep > idx + 1 }">
+          <span>{{ idx + 1 }}</span>{{ label }}
+        </li>
+      </ol>
+      <form @submit.prevent="addAsset" class="asset-form modern-form">
+        <template v-if="assetStep === 1">
+          <div class="form-group field">
+            <label>Tag</label>
+            <input v-model.trim="newAsset.tag" type="text" placeholder="Ex: AST-200" required />
           </div>
-        </div>
-        <div class="form-group field-wide">
-          <label>Fotos do ativo</label>
-          <div class="upload-shell">
-            <label class="btn-secondary upload-btn">
-              <Paperclip :size="16" />
-              Subir fotos
-              <input
-                type="file"
-                multiple
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                class="file-hidden"
-                @change="onCreateFilesPick"
-              />
-            </label>
-            <small class="field-hint">{{ uploadLimitsHint }}</small>
+          <div class="form-group field">
+            <label>Descrição</label>
+            <input v-model.trim="newAsset.description" type="text" placeholder="Descrição do ativo" required />
           </div>
-          <ul v-if="selectedCreateFiles.length" class="picked-list">
-            <li v-for="(file, idx) in selectedCreateFiles" :key="`${file.name}-${idx}`">
-              <span>{{ file.name }}</span>
-              <button type="button" class="picked-remove" @click="removeCreateFile(idx)">Remover</button>
-            </li>
-          </ul>
-          <div v-if="createPreviewUrls.length" class="photo-preview-row">
-            <img
-              v-for="(src, idx) in createPreviewUrls"
-              :key="`create-preview-${idx}`"
-              :src="src"
-              :alt="selectedCreateFiles[idx]?.name ?? 'Pré-visualização'"
-              class="clickable-thumb"
+          <div class="form-group field field-wide">
+            <label>Setor</label>
+            <input v-model.trim="newAsset.sector" type="text" placeholder="Setor" required />
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn-primary" @click="goToAssetStep(2)">Continuar</button>
+          </div>
+        </template>
+
+        <template v-else-if="assetStep === 2">
+          <div class="form-group field">
+            <label>Status</label>
+            <select v-model="newAsset.status" required>
+              <option>Em uso</option>
+              <option>Disponível</option>
+              <option>Em manutenção</option>
+            </select>
+          </div>
+          <div class="form-group field field-wide">
+            <label>Responsável (e-mail)</label>
+            <input
+              v-model.trim="newAsset.assignedTo"
+              type="email"
+              autocomplete="off"
+              placeholder="ex.: gestor@assetra.local (opcional)"
+              @focus="isCreateResponsibleFocused = true"
+              @blur="hideCreateResponsibleSuggestions"
             />
+            <div v-if="showCreateResponsibleSuggestions" class="suggestion-panel">
+              <button
+                v-for="user in filteredCreateResponsibleSuggestions"
+                :key="`create-user-${user.id}`"
+                type="button"
+                class="suggestion-item"
+                @mousedown.prevent="pickCreateResponsible(user.email)"
+              >
+                <strong>{{ user.name }}</strong>
+                <span>{{ user.email }}</span>
+              </button>
+            </div>
           </div>
-        </div>
-        <div class="form-actions">
-          <button type="submit" class="btn-primary" :disabled="isSaving">
-            {{ isSaving ? 'A guardar...' : 'Cadastrar' }}
-          </button>
-          <button type="button" class="btn-secondary" :disabled="isSaving" @click="showForm = false">Cancelar</button>
-        </div>
+          <div class="form-actions">
+            <button type="button" class="btn-secondary" @click="goToAssetStep(1)">Voltar</button>
+            <button type="button" class="btn-primary" @click="goToAssetStep(3)">Continuar</button>
+          </div>
+        </template>
+
+        <template v-else>
+          <div class="form-group field field-wide">
+            <label>Fotos do ativo</label>
+            <div class="upload-shell">
+              <label class="btn-secondary upload-btn">
+                <Paperclip :size="16" />
+                Subir fotos
+                <input
+                  type="file"
+                  multiple
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  class="file-hidden"
+                  @change="onCreateFilesPick"
+                />
+              </label>
+              <small class="field-hint">{{ uploadLimitsHint }}</small>
+            </div>
+            <ul v-if="selectedCreateFiles.length" class="picked-list">
+              <li v-for="(file, idx) in selectedCreateFiles" :key="`${file.name}-${idx}`">
+                <span>{{ file.name }}</span>
+                <button type="button" class="picked-remove" @click="removeCreateFile(idx)">Remover</button>
+              </li>
+            </ul>
+            <div v-if="createPreviewUrls.length" class="photo-preview-row">
+              <img
+                v-for="(src, idx) in createPreviewUrls"
+                :key="`create-preview-${idx}`"
+                :src="src"
+                :alt="selectedCreateFiles[idx]?.name ?? 'Pré-visualização'"
+                class="clickable-thumb"
+              />
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn-secondary" :disabled="isSaving" @click="goToAssetStep(2)">Voltar</button>
+            <button type="submit" class="btn-primary" :disabled="isSaving">
+              {{ isSaving ? 'A guardar...' : 'Cadastrar' }}
+            </button>
+            <button type="button" class="btn-secondary" :disabled="isSaving" @click="closeAssetForm">Cancelar</button>
+          </div>
+        </template>
       </form>
       <p v-if="formError" class="error-message">{{ formError }}</p>
     </div>
@@ -423,6 +450,8 @@ const { viewMode } = useAssetViewMode()
 const statusFilter = ref<'all' | AssetStatus>('all')
 
 const showForm = ref(false)
+const assetStep = ref(1)
+const assetStepLabels = ['Dados básicos', 'Status e responsável', 'Fotos e revisão']
 const formError = ref('')
 const isSaving = ref(false)
 const editingAssetId = ref<string | null>(null)
@@ -536,6 +565,30 @@ const removeCreateFile = (index: number) => {
   selectedCreateFiles.value.splice(index, 1)
 }
 
+const toggleAssetForm = () => {
+  showForm.value = !showForm.value
+  if (showForm.value) {
+    assetStep.value = 1
+    formError.value = ''
+  }
+}
+
+const closeAssetForm = () => {
+  showForm.value = false
+  assetStep.value = 1
+}
+
+const goToAssetStep = (step: number) => {
+  if (step === 2) {
+    if (!newAsset.tag.trim() || !newAsset.description.trim() || !newAsset.sector.trim()) {
+      formError.value = 'Preencha tag, descrição e setor para continuar.'
+      return
+    }
+  }
+  formError.value = ''
+  assetStep.value = step
+}
+
 const onEditFilesPick = (ev: Event) => {
   const input = ev.target as HTMLInputElement
   if (!input.files?.length) return
@@ -589,7 +642,7 @@ const addAsset = async () => {
     newAsset.status = 'Disponível'
     newAsset.assignedTo = ''
     selectedCreateFiles.value = []
-    showForm.value = false
+    closeAssetForm()
   } catch (e: unknown) {
     const ax = e as { response?: { data?: { message?: string } } }
     formError.value = ax?.response?.data?.message ?? 'Erro ao cadastrar ativo.'
@@ -676,24 +729,38 @@ const saveAssetEdit = async () => {
   animation: fade-up 0.5s ease;
 }
 
-.page-header {
+.hero {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
+  padding: 20px 22px;
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 10%, var(--bg-card)), var(--bg-card));
   margin-bottom: 24px;
 }
 
-.page-header h2 {
+.hero-text h2 {
   margin: 0 0 4px;
   font-size: 28px;
   font-weight: 700;
   color: var(--text-primary);
 }
 
-.page-header p {
+.hero-text p {
   margin: 0;
   font-size: 14px;
   color: var(--text-secondary);
+}
+
+.hero-eyebrow {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--primary);
 }
 
 .btn-primary {
@@ -740,14 +807,70 @@ const saveAssetEdit = async () => {
 .form-card {
   background: var(--bg-card);
   border: 1px solid var(--border-light);
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 24px;
   margin-bottom: 24px;
   box-shadow: var(--shadow-md);
 }
 
+.form-card-elevated {
+  border-color: color-mix(in srgb, var(--primary) 22%, var(--border-light));
+  box-shadow: var(--shadow-lg);
+}
+
+.form-head {
+  margin-bottom: 18px;
+}
+
+.wizard-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+}
+
+.wizard-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-light);
+}
+
+.wizard-steps li span {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--bg-primary);
+}
+
+.wizard-steps li.active {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.form-eyebrow {
+  display: inline-block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--primary);
+}
+
 .form-card h3 {
-  margin: 0 0 20px;
+  margin: 0;
   font-size: 20px;
   font-weight: 600;
   color: var(--text-primary);
@@ -757,6 +880,20 @@ const saveAssetEdit = async () => {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 16px;
+}
+
+.modern-form .field input,
+.modern-form .field select,
+.modern-form .field textarea {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.modern-form .field input:focus,
+.modern-form .field select:focus,
+.modern-form .field textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
 }
 
 .form-group {
@@ -828,6 +965,7 @@ const saveAssetEdit = async () => {
 }
 
 .field-hint {
+  margin-top: 4px;
   font-size: 12px;
   color: var(--text-muted);
 }
@@ -1447,12 +1585,12 @@ const saveAssetEdit = async () => {
 }
 
 @media (max-width: 768px) {
-  .page-header {
+  .hero {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .page-header .btn-primary {
+  .hero .btn-primary {
     width: 100%;
     justify-content: center;
   }

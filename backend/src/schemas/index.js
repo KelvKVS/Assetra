@@ -191,6 +191,14 @@ export const adminIntegrationUpdateSchema = adminIntegrationBaseSchema
   .partial()
   .refine((d) => Object.keys(d).length > 0, { message: 'Informe ao menos um campo para atualizar.' })
 
+export const adminIntegrationTestSchema = z.object({
+  baseUrl: z.string().max(500).optional(),
+  endpointPath: z.string().max(300).optional(),
+  authType: integrationAuthTypeEnum.optional(),
+  authConfig: jsonMapSchema.optional(),
+  extraHeaders: jsonMapSchema.optional(),
+})
+
 export const taskCompleteSchema = z.object({
   notes: z.string().max(500).optional(),
 })

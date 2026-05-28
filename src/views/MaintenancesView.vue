@@ -27,7 +27,7 @@
         <button class="btn-secondary" @click="showBulkAssign = !showBulkAssign">
           {{ showBulkAssign ? 'Fechar lote' : 'Atribuição em lote' }}
         </button>
-        <button class="btn-primary" @click="showForm = !showForm">
+        <button class="btn-primary" @click="toggleMaintenanceForm">
           <Plus :size="18" :stroke-width="2.5" />
           {{ showForm ? 'Fechar' : 'Novo Chamado' }}
         </button>
@@ -68,7 +68,13 @@
         <span class="form-eyebrow">Novo chamado</span>
         <h3>Abrir chamado de manutenção</h3>
       </div>
+      <ol class="wizard-steps">
+        <li v-for="(label, idx) in maintenanceStepLabels" :key="label" :class="{ active: maintenanceStep === idx + 1, done: maintenanceStep > idx + 1 }">
+          <span>{{ idx + 1 }}</span>{{ label }}
+        </li>
+      </ol>
       <form @submit.prevent="addMaintenance" class="maintenance-form modern-form">
+        <template v-if="maintenanceStep === 1">
         <div class="form-group field">
           <label>Tag do ativo</label>
           <input
@@ -110,6 +116,11 @@
           ></textarea>
           <small class="field-hint">Dica: informe o que acontece, quando começou e como reproduzir.</small>
         </div>
+        <div class="form-actions field-wide">
+          <button type="button" class="btn-primary" @click="goToMaintenanceStep(2)">Continuar</button>
+        </div>
+        </template>
+        <template v-else>
         <div class="form-group field">
           <label>Status</label>
           <select v-model="newMaintenance.status" required>
@@ -166,10 +177,13 @@
           </ul>
         </div>
         <div class="form-actions field-wide">
+          <button type="button" class="btn-secondary" @click="goToMaintenanceStep(1)">Voltar</button>
           <button type="submit" class="btn-primary">Abrir Chamado</button>
-          <button type="button" class="btn-secondary" @click="showForm = false">Cancelar</button>
+          <button type="button" class="btn-secondary" @click="closeMaintenanceForm">Cancelar</button>
         </div>
+        </template>
       </form>
+      <p v-if="formError" class="error-message">{{ formError }}</p>
     </div>
 
     <div class="list-toolbar">
@@ -368,7 +382,10 @@ const authStore = useAuthStore()
 const { pageSearch, matchesPageSearch } = useLocalPageSearch()
 
 const showForm = ref(false)
+const maintenanceStep = ref(1)
+const maintenanceStepLabels = ['Detalhes do chamado', 'Atribuição e anexos']
 const showBulkAssign = ref(false)
+const formError = ref('')
 const editingId = ref<string | null>(null)
 const bulkTechnicianEmail = ref('')
 const bulkScope = ref<'unassigned-open' | 'in-progress-all'>('unassigned-open')
@@ -503,31 +520,37 @@ const filteredMaintenances = computed(() =>
 )
 
 const addMaintenance = async () => {
+  formError.value = ''
   const ok = await confirm.ask('Confirme com a sua senha para abrir este chamado de manutenção.')
   if (!ok) return
-  let attachments: AttachmentRef[] = []
-  if (selectedCreateFiles.value.length) {
-    attachments = await inventory.uploadAttachments(selectedCreateFiles.value)
+  try {
+    let attachments: AttachmentRef[] = []
+    if (selectedCreateFiles.value.length) {
+      attachments = await inventory.uploadAttachments(selectedCreateFiles.value)
+    }
+    await inventory.createMaintenance({
+      assetTag: newMaintenance.assetTag,
+      type: newMaintenance.type,
+      description: newMaintenance.description,
+      priority: newMaintenance.priority,
+      status: newMaintenance.status,
+      assignedTechnicianEmail: newMaintenance.assignedTechnicianEmail,
+      attachments,
+      openingDate: newMaintenance.openingDate,
+    })
+    newMaintenance.assetTag = ''
+    newMaintenance.type = 'Corretiva'
+    newMaintenance.description = ''
+    newMaintenance.status = 'Aberta'
+    newMaintenance.assignedTechnicianEmail = ''
+    newMaintenance.openingDate = new Date().toISOString().split('T')[0]
+    newMaintenance.priority = 'Média'
+    selectedCreateFiles.value = []
+    closeMaintenanceForm()
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: { message?: string } } }
+    formError.value = ax?.response?.data?.message ?? 'Não foi possível abrir o chamado.'
   }
-  await inventory.createMaintenance({
-    assetTag: newMaintenance.assetTag,
-    type: newMaintenance.type,
-    description: newMaintenance.description,
-    priority: newMaintenance.priority,
-    status: newMaintenance.status,
-    assignedTechnicianEmail: newMaintenance.assignedTechnicianEmail,
-    attachments,
-    openingDate: newMaintenance.openingDate,
-  })
-  newMaintenance.assetTag = ''
-  newMaintenance.type = 'Corretiva'
-  newMaintenance.description = ''
-  newMaintenance.status = 'Aberta'
-  newMaintenance.assignedTechnicianEmail = ''
-  newMaintenance.openingDate = new Date().toISOString().split('T')[0]
-  newMaintenance.priority = 'Média'
-  selectedCreateFiles.value = []
-  showForm.value = false
 }
 
 const removeMaintenance = async (id: string) => {
@@ -579,6 +602,30 @@ const onCreateFilesPick = (ev: Event) => {
 
 const removeCreateFile = (index: number) => {
   selectedCreateFiles.value.splice(index, 1)
+}
+
+const toggleMaintenanceForm = () => {
+  showForm.value = !showForm.value
+  if (showForm.value) {
+    maintenanceStep.value = 1
+    formError.value = ''
+  }
+}
+
+const closeMaintenanceForm = () => {
+  showForm.value = false
+  maintenanceStep.value = 1
+}
+
+const goToMaintenanceStep = (step: number) => {
+  if (step === 2) {
+    if (!newMaintenance.assetTag.trim() || !newMaintenance.type.trim() || !newMaintenance.description.trim()) {
+      formError.value = 'Preencha ativo, tipo e descrição para continuar.'
+      return
+    }
+  }
+  formError.value = ''
+  maintenanceStep.value = step
 }
 
 const onEditFilesPick = (ev: Event) => {
@@ -696,6 +743,39 @@ const statusClass = (status: string) => {
   letter-spacing: 0.12em;
   color: var(--primary);
   text-transform: uppercase;
+}
+.wizard-steps {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+}
+.wizard-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-light);
+}
+.wizard-steps li span {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--bg-primary);
+}
+.wizard-steps li.active {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--primary-light);
 }
 
 .form-card h3 { margin: 0 0 20px; font-size: 20px; font-weight: 600; color: var(--text-primary); }

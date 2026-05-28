@@ -8,6 +8,7 @@ import {
   parseJsonObject,
   stringifyJsonObject,
 } from '../utils/integrationAuthConfig.js'
+import { executeIntegrationTest } from '../utils/integrationRequest.js'
 
 function toDto(row) {
   const authConfig = parseJsonObject(row.authConfig)
@@ -150,4 +151,32 @@ export async function hasActiveFinanceIntegration(tenantId) {
     select: { id: true },
   })
   return Boolean(row?.id)
+}
+
+export async function testAdminIntegrationPayload(payload) {
+  return executeIntegrationTest({
+    baseUrl: payload.baseUrl,
+    endpointPath: payload.endpointPath,
+    authType: payload.authType ?? 'Bearer',
+    authConfig: payload.authConfig ?? {},
+    extraHeaders: payload.extraHeaders ?? {},
+  })
+}
+
+export async function testAdminIntegrationById(tenantId, id, overrides = {}) {
+  const row = await prisma.financeIntegration.findFirst({
+    where: { id, tenantId },
+  })
+  if (!row) {
+    throw new AppError(404, 'Integração não encontrada.')
+  }
+
+  const mergedAuth = mergeAuthConfig(row.authConfig, overrides.authConfig ?? {})
+  return executeIntegrationTest({
+    baseUrl: overrides.baseUrl ?? row.baseUrl,
+    endpointPath: overrides.endpointPath ?? row.endpointPath,
+    authType: overrides.authType ?? row.authType,
+    authConfig: mergedAuth,
+    extraHeaders: overrides.extraHeaders != null ? overrides.extraHeaders : parseJsonObject(row.extraHeaders),
+  })
 }
