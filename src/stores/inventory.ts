@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import api from '../services/api'
+import uploadApi from '../services/uploadApi'
+import { validateUploadFiles } from '../utils/uploadLimits'
 import type { Asset, AssetStatus, AttachmentRef } from '../types/assetra'
 import { normalizeAttachments } from '../utils/mediaUrl'
 import { useAuthStore } from './auth'
@@ -226,10 +228,12 @@ export const useInventoryStore = defineStore('inventory', {
     },
     async uploadAttachments(files: File[]): Promise<AttachmentRef[]> {
       if (!files.length) return []
+      const check = validateUploadFiles(files)
+      if (!check.ok) throw new Error(check.message)
       const form = new FormData()
-      for (const f of files) form.append('files', f)
+      for (const f of check.files) form.append('files', f)
       // Não definir Content-Type manualmente — o browser precisa incluir o boundary do multipart.
-      const { data } = await api.post('/uploads', form)
+      const { data } = await uploadApi.post('/uploads', form)
       return normalizeAttachments((data?.files ?? []) as AttachmentRef[]) ?? []
     },
     async createApproval(payload: {

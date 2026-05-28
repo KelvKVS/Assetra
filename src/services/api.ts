@@ -1,4 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios'
+import { setUploadSessionToken } from './uploadApi'
 
 type AxiosConfigWithSilent = InternalAxiosRequestConfig & { silent401?: boolean }
 
@@ -44,6 +45,7 @@ api.interceptors.response.use(
     }
     if (error?.response?.status === 401) {
       setSessionToken('')
+      setUploadSessionToken('')
       try {
         localStorage.removeItem('assetra-auth-token')
       } catch {

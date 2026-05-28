@@ -1,0 +1,410 @@
+/**
+ * Responsividade global — complementa estilos scoped das páginas.
+ * Usa main.content para contexto autenticado e !important só em breakpoints.
+ */
+
+/* ---- Base: evitar overflow horizontal e texto a sair dos blocos ---- */
+html {
+  overflow-x: clip;
+}
+
+main.content {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+main.content h1,
+main.content h2,
+main.content h3,
+main.content h4,
+main.content p,
+main.content span,
+main.content strong,
+main.content small,
+main.content label,
+main.content a,
+main.content li,
+main.content td,
+main.content th,
+main.content code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Fotos de conteúdo — não aplicar a ícones Lucide nem SVGs em botões */
+main.content img:not(.zoom-image):not(.thumb-btn img):not(.asset-cover-btn img):not(.gallery-thumb img) {
+  max-width: 100%;
+  height: auto;
+}
+
+main.content img.clickable-thumb,
+main.content .asset-cover-btn img,
+main.content .gallery-thumb img,
+main.content .att-item img,
+main.content .att-tile img,
+main.content .preview-tile img,
+main.content .review-thumb img {
+  cursor: zoom-in;
+}
+
+main.content svg.lucide,
+main.content .btn-icon svg,
+main.content .btn-primary svg,
+main.content .btn-secondary svg,
+main.content .nav-item svg,
+main.content .stat-card > svg,
+main.content .asset-icon svg,
+main.content .tool-btn svg,
+main.content .lightbox-nav svg,
+main.content .lightbox-close svg {
+  max-width: none !important;
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+}
+
+/* Filhos flex/grid precisam de min-width: 0 para encolher */
+main.content .page-header,
+main.content .stat-card,
+main.content .asset-card,
+main.content .user-card,
+main.content .maintenance-card,
+main.content .approval-card,
+main.content .timeline-card,
+main.content .chart-card,
+main.content .form-card,
+main.content .welcome-banner,
+main.content .topbar-left,
+main.content .user-info,
+main.content .detail-item,
+main.content .info-item {
+  min-width: 0;
+}
+
+/* ---- Cabeçalhos de página ---- */
+main.content .page-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: flex-start;
+}
+
+main.content .page-header h2 {
+  font-size: clamp(1.35rem, 4vw, 1.75rem);
+  line-height: 1.25;
+  max-width: 100%;
+}
+
+main.content .page-header p,
+main.content .page-header .muted {
+  max-width: 100%;
+}
+
+/* ---- Grelhas de estatísticas e cartões ---- */
+main.content .stats-grid,
+main.content .charts-grid,
+main.content .assets-grid,
+main.content .users-grid,
+main.content .maintenance-list {
+  width: 100%;
+}
+
+main.content .stat-card,
+main.content .user-card {
+  overflow: hidden;
+}
+
+main.content .asset-card {
+  overflow: visible;
+  height: auto;
+  align-self: start;
+}
+
+main.content .assets-grid {
+  align-items: start;
+}
+
+main.content .stat-content,
+main.content .asset-info,
+main.content .user-info {
+  min-width: 0;
+}
+
+/* ---- Barras de pesquisa ---- */
+main.content .search-bar {
+  width: 100%;
+  min-width: 0;
+}
+
+main.content .search-bar input {
+  min-width: 0;
+  width: 100%;
+}
+
+/* ---- Formulários ---- */
+main.content .asset-form,
+main.content .inline-form,
+main.content .approval-form {
+  width: 100%;
+}
+
+main.content .form-group,
+main.content .field {
+  min-width: 0;
+}
+
+main.content .form-group input,
+main.content .form-group select,
+main.content .form-group textarea,
+main.content .modal-form input,
+main.content .modal-form select {
+  max-width: 100%;
+}
+
+main.content .form-actions,
+main.content .modal-actions {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* ---- Modais ---- */
+main.content .modal-overlay {
+  padding: 12px;
+  align-items: flex-end;
+}
+
+main.content .modal {
+  width: 100%;
+  max-width: 560px;
+  max-height: min(92vh, 900px);
+  overflow-y: auto;
+  margin: auto;
+}
+
+main.content .modal-header {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ---- Tabelas com scroll horizontal ---- */
+main.content .card:has(table),
+main.content .form-card:has(table),
+main.content .table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}
+
+main.content table {
+  width: 100%;
+  min-width: 520px;
+}
+
+/* ---- Dashboard ---- */
+main.content .welcome-banner {
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+main.content .welcome-banner > div {
+  min-width: 0;
+  flex: 1 1 200px;
+}
+
+main.content .bar-row {
+  min-width: 0;
+}
+
+main.content .bar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Timeline / solicitações ---- */
+main.content .timeline-content {
+  min-width: 0;
+}
+
+main.content .timeline-top {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+main.content .timeline-feedback {
+  flex-wrap: wrap;
+}
+
+/* ---- Badges e detalhes ---- */
+main.content .user-badges,
+main.content .asset-details,
+main.content .asset-actions,
+main.content .user-actions,
+main.content .filter-tabs,
+main.content .picked-list li {
+  flex-wrap: wrap;
+}
+
+/* ---- Capas de fotos nos ativos (evita margem negativa que estoura a largura) ---- */
+main.content .asset-cover-btn {
+  width: 100% !important;
+  max-width: 100%;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* ---- Botões em linha ---- */
+main.content .btn-primary,
+main.content .btn-secondary {
+  max-width: 100%;
+}
+
+main.content .btn-icon {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  max-width: none;
+  flex-shrink: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+main.content .asset-actions,
+main.content .user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  visibility: visible;
+}
+
+/* ===================== TABLET (≤1024px) ===================== */
+@media (max-width: 1024px) {
+  main.content .charts-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  main.content .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* ===================== MOBILE (≤768px) ===================== */
+@media (max-width: 768px) {
+  main.content .page-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  main.content .page-header > .btn-primary,
+  main.content .page-header > .btn-secondary,
+  main.content .page-header > button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  main.content .stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  main.content .assets-grid,
+  main.content .users-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  main.content .asset-form,
+  main.content .inline-form {
+    grid-template-columns: 1fr !important;
+  }
+
+  main.content .field-wide {
+    grid-column: 1 / -1 !important;
+  }
+
+  main.content .form-actions,
+  main.content .modal-actions {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  main.content .form-actions .btn-primary,
+  main.content .form-actions .btn-secondary,
+  main.content .modal-actions .btn-primary,
+  main.content .modal-actions .btn-secondary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  main.content .modal-overlay {
+    align-items: center;
+  }
+
+  main.content .bar-row {
+    grid-template-columns: 1fr minmax(0, 1fr) auto !important;
+    gap: 8px !important;
+  }
+
+  main.content .timeline-card {
+    grid-template-columns: 48px minmax(0, 1fr) !important;
+    gap: 12px !important;
+    padding: 14px !important;
+  }
+
+  main.content .maintenance-header,
+  main.content .approval-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+/* ===================== MOBILE PEQUENO (≤480px) ===================== */
+@media (max-width: 480px) {
+  main.content .stat-card {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  main.content .user-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  main.content .user-actions {
+    justify-content: flex-end;
+  }
+
+  main.content .bar-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  main.content .bar-value {
+    text-align: left;
+  }
+
+  main.content .timeline-card {
+    grid-template-columns: 1fr !important;
+  }
+
+  main.content .timeline-marker {
+    display: none;
+  }
+
+  main.content .suggestion-panel {
+    max-height: 160px;
+  }
+
+  main.content .photo-preview-row,
+  main.content .asset-gallery,
+  main.content .edit-attachments {
+    justify-content: center;
+  }
+}
+
+/* ===================== DESKTOP GRANDE — limitar largura legível em formulários muito largos ---- */
+@media (min-width: 1400px) {
+  main.content .form-card {
+    max-width: 100%;
+  }
+}

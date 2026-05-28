@@ -192,7 +192,7 @@
           <label>
             <ImageIcon :size="14" />
             Fotos / prints
-            <span class="field-hint inline">até 6 ficheiros · 8 MB cada</span>
+            <span class="field-hint inline">{{ uploadLimitsHint }}</span>
           </label>
 
           <div
@@ -293,7 +293,7 @@
             <dd>
               <div class="review-thumbs">
                 <div v-for="(p, i) in previews" :key="i" class="review-thumb">
-                  <img v-if="p.kind === 'image'" :src="p.src" :alt="p.name" />
+                  <img v-if="p.kind === 'image'" :src="p.src" :alt="p.name" class="clickable-thumb" />
                   <FileText v-else :size="18" />
                 </div>
               </div>
@@ -320,6 +320,17 @@
     <section class="history">
       <header class="section-header">
         <h3><History :size="18" /> Histórico das minhas solicitações</h3>
+      </header>
+
+      <div class="list-toolbar history-toolbar">
+        <div class="search-bar search-bar--page">
+          <Search :size="18" :stroke-width="2" />
+          <input
+            v-model.trim="searchQuery"
+            type="search"
+            placeholder="Buscar no histórico por ativo, descrição ou tipo..."
+          />
+        </div>
         <div class="filter-tabs">
           <button :class="['tab-btn', { active: filter === 'all' }]" @click="filter = 'all'">
             Todas <span class="tab-count">{{ myApprovals.length }}</span>
@@ -334,7 +345,7 @@
             Reprovadas <span class="tab-count">{{ counts.rejected }}</span>
           </button>
         </div>
-      </header>
+      </div>
 
       <div v-if="filteredHistory.length" class="timeline">
         <article
@@ -364,17 +375,16 @@
             </p>
 
             <div v-if="item.attachments?.length" class="timeline-attachments">
-              <a
+              <button
                 v-for="(att, idx) in item.attachments"
                 :key="idx"
-                :href="att.url"
-                target="_blank"
-                rel="noopener"
+                type="button"
                 class="att-tile"
+                @click.stop="openAttachment(item, att)"
               >
                 <img v-if="isImage(att.mimetype)" :src="att.url" :alt="att.originalName ?? att.filename" />
                 <FileText v-else :size="20" />
-              </a>
+              </button>
             </div>
 
             <div v-if="item.status !== 'Pendente' && (item.notes || item.decidedByName)" class="timeline-decision">
@@ -399,10 +409,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch, type Component } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, type Component } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useInventoryStore, type AttachmentRef } from '../stores/inventory'
 import { useConfirmAction } from '../composables/useConfirmAction'
+import { useImageLightbox } from '../composables/useImageLightbox'
+import { usePageSearch } from '../composables/usePageSearch'
+import { UPLOAD_LIMITS_HINT, mergeUploadFiles } from '../utils/uploadLimits'
 import {
   Wrench,
   ArrowRightLeft,
@@ -429,6 +442,7 @@ import {
   Flame,
   AlertCircle,
   Activity,
+  Search,
 } from 'lucide-vue-next'
 
 type RequestType = 'Manutenção' | 'Movimentação'
@@ -440,6 +454,8 @@ type Preview = { name: string; src: string; kind: PreviewKind; file: File }
 const authStore = useAuthStore()
 const inventory = useInventoryStore()
 const confirm = useConfirmAction()
+const { searchQuery, setPlaceholder, clear: clearSearch } = usePageSearch()
+const uploadLimitsHint = UPLOAD_LIMITS_HINT
 
 const firstName = computed(() => authStore.user?.name?.split(' ')[0] ?? 'utilizador')
 
@@ -491,12 +507,21 @@ const counts = computed(() => ({
 
 const filter = ref<'all' | 'Pendente' | 'Aprovada' | 'Reprovada'>('all')
 const filteredHistory = computed(() => {
-  if (filter.value === 'all') return myApprovals.value
-  return myApprovals.value.filter((a) => a.status === filter.value)
+  const term = searchQuery.value.toLowerCase()
+  let list = filter.value === 'all' ? myApprovals.value : myApprovals.value.filter((a) => a.status === filter.value)
+  if (!term) return list
+  return list.filter((a) =>
+    [a.assetTag, a.description, a.type, a.status, a.feedback ?? ''].some((v) => String(v).toLowerCase().includes(term)),
+  )
 })
 
 onMounted(async () => {
+  setPlaceholder('Buscar nas suas solicitações...')
   await Promise.allSettled([inventory.fetchAssets(), inventory.fetchMyApprovalsSafe()])
+})
+
+onBeforeUnmount(() => {
+  clearSearch()
 })
 
 const openForm = (type: RequestType) => {
@@ -534,8 +559,12 @@ const goToStep = (n: number) => {
 const triggerFilePicker = () => fileInput.value?.click()
 
 const acceptFiles = (incoming: FileList | File[]) => {
-  const arr = Array.from(incoming)
-  const merged = [...files.value, ...arr].slice(0, 6)
+  const { files: merged, error } = mergeUploadFiles(files.value, incoming)
+  if (error) {
+    formError.value = error
+    return
+  }
+  formError.value = ''
   files.value = merged
   previews.value = merged.map((file) => {
     const isImg = file.type.startsWith('image/')
@@ -576,6 +605,21 @@ watch(isFormOpen, (val) => {
 const truncate = (s: string, n = 22) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
 
 const isImage = (mime?: string) => Boolean(mime && mime.startsWith('image/'))
+
+const imageLightbox = useImageLightbox()
+
+const openAttachment = (item: { assetTag: string; attachments?: AttachmentRef[] }, att: AttachmentRef) => {
+  if (isImage(att.mimetype)) {
+    const images = (item.attachments ?? []).filter((a) => isImage(a.mimetype))
+    const imageIndex = images.findIndex((a) => a.url === att.url || a.filename === att.filename)
+    imageLightbox.openGallery(item.attachments ?? [], {
+      title: `Solicitação · ${item.assetTag}`,
+      startIndex: imageIndex >= 0 ? imageIndex : 0,
+    })
+    return
+  }
+  if (att.url) window.open(att.url, '_blank', 'noopener,noreferrer')
+}
 
 const formatDate = (iso?: string | null) => {
   if (!iso) return ''
@@ -850,6 +894,7 @@ const onSubmit = async () => {
 .review-thumb {
   width: 50px; height: 50px; background: var(--bg-hover);
   border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; color: var(--text-muted);
+  padding: 0; border: 1px solid var(--border-light); cursor: pointer;
 }
 .review-thumb img { width: 100%; height: 100%; object-fit: cover; }
 
@@ -859,7 +904,9 @@ const onSubmit = async () => {
 }
 
 /* ===== History ===== */
-.section-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+.section-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 0; }
+.history-toolbar { margin-bottom: 16px; align-items: center; }
+.history-toolbar .filter-tabs { flex: 1 1 auto; justify-content: flex-end; }
 .section-header h3 {
   display: inline-flex; align-items: center; gap: 8px;
   margin: 0; font-size: 16px; color: var(--text-primary);
@@ -920,7 +967,7 @@ const onSubmit = async () => {
   width: 70px; height: 70px; border-radius: 10px;
   overflow: hidden; background: var(--bg-primary); border: 1px solid var(--border-light);
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-muted); transition: all 0.18s ease;
+  color: var(--text-muted); transition: all 0.18s ease; padding: 0; cursor: pointer;
 }
 .att-tile:hover { transform: translateY(-2px); border-color: var(--primary); }
 .att-tile img { width: 100%; height: 100%; object-fit: cover; }

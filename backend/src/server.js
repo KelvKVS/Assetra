@@ -27,6 +27,7 @@ import integrationRoutes from './routes/integrations.js'
 import reportRoutes from './routes/reports.js'
 import { AppError } from './utils/AppError.js'
 import { getEventBusHealth } from './lib/eventBus.js'
+import { formatUploadLimitLabel } from './config/uploadLimits.js'
 
 const isProd = process.env.NODE_ENV === 'production'
 const jwtSecret = String(process.env.JWT_SECRET ?? '').trim()
@@ -224,6 +225,14 @@ app.use((error, req, res, _next) => {
     })
   }
 
+  if (error?.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({
+      message: `Ficheiro demasiado grande. Limite por ficheiro: ${formatUploadLimitLabel()}.`,
+    })
+  }
+  if (error?.code === 'LIMIT_FILE_COUNT') {
+    return res.status(400).json({ message: 'Demasiados ficheiros no pedido.' })
+  }
   if (error?.name === 'MulterError' || /Tipo de ficheiro/i.test(String(error?.message ?? ''))) {
     return res.status(400).json({ message: error.message ?? 'Ficheiro inválido.' })
   }
@@ -250,7 +259,13 @@ app.use((error, req, res, _next) => {
   })
 })
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`API rodando em http://localhost:${port}`)
 })
+
+/** Uploads até 800 MB — evita corte prematuro da ligação HTTP. */
+const uploadIdleMs = 2 * 60 * 60 * 1000
+server.timeout = uploadIdleMs
+if (typeof server.requestTimeout === 'number') server.requestTimeout = uploadIdleMs
+if (typeof server.headersTimeout === 'number') server.headersTimeout = uploadIdleMs + 60_000
 

@@ -76,7 +76,7 @@
                 @change="onCreateFilesPick"
               />
             </label>
-            <small class="field-hint">Até 6 fotos (8 MB por arquivo).</small>
+            <small class="field-hint">{{ uploadLimitsHint }}</small>
           </div>
           <ul v-if="selectedCreateFiles.length" class="picked-list">
             <li v-for="(file, idx) in selectedCreateFiles" :key="`${file.name}-${idx}`">
@@ -90,6 +90,7 @@
               :key="`create-preview-${idx}`"
               :src="src"
               :alt="selectedCreateFiles[idx]?.name ?? 'Pré-visualização'"
+              class="clickable-thumb"
             />
           </div>
         </div>
@@ -135,34 +136,82 @@
       </div>
     </div>
 
-    <!-- Search Bar -->
-    <div class="search-bar">
-      <Search :size="18" :stroke-width="2" />
-      <input v-model.trim="search" type="text" placeholder="Buscar por tag, descrição, setor ou responsável..." />
+    <!-- Filtros e visualização -->
+    <div class="list-toolbar">
+      <div class="search-bar search-bar--page">
+        <Search :size="18" :stroke-width="2" />
+        <input
+          v-model.trim="searchQuery"
+          type="search"
+          placeholder="Buscar por tag, descrição, setor ou responsável..."
+        />
+      </div>
+      <div class="toolbar-controls">
+        <label class="filter-select-wrap">
+          <span class="sr-only">Filtrar por status</span>
+          <select v-model="statusFilter" class="filter-select">
+            <option value="all">Todos os status</option>
+            <option value="Em uso">Em uso</option>
+            <option value="Disponível">Disponível</option>
+            <option value="Em manutenção">Em manutenção</option>
+          </select>
+        </label>
+        <div class="view-toggle" role="group" aria-label="Modo de visualização">
+          <button
+            type="button"
+            class="view-toggle-btn"
+            :class="{ active: viewMode === 'cards' }"
+            title="Cartões detalhados"
+            @click="viewMode = 'cards'"
+          >
+            <LayoutGrid :size="16" :stroke-width="2.5" />
+            <span>Detalhes</span>
+          </button>
+          <button
+            type="button"
+            class="view-toggle-btn"
+            :class="{ active: viewMode === 'compact' }"
+            title="Miniatura e nome"
+            @click="viewMode = 'compact'"
+          >
+            <LayoutList :size="16" :stroke-width="2.5" />
+            <span>Miniaturas</span>
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Assets Grid -->
-    <div class="assets-grid">
-      <div v-for="asset in filteredAssets" :key="asset.id ?? asset.tag" class="asset-card">
+    <div :class="['assets-grid', viewMode === 'compact' && 'assets-grid--compact']">
+      <article
+        v-for="asset in filteredAssets"
+        :key="asset.id ?? asset.tag"
+        :class="[
+          'asset-card',
+          viewMode === 'compact' && 'asset-card--compact',
+          !coverPhoto(asset) && 'asset-card--no-cover',
+        ]"
+      >
+        <template v-if="viewMode === 'cards'">
         <button
           v-if="coverPhoto(asset)"
           type="button"
           class="asset-cover asset-cover-btn"
           :aria-label="`Ver fotos de ${asset.tag}`"
-          @click="openGallery(asset, coverPhoto(asset)!)"
+          @click.stop="openGallery(asset, coverPhoto(asset)!)"
         >
           <img :src="coverPhoto(asset)!.url" :alt="coverPhoto(asset)!.originalName ?? asset.tag" />
         </button>
-        <div class="asset-header">
-          <div class="asset-icon">
-            <Monitor :size="24" :stroke-width="2" />
+        <div class="asset-header" :class="{ 'asset-header--with-cover': coverPhoto(asset) }">
+            <div v-if="!coverPhoto(asset)" class="asset-icon">
+              <Monitor :size="24" :stroke-width="2" />
+            </div>
+            <div class="asset-status">
+              <span :class="['status-badge', `status-${asset.status.toLowerCase().replace(' ', '-')}`]">
+                {{ asset.status }}
+              </span>
+            </div>
           </div>
-          <div class="asset-status">
-            <span :class="['status-badge', `status-${asset.status.toLowerCase().replace(' ', '-')}`]">
-              {{ asset.status }}
-            </span>
-          </div>
-        </div>
         <div class="asset-info">
           <h3 class="asset-tag">{{ asset.tag }}</h3>
           <p class="asset-description">{{ asset.description }}</p>
@@ -180,14 +229,14 @@
               <span>{{ asset.attachments.length }} foto(s)</span>
             </div>
           </div>
-          <div v-if="imageAttachments(asset.attachments).length" class="asset-gallery">
+          <div v-if="imageAttachments(asset.attachments).length > 1" class="asset-gallery">
             <button
-              v-for="(att, idx) in imageAttachments(asset.attachments)"
+              v-for="(att, idx) in imageAttachments(asset.attachments).slice(1)"
               :key="`${asset.tag}-photo-${idx}`"
               type="button"
               class="gallery-thumb"
-              :aria-label="`Abrir foto ${idx + 1} de ${asset.tag}`"
-              @click="openGallery(asset, att)"
+              :aria-label="`Abrir foto ${idx + 2} de ${asset.tag}`"
+              @click.stop="openGallery(asset, att)"
             >
               <img :src="att.url" :alt="att.originalName ?? att.filename" />
             </button>
@@ -201,7 +250,41 @@
             <Trash2 :size="18" :stroke-width="2.5" />
           </button>
         </div>
-      </div>
+        </template>
+
+        <template v-else>
+          <button
+            v-if="coverPhoto(asset)"
+            type="button"
+            class="compact-thumb"
+            :aria-label="`Ver fotos de ${asset.tag}`"
+            @click.stop="openGallery(asset, coverPhoto(asset)!)"
+          >
+            <img :src="coverPhoto(asset)!.url" :alt="coverPhoto(asset)!.originalName ?? asset.tag" />
+          </button>
+          <div v-else class="compact-thumb compact-thumb--empty" aria-hidden="true">
+            <Monitor :size="22" :stroke-width="2" />
+          </div>
+          <div class="compact-body">
+            <div class="compact-title-row">
+              <h3 class="asset-tag">{{ asset.tag }}</h3>
+              <span :class="['status-badge', `status-${asset.status.toLowerCase().replace(' ', '-')}`]">
+                {{ asset.status }}
+              </span>
+            </div>
+            <p class="asset-description">{{ asset.description }}</p>
+            <small class="compact-meta">{{ asset.sector }}</small>
+          </div>
+          <div v-if="canManageAssets" class="compact-actions">
+            <button class="btn-icon" @click="startAssetEdit(asset)" title="Editar">
+              <Edit :size="16" :stroke-width="2.5" />
+            </button>
+            <button class="btn-icon btn-danger" @click="removeAsset(asset)" title="Excluir">
+              <Trash2 :size="16" :stroke-width="2.5" />
+            </button>
+          </div>
+        </template>
+      </article>
     </div>
 
     <!-- Edit Modal -->
@@ -261,7 +344,12 @@
             <label>Fotos do ativo</label>
             <div v-if="editAttachments.length" class="edit-attachments">
               <div v-for="(att, idx) in editAttachments" :key="`edit-att-${att.filename}-${idx}`" class="edit-att-item">
-                <img v-if="!att.mimetype || att.mimetype.startsWith('image/')" :src="att.url" :alt="att.originalName ?? att.filename" />
+                <img
+                  v-if="!att.mimetype || att.mimetype.startsWith('image/')"
+                  :src="att.url"
+                  :alt="att.originalName ?? att.filename"
+                  class="clickable-thumb"
+                />
                 <span v-else>{{ att.originalName ?? att.filename }}</span>
                 <button type="button" class="picked-remove" @click="removeEditAttachment(idx)">Remover</button>
               </div>
@@ -278,7 +366,7 @@
                   @change="onEditFilesPick"
                 />
               </label>
-              <small class="field-hint">Máximo de 6 fotos no total.</small>
+              <small class="field-hint">{{ uploadLimitsHint }}</small>
             </div>
             <ul v-if="selectedEditFiles.length" class="picked-list">
               <li v-for="(file, idx) in selectedEditFiles" :key="`edit-file-${file.name}-${idx}`">
@@ -295,42 +383,36 @@
       </div>
     </div>
 
-    <AssetPhotoLightbox
-      :open="lightboxOpen"
-      :attachments="lightboxAttachments"
-      :start-index="lightboxIndex"
-      :title="lightboxTitle"
-      @close="closeGallery"
-    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { usePageSearch } from '../composables/usePageSearch'
+import { useAssetViewMode } from '../composables/useAssetViewMode'
 import { type Asset, type AssetStatus, type AttachmentRef } from '../types/assetra'
 import { useAuthStore } from '../stores/auth'
 import { useInventoryStore } from '../stores/inventory'
 import { useConfirmAction } from '../composables/useConfirmAction'
-import { imageAttachments, useAssetPhotoLightbox } from '../composables/useAssetPhotoLightbox'
+import { imageAttachments, useImageLightbox } from '../composables/useImageLightbox'
 import { prepareAttachmentsForApi } from '../utils/attachmentPayload'
-import AssetPhotoLightbox from '../components/AssetPhotoLightbox.vue'
-import { Plus, Search, Monitor, CheckCircle, Package, Wrench, MapPin, Edit, Trash2, X, Paperclip } from 'lucide-vue-next'
+import { UPLOAD_LIMITS_HINT, mergeUploadFiles } from '../utils/uploadLimits'
+import { Plus, Search, Monitor, CheckCircle, Package, Wrench, MapPin, Edit, Trash2, X, Paperclip, LayoutGrid, LayoutList } from 'lucide-vue-next'
+
+const uploadLimitsHint = UPLOAD_LIMITS_HINT
 
 const confirm = useConfirmAction()
-const {
-  lightboxOpen,
-  lightboxAttachments,
-  lightboxIndex,
-  lightboxTitle,
-  openGallery,
-  closeGallery,
-} = useAssetPhotoLightbox()
+const imageLightbox = useImageLightbox()
+const openGallery = (asset: Asset, clicked?: AttachmentRef) => imageLightbox.openFromAsset(asset, clicked)
 
 const authStore = useAuthStore()
 const canManageAssets = computed(() => ['ADM', 'GESTOR'].includes(authStore.user?.role ?? ''))
 
+const { searchQuery, setPlaceholder, clear: clearSearch } = usePageSearch()
+const { viewMode } = useAssetViewMode()
+const statusFilter = ref<'all' | AssetStatus>('all')
+
 const showForm = ref(false)
-const search = ref('')
 const formError = ref('')
 const isSaving = ref(false)
 const editingAssetId = ref<string | null>(null)
@@ -360,13 +442,14 @@ const newAsset = reactive<Asset>({
 })
 
 const filteredAssets = computed(() => {
-  const term = search.value.toLowerCase()
-  if (!term) return inventory.assets
-  return assets.value.filter((asset) =>
-    [asset.tag, asset.description, asset.sector, asset.status, asset.assignedTo ?? ''].some((value) =>
+  const term = searchQuery.value.toLowerCase()
+  return assets.value.filter((asset) => {
+    if (statusFilter.value !== 'all' && asset.status !== statusFilter.value) return false
+    if (!term) return true
+    return [asset.tag, asset.description, asset.sector, asset.status, asset.assignedTo ?? ''].some((value) =>
       String(value).toLowerCase().includes(term),
-    ),
-  )
+    )
+  })
 })
 const availableUsers = computed(() => inventory.users.filter((u) => u.status === 'Ativo'))
 const filteredCreateResponsibleSuggestions = computed(() => {
@@ -393,11 +476,16 @@ const usageStats = computed(() => ({
 }))
 
 onMounted(async () => {
+  setPlaceholder('Buscar ativos (tag, descrição, setor...)')
   try {
     await Promise.all([inventory.fetchAssets(), inventory.fetchUsers()])
   } catch {
     formError.value = inventory.error || 'Não foi possível carregar os ativos.'
   }
+})
+
+onBeforeUnmount(() => {
+  clearSearch()
 })
 const pickCreateResponsible = (email: string) => {
   newAsset.assignedTo = email
@@ -433,7 +521,9 @@ onBeforeUnmount(() => revokeCreatePreviews())
 const onCreateFilesPick = (ev: Event) => {
   const input = ev.target as HTMLInputElement
   if (!input.files?.length) return
-  selectedCreateFiles.value = Array.from(input.files).slice(0, 6)
+  const { files, error } = mergeUploadFiles(selectedCreateFiles.value, input.files)
+  if (error) formError.value = error
+  selectedCreateFiles.value = files
   input.value = ''
 }
 
@@ -445,8 +535,14 @@ const onEditFilesPick = (ev: Event) => {
   const input = ev.target as HTMLInputElement
   if (!input.files?.length) return
   const room = Math.max(0, 6 - editAttachments.value.length)
-  const picked = Array.from(input.files).slice(0, room)
-  selectedEditFiles.value = [...selectedEditFiles.value, ...picked].slice(0, room)
+  if (!room) {
+    formError.value = 'Já existem 6 fotos neste ativo.'
+    input.value = ''
+    return
+  }
+  const { files, error } = mergeUploadFiles(selectedEditFiles.value, input.files)
+  if (error) formError.value = error
+  selectedEditFiles.value = files.slice(0, room)
   input.value = ''
 }
 
@@ -794,7 +890,7 @@ const saveAssetEdit = async () => {
 
 .asset-cover-btn {
   display: block;
-  width: calc(100% + 40px);
+  width: 100%;
   margin: -20px -20px 12px;
   padding: 0;
   border: none;
@@ -803,6 +899,8 @@ const saveAssetEdit = async () => {
   border-radius: 12px 12px 0 0;
   overflow: hidden;
   max-height: 140px;
+  max-width: calc(100% + 40px);
+  box-sizing: border-box;
 }
 
 .asset-cover-btn img {
@@ -939,10 +1037,94 @@ const saveAssetEdit = async () => {
   outline: none;
 }
 
+.list-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: stretch;
+  margin-bottom: 20px;
+}
+
+.search-bar--page {
+  flex: 1 1 240px;
+  margin-bottom: 0;
+}
+
+.toolbar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.filter-select-wrap {
+  min-width: 0;
+}
+
+.filter-select {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--text-primary);
+  min-width: 160px;
+  max-width: 100%;
+}
+
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg-card);
+}
+
+.view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.view-toggle-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.view-toggle-btn.active {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .assets-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
+  align-items: start;
+}
+
+.assets-grid--compact {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
 }
 
 .asset-card {
@@ -951,6 +1133,96 @@ const saveAssetEdit = async () => {
   border-radius: 12px;
   padding: 20px;
   transition: all 0.2s ease;
+  height: auto;
+}
+
+.asset-card--compact {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.asset-card--compact:hover {
+  transform: translateY(-2px);
+}
+
+.compact-thumb {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: zoom-in;
+  background: var(--bg-hover);
+}
+
+.compact-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.compact-thumb--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.compact-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.compact-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.compact-title-row .asset-tag {
+  margin: 0;
+  font-size: 15px;
+}
+
+.compact-body .asset-description {
+  margin: 0 0 4px;
+  font-size: 12px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.compact-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.compact-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.asset-header--with-cover {
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.asset-header--with-cover .asset-status {
+  margin-left: auto;
+}
+
+.asset-card--no-cover .asset-header {
+  margin-bottom: 16px;
 }
 
 .asset-card:hover {
@@ -1010,6 +1282,7 @@ const saveAssetEdit = async () => {
   font-size: 18px;
   font-weight: 700;
   color: var(--text-primary);
+  overflow-wrap: anywhere;
 }
 
 .asset-description {
@@ -1017,6 +1290,7 @@ const saveAssetEdit = async () => {
   font-size: 14px;
   color: var(--text-secondary);
   line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .asset-details {
@@ -1139,6 +1413,53 @@ const saveAssetEdit = async () => {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .page-header .btn-primary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .stats-grid,
+  .assets-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .asset-form {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .form-actions .btn-primary,
+  .form-actions .btn-secondary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .modal {
+    width: 100%;
+    max-height: 92vh;
+    overflow-y: auto;
+  }
+
+  .modal-actions {
+    flex-direction: column;
+  }
+
+  .modal-actions .btn-primary,
+  .modal-actions .btn-secondary {
+    width: 100%;
   }
 }
 </style>

@@ -76,18 +76,17 @@
           <div v-if="item.attachments && item.attachments.length" class="approval-attachments">
             <span class="att-title"><Paperclip :size="13" /> Anexos</span>
             <div class="att-grid">
-              <a
+              <button
                 v-for="(att, idx) in item.attachments"
                 :key="idx"
-                :href="att.url"
-                target="_blank"
-                rel="noopener"
+                type="button"
                 class="att-item"
+                @click.stop="openAttachment(item, att)"
               >
                 <img v-if="isImage(att.mimetype)" :src="att.url" :alt="att.originalName ?? att.filename" />
                 <FileText v-else :size="22" />
                 <span class="att-name">{{ att.originalName ?? att.filename }}</span>
-              </a>
+              </button>
             </div>
           </div>
 
@@ -148,6 +147,8 @@ import { computed, onMounted, reactive, ref, type Component } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useInventoryStore, type ApprovalRow } from '../stores/inventory'
 import { useConfirmAction } from '../composables/useConfirmAction'
+import { useImageLightbox } from '../composables/useImageLightbox'
+import type { AttachmentRef } from '../types/assetra'
 import {
   Search,
   Clock,
@@ -252,6 +253,21 @@ const statusClass = (status: string) =>
 const typeIcon = (type: string): Component => (type.includes('Moviment') ? ArrowRightLeft : Wrench)
 
 const isImage = (mime?: string) => Boolean(mime && mime.startsWith('image/'))
+
+const imageLightbox = useImageLightbox()
+
+const openAttachment = (item: ApprovalRow, att: AttachmentRef) => {
+  if (isImage(att.mimetype)) {
+    const images = (item.attachments ?? []).filter((a) => isImage(a.mimetype))
+    const imageIndex = images.findIndex((a) => a.url === att.url || a.filename === att.filename)
+    imageLightbox.openGallery(item.attachments ?? [], {
+      title: `${item.type} · ${item.assetTag}`,
+      startIndex: imageIndex >= 0 ? imageIndex : 0,
+    })
+    return
+  }
+  if (att.url) window.open(att.url, '_blank', 'noopener,noreferrer')
+}
 </script>
 
 <style scoped>
@@ -391,8 +407,8 @@ const isImage = (mime?: string) => Boolean(mime && mime.startsWith('image/'))
 .att-item {
   position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
   padding: 6px; background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: 8px;
-  text-decoration: none; color: var(--text-muted); font-size: 11px; min-height: 80px;
-  transition: all 0.2s ease;
+  color: var(--text-muted); font-size: 11px; min-height: 80px;
+  transition: all 0.2s ease; cursor: pointer; width: 100%;
 }
 .att-item:hover { border-color: var(--primary); color: var(--text-primary); transform: translateY(-2px); }
 .att-item img { width: 100%; height: 60px; object-fit: cover; border-radius: 4px; }

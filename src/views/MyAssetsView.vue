@@ -43,57 +43,76 @@
       </div>
     </div>
 
-    <!-- Search Bar -->
-    <div class="search-bar">
-      <Search :size="18" :stroke-width="2" />
-      <input v-model.trim="search" type="text" placeholder="Buscar por tag, descrição ou setor..." />
+    <div class="list-toolbar">
+      <div class="search-bar search-bar--page">
+        <Search :size="18" :stroke-width="2" />
+        <input v-model.trim="searchQuery" type="search" placeholder="Buscar por tag, descrição ou setor..." />
+      </div>
+      <div class="view-toggle" role="group" aria-label="Modo de visualização">
+        <button type="button" class="view-toggle-btn" :class="{ active: viewMode === 'cards' }" @click="viewMode = 'cards'">
+          <LayoutGrid :size="16" /> <span>Detalhes</span>
+        </button>
+        <button type="button" class="view-toggle-btn" :class="{ active: viewMode === 'compact' }" @click="viewMode = 'compact'">
+          <LayoutList :size="16" /> <span>Miniaturas</span>
+        </button>
+      </div>
     </div>
 
-    <!-- Assets Grid -->
-    <div class="assets-grid">
-      <div v-for="asset in filteredAssets" :key="asset.id ?? asset.tag" class="asset-card">
-        <button
-          v-if="coverPhoto(asset)"
-          type="button"
-          class="asset-cover asset-cover-btn"
-          :aria-label="`Ver fotos de ${asset.tag}`"
-          @click="openGallery(asset, coverPhoto(asset)!)"
-        >
-          <img :src="coverPhoto(asset)!.url" :alt="coverPhoto(asset)!.originalName ?? asset.tag" />
-        </button>
-        <div class="asset-header">
-          <div class="asset-icon">
-            <Monitor :size="24" :stroke-width="2" />
-          </div>
-          <div class="asset-status">
-            <span :class="['status-badge', `status-${statusClass(asset.status)}`]">
-              {{ asset.status }}
-            </span>
-          </div>
-        </div>
-        <div class="asset-info">
-          <h3 class="asset-tag">{{ asset.tag }}</h3>
-          <p class="asset-description">{{ asset.description }}</p>
-          <div class="asset-details">
-            <div class="detail-item">
-              <MapPin :size="14" :stroke-width="2.5" />
-              <span>{{ asset.sector }}</span>
+    <div :class="['assets-grid', viewMode === 'compact' && 'assets-grid--compact']">
+      <article
+        v-for="asset in filteredAssets"
+        :key="asset.id ?? asset.tag"
+        :class="['asset-card', viewMode === 'compact' && 'asset-card--compact', !coverPhoto(asset) && 'asset-card--no-cover']"
+      >
+        <template v-if="viewMode === 'cards'">
+          <button
+            v-if="coverPhoto(asset)"
+            type="button"
+            class="asset-cover asset-cover-btn"
+            :aria-label="`Ver fotos de ${asset.tag}`"
+            @click.stop="openGallery(asset, coverPhoto(asset)!)"
+          >
+            <img :src="coverPhoto(asset)!.url" :alt="coverPhoto(asset)!.originalName ?? asset.tag" />
+          </button>
+          <div class="asset-header" :class="{ 'asset-header--with-cover': coverPhoto(asset) }">
+            <div v-if="!coverPhoto(asset)" class="asset-icon">
+              <Monitor :size="24" :stroke-width="2" />
+            </div>
+            <div class="asset-status">
+              <span :class="['status-badge', `status-${statusClass(asset.status)}`]">{{ asset.status }}</span>
             </div>
           </div>
-          <div v-if="imageAttachments(asset.attachments).length > 1" class="asset-gallery">
-            <button
-              v-for="(att, idx) in imageAttachments(asset.attachments)"
-              :key="`${asset.tag}-photo-${idx}`"
-              type="button"
-              class="gallery-thumb"
-              :aria-label="`Abrir foto ${idx + 1}`"
-              @click="openGallery(asset, att)"
-            >
-              <img :src="att.url" :alt="att.originalName ?? att.filename" />
-            </button>
+          <div class="asset-info">
+            <h3 class="asset-tag">{{ asset.tag }}</h3>
+            <p class="asset-description">{{ asset.description }}</p>
+            <div class="asset-details">
+              <div class="detail-item">
+                <MapPin :size="14" :stroke-width="2.5" />
+                <span>{{ asset.sector }}</span>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </template>
+        <template v-else>
+          <button
+            v-if="coverPhoto(asset)"
+            type="button"
+            class="compact-thumb"
+            @click.stop="openGallery(asset, coverPhoto(asset)!)"
+          >
+            <img :src="coverPhoto(asset)!.url" :alt="coverPhoto(asset)!.originalName ?? asset.tag" />
+          </button>
+          <div v-else class="compact-thumb compact-thumb--empty"><Monitor :size="22" /></div>
+          <div class="compact-body">
+            <div class="compact-title-row">
+              <h3 class="asset-tag">{{ asset.tag }}</h3>
+              <span :class="['status-badge', `status-${statusClass(asset.status)}`]">{{ asset.status }}</span>
+            </div>
+            <p class="asset-description">{{ asset.description }}</p>
+            <small class="compact-meta">{{ asset.sector }}</small>
+          </div>
+        </template>
+      </article>
     </div>
 
     <!-- Empty State -->
@@ -103,51 +122,46 @@
       <p>Não há ativos com o seu e-mail no campo responsável. Peça a um administrador para associar o seu e-mail na ficha do ativo.</p>
     </div>
 
-    <AssetPhotoLightbox
-      :open="lightboxOpen"
-      :attachments="lightboxAttachments"
-      :start-index="lightboxIndex"
-      :title="lightboxTitle"
-      @close="closeGallery"
-    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { usePageSearch } from '../composables/usePageSearch'
+import { useAssetViewMode } from '../composables/useAssetViewMode'
 import { useAuthStore } from '../stores/auth'
 import { useInventoryStore } from '../stores/inventory'
 import { assetsAssignedToEmail } from '../utils/userScope'
-import AssetPhotoLightbox from '../components/AssetPhotoLightbox.vue'
-import { imageAttachments, useAssetPhotoLightbox } from '../composables/useAssetPhotoLightbox'
-import type { Asset } from '../types/assetra'
-import { Monitor, Search, CheckCircle, Wrench, Shield, MapPin } from 'lucide-vue-next'
+import { imageAttachments, useImageLightbox } from '../composables/useImageLightbox'
+import type { Asset, AttachmentRef } from '../types/assetra'
+import { Monitor, Search, CheckCircle, Wrench, Shield, MapPin, LayoutGrid, LayoutList } from 'lucide-vue-next'
 
-const {
-  lightboxOpen,
-  lightboxAttachments,
-  lightboxIndex,
-  lightboxTitle,
-  openGallery,
-  closeGallery,
-} = useAssetPhotoLightbox()
+const imageLightbox = useImageLightbox()
+const openGallery = (asset: Asset, clicked?: AttachmentRef) => imageLightbox.openFromAsset(asset, clicked)
 
 const coverPhoto = (asset: Asset) => imageAttachments(asset.attachments)[0]
 
 const authStore = useAuthStore()
 const inventory = useInventoryStore()
 
+const { searchQuery, setPlaceholder, clear: clearSearch } = usePageSearch()
+const { viewMode } = useAssetViewMode()
+
 const userDepartment = computed(() => authStore.user?.department?.trim() || '')
-const search = ref('')
 
 onMounted(() => {
+  setPlaceholder('Buscar nos meus ativos...')
   void inventory.fetchAssets()
+})
+
+onBeforeUnmount(() => {
+  clearSearch()
 })
 
 const myAssets = computed(() => assetsAssignedToEmail(inventory.assets, authStore.user?.email))
 
 const filteredAssets = computed(() => {
-  const term = search.value.toLowerCase()
+  const term = searchQuery.value.toLowerCase()
   if (!term) return myAssets.value
   return myAssets.value.filter((asset) =>
     [asset.tag, asset.description, asset.sector, asset.status].some((value) => value.toLowerCase().includes(term)),
@@ -197,12 +211,30 @@ const statusClass = (status: string) => {
 .search-bar svg { color: var(--text-secondary); flex-shrink: 0; }
 .search-bar input { flex: 1; border: none; background: transparent; font-size: 14px; color: var(--text-primary); outline: none; }
 
-.assets-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-.asset-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; transition: all 0.2s ease; overflow: hidden; }
+.list-toolbar { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; align-items: stretch; }
+.search-bar--page { flex: 1 1 220px; margin-bottom: 0; }
+.view-toggle { display: inline-flex; border: 1px solid var(--border-light); border-radius: 10px; overflow: hidden; background: var(--bg-card); }
+.view-toggle-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border: none; background: transparent; color: var(--text-secondary); font-size: 13px; font-weight: 600; cursor: pointer; }
+.view-toggle-btn.active { background: var(--primary-light); color: var(--primary); }
+
+.assets-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; align-items: start; }
+.assets-grid--compact { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.asset-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; transition: all 0.2s ease; height: auto; }
+.asset-card--compact { display: flex; flex-direction: row; align-items: center; gap: 12px; padding: 10px 12px; }
+.compact-thumb { flex-shrink: 0; width: 56px; height: 56px; padding: 0; border: none; border-radius: 10px; overflow: hidden; cursor: zoom-in; background: var(--bg-hover); }
+.compact-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.compact-thumb--empty { display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
+.compact-body { flex: 1; min-width: 0; }
+.compact-title-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 4px; }
+.compact-title-row .asset-tag { margin: 0; font-size: 15px; }
+.compact-body .asset-description { margin: 0; font-size: 12px; -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.compact-meta { font-size: 11px; color: var(--text-muted); }
+.asset-header--with-cover { justify-content: flex-end; margin-bottom: 8px; }
 .asset-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); border-color: var(--primary); }
 .asset-cover-btn {
   display: block;
-  width: calc(100% + 40px);
+  width: 100%;
+  max-width: calc(100% + 40px);
   margin: -20px -20px 12px;
   padding: 0;
   border: none;
@@ -210,6 +242,7 @@ const statusClass = (status: string) => {
   cursor: zoom-in;
   max-height: 140px;
   overflow: hidden;
+  box-sizing: border-box;
 }
 .asset-cover-btn img { width: 100%; height: 140px; object-fit: cover; display: block; transition: transform 0.2s ease; }
 .asset-cover-btn:hover img { transform: scale(1.03); }

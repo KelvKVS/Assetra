@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import api from '../services/api'
 import { setSessionToken } from '../services/api'
+import { setUploadSessionToken } from '../services/uploadApi'
 import type { Profile } from '../types/assetra'
 
 const LEGACY_MOCK_SESSION = 'assetra-mock-session'
@@ -34,6 +35,7 @@ function clearLegacyMockStorage() {
 function persistToken(token?: string) {
   const value = token?.trim() || ''
   setSessionToken(value)
+  setUploadSessionToken(value)
   try {
     if (value) {
       localStorage.setItem(AUTH_TOKEN_KEY, value)
@@ -49,8 +51,10 @@ function loadPersistedToken() {
   try {
     const stored = localStorage.getItem(AUTH_TOKEN_KEY)?.trim() || ''
     setSessionToken(stored)
+    setUploadSessionToken(stored)
   } catch {
     setSessionToken('')
+    setUploadSessionToken('')
   }
 }
 

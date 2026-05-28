@@ -333,4 +333,29 @@ const confirm = async () => {
     transform: translateY(0) scale(1);
   }
 }
+
+@media (max-width: 480px) {
+  .pcm-overlay {
+    padding: 10px;
+    align-items: flex-end;
+  }
+
+  .pcm-modal {
+    width: 100%;
+    max-height: 92vh;
+    border-radius: 14px 14px 0 0;
+    padding: 18px;
+  }
+
+  .pcm-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pcm-btn-ghost,
+  .pcm-btn-primary {
+    width: 100%;
+    justify-content: center;
+  }
+}
 </style>

@@ -155,8 +155,9 @@
                 @change="onCreateFilesPick"
               />
             </label>
-            <small class="field-hint">Até 6 fotos (8 MB por arquivo).</small>
+            <small class="field-hint">{{ uploadLimitsHint }}</small>
           </div>
+          <p v-if="uploadFormError" class="upload-error">{{ uploadFormError }}</p>
           <ul v-if="selectedCreateFiles.length" class="picked-list">
             <li v-for="(file, idx) in selectedCreateFiles" :key="`${file.name}-${idx}`">
               <span>{{ file.name }}</span>
@@ -171,10 +172,16 @@
       </form>
     </div>
 
-    <!-- Search Bar -->
-    <div class="search-bar search-shell">
-      <Search :size="18" :stroke-width="2" />
-      <input v-model.trim="search" type="text" placeholder="Buscar por ativo, tipo ou descrição..." />
+    <!-- Busca -->
+    <div class="list-toolbar">
+      <div class="search-bar search-bar--page">
+        <Search :size="18" :stroke-width="2" />
+        <input
+          v-model.trim="searchQuery"
+          type="search"
+          placeholder="Buscar por ativo, tipo, descrição ou técnico..."
+        />
+      </div>
     </div>
 
     <!-- Maintenance Cards -->
@@ -332,9 +339,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { usePageSearch } from '../composables/usePageSearch'
 import { type AttachmentRef, type MaintenanceRow, useInventoryStore } from '../stores/inventory'
 import { useConfirmAction } from '../composables/useConfirmAction'
+import { UPLOAD_LIMITS_HINT, mergeUploadFiles } from '../utils/uploadLimits'
 import { useAuthStore } from '../stores/auth'
 import { maintenancesInvolvingUserByAssets } from '../utils/userScope'
 import {
@@ -352,12 +361,15 @@ import {
   X
 } from 'lucide-vue-next'
 
+const uploadLimitsHint = UPLOAD_LIMITS_HINT
+
 const confirm = useConfirmAction()
 const authStore = useAuthStore()
 
+const { searchQuery, setPlaceholder, clear: clearSearch } = usePageSearch()
+
 const showForm = ref(false)
 const showBulkAssign = ref(false)
-const search = ref('')
 const editingId = ref<string | null>(null)
 const bulkTechnicianEmail = ref('')
 const bulkScope = ref<'unassigned-open' | 'in-progress-all'>('unassigned-open')
@@ -390,9 +402,14 @@ const editMaintenance = reactive({
 const inventory = useInventoryStore()
 
 onMounted(() => {
+  setPlaceholder('Buscar manutenções (ativo, tipo, técnico...)')
   void inventory.fetchMaintenances()
   void inventory.fetchAssets()
   void inventory.fetchUsers()
+})
+
+onBeforeUnmount(() => {
+  clearSearch()
 })
 
 const isTechnician = computed(() => authStore.user?.role === 'TECNICO')
@@ -479,10 +496,12 @@ const maintenanceStats = computed(() => ({
 }))
 
 const filteredMaintenances = computed(() => {
-  const term = search.value.toLowerCase()
+  const term = searchQuery.value.toLowerCase()
   if (!term) return scopedMaintenances.value
   return scopedMaintenances.value.filter((item) =>
-    [item.assetTag, item.type, item.description, item.status].some((value) => String(value).toLowerCase().includes(term)),
+    [item.assetTag, item.type, item.description, item.status, item.assignedTechnicianEmail ?? ''].some((value) =>
+      String(value).toLowerCase().includes(term),
+    ),
   )
 })
 
@@ -549,10 +568,16 @@ const saveMaintenanceEdit = async () => {
   editingId.value = null
 }
 
+const uploadFormError = ref('')
+
 const onCreateFilesPick = (ev: Event) => {
   const input = ev.target as HTMLInputElement
-  if (!input.files) return
-  selectedCreateFiles.value = Array.from(input.files).slice(0, 6)
+  if (!input.files?.length) return
+  const { files, error } = mergeUploadFiles(selectedCreateFiles.value, input.files)
+  if (error) uploadFormError.value = error
+  else uploadFormError.value = ''
+  selectedCreateFiles.value = files
+  input.value = ''
 }
 
 const removeCreateFile = (index: number) => {
@@ -561,8 +586,12 @@ const removeCreateFile = (index: number) => {
 
 const onEditFilesPick = (ev: Event) => {
   const input = ev.target as HTMLInputElement
-  if (!input.files) return
-  selectedEditFiles.value = Array.from(input.files).slice(0, 6)
+  if (!input.files?.length) return
+  const { files, error } = mergeUploadFiles(selectedEditFiles.value, input.files)
+  if (error) uploadFormError.value = error
+  else uploadFormError.value = ''
+  selectedEditFiles.value = files
+  input.value = ''
 }
 
 const removeEditFile = (index: number) => {
@@ -734,6 +763,14 @@ const statusClass = (status: string) => {
 }
 .details-field textarea { min-height: 110px; }
 .field-hint { font-size: 12px; color: var(--text-muted); }
+.upload-error {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--danger);
+  background: var(--danger-light);
+  border-radius: 8px;
+}
 .upload-shell { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .upload-btn { width: fit-content; cursor: pointer; }
 .file-hidden { display: none; }
@@ -774,26 +811,6 @@ const statusClass = (status: string) => {
 }
 
 .form-actions { display: flex; gap: 12px; align-items: flex-end; }
-
-.search-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
-  border-radius: 10px;
-  margin-bottom: 24px;
-  transition: all 0.2s ease;
-}
-
-.search-bar:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
-.search-bar svg { color: var(--text-secondary); flex-shrink: 0; }
-.search-bar input { flex: 1; border: none; background: transparent; font-size: 14px; color: var(--text-primary); outline: none; }
-.search-shell {
-  background: linear-gradient(180deg, var(--bg-card), var(--bg-primary));
-  border-radius: 12px;
-}
 
 .maintenance-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
 .maintenance-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 12px; overflow: hidden; transition: all 0.2s ease; }

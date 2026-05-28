@@ -239,6 +239,13 @@ watch(
   transition: all 0.2s ease;
   cursor: pointer;
   border-left: 3px solid transparent;
+  min-width: 0;
+}
+
+.nav-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nav-item svg {

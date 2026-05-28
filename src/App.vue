@@ -29,19 +29,32 @@
       @confirmed="confirm.onConfirmed"
       @cancel="confirm.onCancel"
     />
+
+    <ImageLightbox
+      :open="imageLightbox.state.open"
+      :attachments="imageLightbox.state.attachments"
+      :start-index="imageLightbox.state.startIndex"
+      :title="imageLightbox.state.title"
+      @close="imageLightbox.close"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import Sidebar from './components/Sidebar.vue'
 import Topbar from './components/Topbar.vue'
 import PasswordConfirmModal from './components/PasswordConfirmModal.vue'
+import ImageLightbox from './components/ImageLightbox.vue'
 import { useConfirmAction } from './composables/useConfirmAction'
+import { useImageLightbox } from './composables/useImageLightbox'
+import { setupGlobalImageZoom } from './composables/setupGlobalImageZoom'
 
 const confirm = useConfirmAction()
+const imageLightbox = useImageLightbox()
+let teardownImageZoom: (() => void) | undefined
 
 const authStore = useAuthStore()
 const route = useRoute()
@@ -78,6 +91,11 @@ const toggleTheme = () => {
 onMounted(() => {
   const storedTheme = localStorage.getItem('assetra-theme')
   applyTheme(storedTheme !== 'light')
+  teardownImageZoom = setupGlobalImageZoom(imageLightbox)
+})
+
+onUnmounted(() => {
+  teardownImageZoom?.()
 })
 </script>
 
@@ -153,6 +171,9 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 /* Quando há sidebar, aplica margem */
@@ -172,18 +193,23 @@ body {
 
 .content {
   flex: 1;
-  padding: 32px;
+  padding: clamp(14px, 3vw, 32px);
   background: var(--bg-primary);
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 @media (max-width: 1024px) {
   .app-shell:has(.sidebar) .main-wrapper {
     margin-left: 0;
+    width: 100%;
   }
-  .content { padding: 24px 20px; }
 }
 
-@media (max-width: 560px) {
-  .content { padding: 18px 14px; }
+@media (max-width: 480px) {
+  .content {
+    padding: 12px;
+  }
 }
 </style>

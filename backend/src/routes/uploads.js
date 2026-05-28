@@ -6,6 +6,11 @@ import multer from 'multer'
 import { authMiddleware, optionalAuthMiddleware } from '../middlewares/auth.js'
 import { buildUploadPublicUrl } from '../utils/publicApiUrl.js'
 import { signUploadFileToken, verifyUploadFileToken } from '../utils/uploadFileToken.js'
+import {
+  MAX_UPLOAD_FILE_BYTES,
+  MAX_UPLOAD_FILES,
+  formatUploadLimitLabel,
+} from '../config/uploadLimits.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.resolve(__dirname, '../../uploads')
@@ -43,8 +48,20 @@ const upload = multer({
 const router = Router()
 
 router.post('/', authMiddleware, (req, res, next) => {
-  upload.array('files', 6)(req, res, (err) => {
-    if (err) return next(err)
+  upload.array('files', MAX_UPLOAD_FILES)(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({
+          message: `Ficheiro demasiado grande. Limite por ficheiro: ${formatUploadLimitLabel()}.`,
+        })
+      }
+      if (err.code === 'LIMIT_FILE_COUNT') {
+        return res.status(400).json({
+          message: `Demasiados ficheiros. Máximo: ${MAX_UPLOAD_FILES}.`,
+        })
+      }
+      return next(err)
+    }
     const tenantId = String(req.user?.tenantId ?? '').trim()
     const uploaded = req.files ?? []
     if (!uploaded.length) {

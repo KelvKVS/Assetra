@@ -19,6 +19,10 @@ services:
         sync: false
       - key: API_PUBLIC_URL
         sync: false
+      - key: MAX_UPLOAD_FILE_BYTES
+        value: "838860800"
+      - key: MAX_UPLOAD_FILES
+        value: "6"
       - key: DATABASE_URL
         sync: false
       - key: MONGODB_URL
