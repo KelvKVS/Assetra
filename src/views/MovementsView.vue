@@ -93,10 +93,13 @@
       <p v-if="movementError" class="error-message">{{ movementError }}</p>
     </div>
 
-    <!-- Search Bar -->
     <div class="search-bar">
       <Search :size="18" :stroke-width="2" />
-      <input v-model.trim="search" type="text" placeholder="Buscar por ativo, origem, destino ou responsável..." />
+      <input
+        v-model.trim="pageSearch"
+        type="search"
+        placeholder="Buscar por ativo, origem, destino ou responsável..."
+      />
     </div>
 
     <!-- Timeline -->
@@ -185,6 +188,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { type MovementRow, useInventoryStore } from '../stores/inventory'
 import { useConfirmAction } from '../composables/useConfirmAction'
+import { useLocalPageSearch } from '../composables/useLocalPageSearch'
 import { useAuthStore } from '../stores/auth'
 import { movementsInvolvingUser } from '../utils/userScope'
 import {
@@ -201,9 +205,10 @@ import {
 const confirm = useConfirmAction()
 const authStore = useAuthStore()
 
+const { pageSearch, matchesPageSearch } = useLocalPageSearch()
+
 const showForm = ref(false)
 const movementError = ref('')
-const search = ref('')
 const editingMovementId = ref<string | null>(null)
 const isAssetInputFocused = ref(false)
 const isResponsibleInputFocused = ref(false)
@@ -286,15 +291,11 @@ const hideResponsibleSuggestions = () => {
   }, 120)
 }
 
-const filteredMovements = computed(() => {
-  const term = search.value.toLowerCase()
-  if (!term) return scopedMovements.value
-  return scopedMovements.value.filter((movement) =>
-    [movement.assetTag, movement.origin, movement.destination, movement.responsible].some((value) =>
-      value.toLowerCase().includes(term),
-    ),
-  )
-})
+const filteredMovements = computed(() =>
+  scopedMovements.value.filter((movement) =>
+    matchesPageSearch(movement.assetTag, movement.origin, movement.destination, movement.responsible),
+  ),
+)
 
 const addMovement = async () => {
   movementError.value = ''

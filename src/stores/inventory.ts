@@ -5,6 +5,7 @@ import { validateUploadFiles } from '../utils/uploadLimits'
 import type { Asset, AssetStatus, AttachmentRef } from '../types/assetra'
 import { normalizeAttachments } from '../utils/mediaUrl'
 import { useAuthStore } from './auth'
+import { useNotificationsStore } from './notifications'
 
 export type AssetWithId = Asset & { id: string }
 
@@ -253,10 +254,12 @@ export const useInventoryStore = defineStore('inventory', {
       } else {
         await this.fetchMyApprovalsSafe()
       }
+      void useNotificationsStore().fetchNotifications()
     },
     async respondApproval(id: string, decision: 'APPROVED' | 'REJECTED', notes?: string) {
       await api.post(`/approvals/${id}/respond`, { decision, notes })
       await Promise.all([this.fetchApprovals(), this.fetchAssets(), this.fetchMovements()])
+      void useNotificationsStore().fetchNotifications()
     },
     async fetchTasksSafe() {
       try {

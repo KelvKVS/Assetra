@@ -134,10 +134,13 @@
       <p v-if="formError" class="error-message">{{ formError }}</p>
     </div>
 
-    <!-- Search Bar -->
     <div class="search-bar">
       <Search :size="18" :stroke-width="2" />
-      <input v-model.trim="search" type="text" placeholder="Buscar por nome, e-mail ou perfil..." />
+      <input
+        v-model.trim="pageSearch"
+        type="search"
+        placeholder="Buscar por nome, e-mail ou perfil..."
+      />
     </div>
 
     <!-- Users Grid -->
@@ -282,6 +285,7 @@ import { assetsAssignedToEmail } from '../utils/userScope'
 import { roleLabelPt } from '../utils/roleLabels'
 import { isDemoAssetraEmail } from '../utils/emailPolicy'
 import { useConfirmAction } from '../composables/useConfirmAction'
+import { useLocalPageSearch } from '../composables/useLocalPageSearch'
 import PasswordInput from '../components/PasswordInput.vue'
 import { DEFAULT_DEPARTMENTS, DEPARTMENT_OTHER } from '../constants/departments'
 import {
@@ -300,8 +304,9 @@ const isAdmin = computed(() => authStore.user?.role === 'ADM')
 
 const confirm = useConfirmAction()
 
+const { pageSearch, matchesPageSearch } = useLocalPageSearch()
+
 const showForm = ref(false)
-const search = ref('')
 const formError = ref('')
 const editingUserId = ref<string | null>(null)
 const registrationMode = ref<'google' | 'demo'>('google')
@@ -441,15 +446,11 @@ onMounted(async () => {
   await inventory.fetchUsers()
 })
 
-const filteredUsers = computed(() => {
-  const term = search.value.toLowerCase()
-  if (!term) return inventory.users
-  return inventory.users.filter((user) =>
-    [user.name, user.email, user.role, user.status, user.department ?? ''].some((value) =>
-      value.toLowerCase().includes(term),
-    ),
-  )
-})
+const filteredUsers = computed(() =>
+  inventory.users.filter((user) =>
+    matchesPageSearch(user.name, user.email, user.role, user.status, user.department),
+  ),
+)
 
 const addUser = async () => {
   formError.value = ''

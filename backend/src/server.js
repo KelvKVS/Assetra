@@ -25,6 +25,7 @@ import taskRoutes from './routes/tasks.js'
 import uploadRoutes from './routes/uploads.js'
 import integrationRoutes from './routes/integrations.js'
 import reportRoutes from './routes/reports.js'
+import notificationRoutes from './routes/notifications.js'
 import { AppError } from './utils/AppError.js'
 import { getEventBusHealth } from './lib/eventBus.js'
 import { formatUploadLimitLabel } from './config/uploadLimits.js'
@@ -120,7 +121,9 @@ app.use((req, res, next) => {
               ? 'movements'
               : path.startsWith('/api/approvals')
                 ? 'approvals'
-                : path.startsWith('/api/tasks')
+                : path.startsWith('/api/notifications')
+                  ? 'notifications'
+                  : path.startsWith('/api/tasks')
                   ? 'tasks'
                   : path.startsWith('/api/uploads')
                     ? 'uploads'
@@ -198,6 +201,7 @@ app.use('/api/assets', assetRoutes)
 app.use('/api/maintenances', maintenanceRoutes)
 app.use('/api/movements', movementRoutes)
 app.use('/api/approvals', approvalRoutes)
+app.use('/api/notifications', notificationRoutes)
 app.use('/api/tasks', taskRoutes)
 app.use('/api/uploads', uploadRoutes)
 app.use('/api/integrations', integrationRoutes)

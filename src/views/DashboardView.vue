@@ -163,7 +163,7 @@
               <span class="status-badge status-pendente">{{ a.status }}</span>
             </li>
           </ul>
-          <p v-else class="muted">Sem pendências. 🎉</p>
+          <p v-else class="muted">Sem pendências.</p>
         </section>
 
         <section class="panel">

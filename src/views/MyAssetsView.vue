@@ -46,7 +46,11 @@
     <div class="list-toolbar">
       <div class="search-bar search-bar--page">
         <Search :size="18" :stroke-width="2" />
-        <input v-model.trim="searchQuery" type="search" placeholder="Buscar por tag, descrição ou setor..." />
+        <input
+          v-model.trim="pageSearch"
+          type="search"
+          placeholder="Buscar por tag, descrição ou setor..."
+        />
       </div>
       <div class="view-toggle" role="group" aria-label="Modo de visualização">
         <button type="button" class="view-toggle-btn" :class="{ active: viewMode === 'cards' }" @click="viewMode = 'cards'">
@@ -126,8 +130,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
-import { usePageSearch } from '../composables/usePageSearch'
+import { computed, onMounted } from 'vue'
+import { useLocalPageSearch } from '../composables/useLocalPageSearch'
 import { useAssetViewMode } from '../composables/useAssetViewMode'
 import { useAuthStore } from '../stores/auth'
 import { useInventoryStore } from '../stores/inventory'
@@ -144,29 +148,20 @@ const coverPhoto = (asset: Asset) => imageAttachments(asset.attachments)[0]
 const authStore = useAuthStore()
 const inventory = useInventoryStore()
 
-const { searchQuery, setPlaceholder, clear: clearSearch } = usePageSearch()
+const { pageSearch, matchesPageSearch } = useLocalPageSearch()
 const { viewMode } = useAssetViewMode()
 
 const userDepartment = computed(() => authStore.user?.department?.trim() || '')
 
 onMounted(() => {
-  setPlaceholder('Buscar nos meus ativos...')
   void inventory.fetchAssets()
-})
-
-onBeforeUnmount(() => {
-  clearSearch()
 })
 
 const myAssets = computed(() => assetsAssignedToEmail(inventory.assets, authStore.user?.email))
 
-const filteredAssets = computed(() => {
-  const term = searchQuery.value.toLowerCase()
-  if (!term) return myAssets.value
-  return myAssets.value.filter((asset) =>
-    [asset.tag, asset.description, asset.sector, asset.status].some((value) => value.toLowerCase().includes(term)),
-  )
-})
+const filteredAssets = computed(() =>
+  myAssets.value.filter((asset) => matchesPageSearch(asset.tag, asset.description, asset.sector, asset.status)),
+)
 
 const inUseCount = computed(() => myAssets.value.filter((asset) => asset.status === 'Em uso').length)
 const maintenanceCount = computed(() => myAssets.value.filter((asset) => asset.status === 'Em manutenção').length)

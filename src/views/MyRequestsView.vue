@@ -9,8 +9,13 @@
           Envie uma solicitação de <strong>manutenção</strong> de um ativo ou de
           <strong>movimentação entre setores</strong>. Pode anexar
           <strong>fotos / prints</strong> e a sua justificativa — o aprovador é
-          definido automaticamente pela hierarquia (Funcionário/Técnico → Gestor, Gestor → ADM).
+          definido automaticamente pela hierarquia abaixo.
         </p>
+        <div class="approval-flow" aria-label="Fluxo de aprovação">
+          <span class="approval-flow-step">Funcionário / Técnico</span>
+          <ArrowRight :size="16" :stroke-width="2.5" class="approval-flow-arrow" />
+          <span class="approval-flow-step">Gestor / ADM</span>
+        </div>
       </div>
       <div class="hero-stats">
         <div class="hero-stat">
@@ -46,7 +51,7 @@
           <ArrowRightLeft :size="32" :stroke-width="2.4" />
         </div>
         <h3>Trocar de Setor</h3>
-        <p>Movimentar um ativo de um setor para outro com aprovação do gestor.</p>
+        <p>Movimentar um ativo de um setor para outro com aprovação do gestor ou ADM.</p>
         <span class="choice-cta">
           Começar <ArrowRight :size="16" :stroke-width="2.5" />
         </span>
@@ -288,6 +293,16 @@
             <dt>Justificativa</dt>
             <dd class="feedback">{{ form.feedback }}</dd>
           </div>
+          <div>
+            <dt>Fluxo de aprovação</dt>
+            <dd>
+              <div class="approval-flow approval-flow--compact" aria-label="Encaminhamento da solicitação">
+                <span class="approval-flow-step">{{ requesterTierLabel }}</span>
+                <ArrowRight :size="14" :stroke-width="2.5" class="approval-flow-arrow" />
+                <span class="approval-flow-step approval-flow-step--target">{{ approverTierLabel }}</span>
+              </div>
+            </dd>
+          </div>
           <div v-if="previews.length">
             <dt>Anexos ({{ previews.length }})</dt>
             <dd>
@@ -326,7 +341,7 @@
         <div class="search-bar search-bar--page">
           <Search :size="18" :stroke-width="2" />
           <input
-            v-model.trim="searchQuery"
+            v-model.trim="pageSearch"
             type="search"
             placeholder="Buscar no histórico por ativo, descrição ou tipo..."
           />
@@ -401,20 +416,20 @@
 
       <div v-else class="empty-state">
         <Inbox :size="48" :stroke-width="1.5" />
-        <h4>Nenhuma solicitação ainda</h4>
-        <p>Crie a primeira clicando num dos cartões acima.</p>
+        <h4>{{ historyEmptyState.title }}</h4>
+        <p>{{ historyEmptyState.description }}</p>
       </div>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, type Component } from 'vue'
+import { computed, onMounted, reactive, ref, watch, type Component } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useInventoryStore, type AttachmentRef } from '../stores/inventory'
 import { useConfirmAction } from '../composables/useConfirmAction'
 import { useImageLightbox } from '../composables/useImageLightbox'
-import { usePageSearch } from '../composables/usePageSearch'
+import { useLocalPageSearch } from '../composables/useLocalPageSearch'
 import { UPLOAD_LIMITS_HINT, mergeUploadFiles } from '../utils/uploadLimits'
 import {
   Wrench,
@@ -454,7 +469,7 @@ type Preview = { name: string; src: string; kind: PreviewKind; file: File }
 const authStore = useAuthStore()
 const inventory = useInventoryStore()
 const confirm = useConfirmAction()
-const { searchQuery, setPlaceholder, clear: clearSearch } = usePageSearch()
+const { pageSearch, matchesPageSearch } = useLocalPageSearch()
 const uploadLimitsHint = UPLOAD_LIMITS_HINT
 
 const firstName = computed(() => authStore.user?.name?.split(' ')[0] ?? 'utilizador')
@@ -507,21 +522,71 @@ const counts = computed(() => ({
 
 const filter = ref<'all' | 'Pendente' | 'Aprovada' | 'Reprovada'>('all')
 const filteredHistory = computed(() => {
-  const term = searchQuery.value.toLowerCase()
-  let list = filter.value === 'all' ? myApprovals.value : myApprovals.value.filter((a) => a.status === filter.value)
-  if (!term) return list
-  return list.filter((a) =>
-    [a.assetTag, a.description, a.type, a.status, a.feedback ?? ''].some((v) => String(v).toLowerCase().includes(term)),
-  )
+  const list =
+    filter.value === 'all' ? myApprovals.value : myApprovals.value.filter((a) => a.status === filter.value)
+  return list.filter((a) => matchesPageSearch(a.assetTag, a.description, a.type, a.status, a.feedback))
+})
+
+const hasPageSearch = computed(() => pageSearch.value.trim().length > 0)
+const hasAnyRequests = computed(() => myApprovals.value.length > 0)
+
+const requesterTierLabel = computed(() => {
+  const role = authStore.user?.role
+  if (role === 'TECNICO') return 'Técnico'
+  if (role === 'FUNCIONARIO') return 'Funcionário'
+  if (role === 'GESTOR') return 'Gestor'
+  if (role === 'ADM') return 'Administrador'
+  return 'Solicitante'
+})
+
+const approverTierLabel = computed(() => {
+  const role = authStore.user?.role
+  if (role === 'GESTOR') return 'ADM'
+  return 'Gestor / ADM'
+})
+
+const historyEmptyState = computed(() => {
+  if (hasPageSearch.value) {
+    return {
+      title: 'Nenhum resultado na pesquisa',
+      description: `Não encontrámos solicitações para «${pageSearch.value.trim()}». Experimente outro termo ou limpe a pesquisa.`,
+    }
+  }
+
+  if (!hasAnyRequests.value) {
+    return {
+      title: 'Nenhuma solicitação ainda',
+      description: 'Crie a primeira clicando num dos cartões acima.',
+    }
+  }
+
+  const byFilter: Record<
+    'all' | 'Pendente' | 'Aprovada' | 'Reprovada',
+    { title: string; description: string }
+  > = {
+    all: {
+      title: 'Nenhuma solicitação no histórico',
+      description: 'Não há registos para mostrar com os filtros atuais.',
+    },
+    Pendente: {
+      title: 'Nenhuma solicitação pendente',
+      description: 'Não tem pedidos à espera de aprovação neste momento.',
+    },
+    Aprovada: {
+      title: 'Nenhuma solicitação aprovada',
+      description: 'Ainda não tem pedidos com estado aprovado no histórico.',
+    },
+    Reprovada: {
+      title: 'Nenhuma solicitação reprovada',
+      description: 'Não existem pedidos reprovados para consultar.',
+    },
+  }
+
+  return byFilter[filter.value]
 })
 
 onMounted(async () => {
-  setPlaceholder('Buscar nas suas solicitações...')
   await Promise.allSettled([inventory.fetchAssets(), inventory.fetchMyApprovalsSafe()])
-})
-
-onBeforeUnmount(() => {
-  clearSearch()
 })
 
 const openForm = (type: RequestType) => {
@@ -694,6 +759,39 @@ const onSubmit = async () => {
 .hero-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; color: var(--primary); text-transform: uppercase; }
 .hero h2 { margin: 6px 0 8px; font-size: 26px; color: var(--text-primary); }
 .hero p { margin: 0; color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
+
+.approval-flow {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-primary);
+}
+
+.approval-flow--compact {
+  margin-top: 0;
+  padding: 8px 12px;
+}
+
+.approval-flow-step {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+
+.approval-flow-step--target {
+  color: var(--primary);
+}
+
+.approval-flow-arrow {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
 
 .hero-stats { display: flex; gap: 12px; flex-wrap: wrap; }
 .hero-stat {

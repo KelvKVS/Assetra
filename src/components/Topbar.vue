@@ -48,45 +48,115 @@
 
 
 
-      <div class="search-box" :class="{ open: searchOpen }">
+      <div class="search-wrap" :class="{ open: searchOpen }">
 
-        <Search class="search-icon" :size="16" />
+        <div class="search-box">
 
-        <input
+          <Search class="search-icon" :size="16" />
 
-          ref="searchInputRef"
+          <input
 
-          v-model="searchQuery"
+            ref="searchInputRef"
 
-          type="search"
+            v-model="searchQuery"
 
-          :placeholder="searchPlaceholder"
+            type="search"
 
-          class="search-input"
+            placeholder="Busca rápida: ativos, pessoas, manutenções..."
 
-          autocomplete="off"
+            class="search-input"
 
-          @keydown.escape="closeSearch"
+            autocomplete="off"
 
-        />
+            role="combobox"
 
-        <button
+            :aria-expanded="showSearchPanel"
 
-          v-if="searchQuery"
+            aria-controls="global-search-results"
 
-          type="button"
+            @focus="onSearchFocus"
 
-          class="search-clear"
+            @input="onSearchInput"
 
-          aria-label="Limpar busca"
+            @keydown.escape="closeSearch"
 
-          @click="searchQuery = ''"
+          />
+
+          <button
+
+            v-if="searchQuery"
+
+            type="button"
+
+            class="search-clear"
+
+            aria-label="Limpar busca"
+
+            @click="clearSearch"
+
+          >
+
+            <X :size="14" />
+
+          </button>
+
+        </div>
+
+        <div
+
+          v-if="showSearchPanel"
+
+          id="global-search-results"
+
+          class="global-search-panel"
+
+          role="listbox"
 
         >
 
-          <X :size="14" />
+          <p v-if="searchLoading" class="global-search-status">A carregar dados...</p>
 
-        </button>
+          <p v-else-if="!groupedResults.length" class="global-search-status">Nenhum resultado para «{{ searchQuery.trim() }}»</p>
+
+          <template v-else>
+
+            <section v-for="group in groupedResults" :key="group.kind" class="global-search-group">
+
+              <h4 class="global-search-group-title">{{ group.label }}</h4>
+
+              <button
+
+                v-for="item in group.items"
+
+                :key="item.id"
+
+                type="button"
+
+                class="global-search-item"
+
+                role="option"
+
+                @mousedown.prevent="selectSearchResult(item)"
+
+              >
+
+                <component :is="kindIcon(group.kind)" :size="16" :stroke-width="2" class="global-search-item-icon" />
+
+                <span class="global-search-item-text">
+
+                  <span class="global-search-item-title">{{ item.title }}</span>
+
+                  <span class="global-search-item-sub">{{ item.subtitle }}</span>
+
+                </span>
+
+              </button>
+
+            </section>
+
+          </template>
+
+        </div>
 
       </div>
 
@@ -102,6 +172,8 @@
 
             type="button"
 
+            :aria-expanded="notificationsOpen"
+
             @click="toggleNotifications"
 
             aria-label="Abrir notificações"
@@ -114,15 +186,49 @@
 
           </button>
 
-          <div v-if="notificationsOpen" class="notif-dropdown">
+          <button
+
+            v-if="notificationsOpen"
+
+            type="button"
+
+            class="notif-backdrop"
+
+            aria-label="Fechar notificações"
+
+            @click="closeNotifications"
+
+          />
+
+          <div v-if="notificationsOpen" class="notif-dropdown" role="dialog" aria-label="Notificações">
 
             <div class="notif-header">
 
               <strong>Notificações</strong>
 
-              <small>{{ unreadCount }} novas</small>
+              <small v-if="unreadCount > 0">{{ unreadCount }} novas</small>
+
+              <small v-else>Tudo em dia</small>
+
+              <button
+
+                v-if="notifications.length"
+
+                type="button"
+
+                class="notif-mark-read"
+
+                @click="markAllAsRead"
+
+              >
+
+                Marcar lidas
+
+              </button>
 
             </div>
+
+            <p v-if="notificationsStore.loading" class="notif-empty">A carregar...</p>
 
             <button
 
@@ -132,6 +238,8 @@
 
               class="notif-item"
 
+              :class="{ unread: isUnread(notification) }"
+
               type="button"
 
               @click="openNotification(notification)"
@@ -139,6 +247,8 @@
             >
 
               <div class="notif-title">{{ notification.title }}</div>
+
+              <p v-if="notification.message" class="notif-message">{{ notification.message }}</p>
 
               <div class="notif-meta">
 
@@ -150,7 +260,11 @@
 
             </button>
 
-            <p v-if="notifications.length === 0" class="notif-empty">Sem novidades no momento.</p>
+            <p v-if="!notificationsStore.loading && notifications.length === 0" class="notif-empty">
+
+              Sem novidades no momento.
+
+            </p>
 
           </div>
 
@@ -194,21 +308,31 @@ import { useRouter } from 'vue-router'
 
 import { useAuthStore } from '../stores/auth'
 
-import { useInventoryStore } from '../stores/inventory'
+import { useNotificationsStore, type NotificationItem } from '../stores/notifications'
 
 import { roleLabelPt } from '../utils/roleLabels'
 
 import { useSidebar } from '../composables/useSidebar'
 
-import { usePageSearch } from '../composables/usePageSearch'
+import { useGlobalSearch, type GlobalSearchItem, type GlobalSearchKind } from '../composables/useGlobalSearch'
 
-import { Search, LogOut, Menu, Bell, X } from 'lucide-vue-next'
+import { Search, LogOut, Menu, Bell, X, User, Monitor, Wrench, ArrowLeftRight, ClipboardCheck, FileText } from 'lucide-vue-next'
 
 
 
 const sidebar = useSidebar()
 
-const { searchQuery, searchPlaceholder } = usePageSearch()
+const {
+  searchQuery,
+  groupedResults,
+  hasQuery,
+  ensureData,
+  openResult,
+  clear: clearGlobalSearch,
+} = useGlobalSearch()
+
+const searchLoading = ref(false)
+const showSearchPanel = computed(() => searchOpen.value && hasQuery.value)
 
 
 
@@ -222,7 +346,7 @@ defineProps<{
 
 const authStore = useAuthStore()
 
-const inventoryStore = useInventoryStore()
+const notificationsStore = useNotificationsStore()
 
 const router = useRouter()
 
@@ -238,21 +362,15 @@ let notificationsTimer: ReturnType<typeof setInterval> | null = null
 
 const readNotificationIds = ref<string[]>([])
 
+const lastSeenAt = ref(0)
 
 
-type UiNotification = {
 
-  id: string
-
-  title: string
-
-  sender: string
+type UiNotification = NotificationItem & {
 
   timeLabel: string
 
   timestamp: number
-
-  route: string
 
 }
 
@@ -264,85 +382,43 @@ const userInitial = computed(() => authStore.user?.name?.charAt(0).toUpperCase()
 
 const roleLabel = computed(() => roleLabelPt(authStore.user?.role))
 
-const canApprove = computed(() => ['ADM', 'GESTOR'].includes(String(authStore.user?.role ?? '').trim().toUpperCase()))
+const notifications = computed<UiNotification[]>(() =>
 
+  notificationsStore.items
 
+    .map((item) => ({
 
-const notifications = computed<UiNotification[]>(() => {
+      ...item,
 
-  const items: UiNotification[] = []
+      timeLabel: formatDateTime(item.createdAt),
 
-  const role = authStore.user?.role
+      timestamp: parseDate(item.createdAt),
 
+    }))
 
-
-  if (role === 'ADM' || role === 'GESTOR') {
-
-    for (const approval of inventoryStore.approvals.filter((a) => a.status === 'Pendente')) {
-
-      items.push({
-
-        id: `approval-pending-${approval.id}`,
-
-        title: `${approval.type} pendente: ${approval.assetTag}`,
-
-        sender: approval.requestedByName || 'Utilizador',
-
-        timeLabel: formatDateTime(approval.createdAt),
-
-        timestamp: parseDate(approval.createdAt),
-
-        route: '/aprovacoes',
-
-      })
-
-    }
-
-  }
-
-
-
-  for (const approval of inventoryStore.myApprovals.filter((a) => a.status !== 'Pendente')) {
-
-    items.push({
-
-      id: `approval-mine-${approval.id}`,
-
-      title: `Solicitação ${approval.status.toLowerCase()}: ${approval.assetTag}`,
-
-      sender: approval.decidedByName || 'Gestão',
-
-      timeLabel: formatDateTime(approval.decidedAt || approval.createdAt),
-
-      timestamp: parseDate(approval.decidedAt || approval.createdAt),
-
-      route: '/solicitacoes',
-
-    })
-
-  }
-
-
-
-  return items
-
-    .sort((a, b) => b.timestamp - a.timestamp)
-
-    .slice(0, 20)
-
-})
-
-
-
-const unreadCount = computed(
-
-  () => notifications.value.filter((n) => !readNotificationIds.value.includes(n.id)).length,
+    .sort((a, b) => b.timestamp - a.timestamp),
 
 )
 
 
 
+function isUnread(notification: UiNotification) {
+
+  if (readNotificationIds.value.includes(notification.id)) return false
+
+  return notification.timestamp > lastSeenAt.value
+
+}
+
+
+
+const unreadCount = computed(() => notifications.value.filter((n) => isUnread(n)).length)
+
+
+
 const readStorageKey = computed(() => `assetra-read-notifications:${authStore.user?.id ?? 'guest'}`)
+
+const seenStorageKey = computed(() => `assetra-notifications-seen:${authStore.user?.id ?? 'guest'}`)
 
 
 
@@ -382,15 +458,75 @@ function parseDate(raw?: string | null) {
 
 
 
+function kindIcon(kind: GlobalSearchKind) {
+  const map = {
+    user: User,
+    asset: Monitor,
+    maintenance: Wrench,
+    movement: ArrowLeftRight,
+    approval: ClipboardCheck,
+    request: FileText,
+  }
+  return map[kind]
+}
+
+async function loadSearchData() {
+  searchLoading.value = true
+  try {
+    await ensureData()
+  } finally {
+    searchLoading.value = false
+  }
+}
+
+async function onSearchFocus() {
+  searchOpen.value = true
+  await loadSearchData()
+}
+
+async function onSearchInput() {
+  searchOpen.value = true
+  if (hasQuery.value) await loadSearchData()
+}
+
+function clearSearch() {
+  clearGlobalSearch()
+}
+
 async function toggleSearch() {
-
   searchOpen.value = !searchOpen.value
-
   if (searchOpen.value) {
-
     await nextTick()
-
     searchInputRef.value?.focus()
+    await loadSearchData()
+  }
+}
+
+function selectSearchResult(item: GlobalSearchItem) {
+  openResult(item)
+  closeSearch()
+}
+
+function closeSearch() {
+  searchOpen.value = false
+  clearGlobalSearch()
+}
+
+
+
+function closeNotifications() {
+
+  notificationsOpen.value = false
+
+}
+
+function toggleNotifications() {
+
+  notificationsOpen.value = !notificationsOpen.value
+
+  if (notificationsOpen.value) {
+
+    void refreshNotifications()
 
   }
 
@@ -398,29 +534,27 @@ async function toggleSearch() {
 
 
 
-function closeSearch() {
-
-  searchOpen.value = false
-
-}
-
-
-
-function toggleNotifications() {
-
-  notificationsOpen.value = !notificationsOpen.value
-
-  if (notificationsOpen.value) markAllAsRead()
-
-}
-
-
-
 function openNotification(notification: UiNotification) {
+
+  markNotificationRead(notification.id)
 
   notificationsOpen.value = false
 
   router.push(notification.route)
+
+}
+
+
+
+function markNotificationRead(id: string) {
+
+  if (!readNotificationIds.value.includes(id)) {
+
+    readNotificationIds.value = [...readNotificationIds.value, id]
+
+    persistReadState()
+
+  }
 
 }
 
@@ -432,18 +566,18 @@ function onClickOutside(event: MouseEvent) {
 
   if (!target) return
 
-  if (notificationsRef.value && !notificationsRef.value.contains(target)) {
+  const inNotifications = (target as Element).closest?.('.notifications, .notif-backdrop')
 
-    notificationsOpen.value = false
+  if (!inNotifications && notificationsOpen.value) {
+
+    closeNotifications()
 
   }
 
-  const inSearch = (target as Element).closest?.('.search-box, .search-toggle')
+  const inSearch = (target as Element).closest?.('.search-wrap, .search-toggle')
 
   if (!inSearch && searchOpen.value) {
-
-    searchOpen.value = false
-
+    closeSearch()
   }
 
 }
@@ -455,6 +589,8 @@ function persistReadState() {
   try {
 
     localStorage.setItem(readStorageKey.value, JSON.stringify(readNotificationIds.value))
+
+    localStorage.setItem(seenStorageKey.value, String(lastSeenAt.value))
 
   } catch {
 
@@ -476,17 +612,23 @@ function loadReadState() {
 
       readNotificationIds.value = []
 
-      return
+    } else {
+
+      const parsed = JSON.parse(raw)
+
+      readNotificationIds.value = Array.isArray(parsed) ? parsed : []
 
     }
 
-    const parsed = JSON.parse(raw)
+    const seenRaw = localStorage.getItem(seenStorageKey.value)
 
-    readNotificationIds.value = Array.isArray(parsed) ? parsed : []
+    lastSeenAt.value = seenRaw ? Number(seenRaw) || 0 : 0
 
   } catch {
 
     readNotificationIds.value = []
+
+    lastSeenAt.value = 0
 
   }
 
@@ -500,7 +642,17 @@ function markAllAsRead() {
 
   readNotificationIds.value = Array.from(new Set([...readNotificationIds.value, ...allIds]))
 
+  lastSeenAt.value = Date.now()
+
   persistReadState()
+
+}
+
+
+
+async function refreshNotifications() {
+
+  await notificationsStore.fetchNotifications()
 
 }
 
@@ -514,27 +666,13 @@ onMounted(async () => {
 
   loadReadState()
 
-  const refreshNotifications = async () => {
-
-    if (canApprove.value) {
-
-      await Promise.allSettled([inventoryStore.fetchApprovalsSafe(), inventoryStore.fetchMyApprovalsSafe()])
-
-      return
-
-    }
-
-    await inventoryStore.fetchMyApprovalsSafe()
-
-  }
-
   await refreshNotifications()
 
   notificationsTimer = setInterval(() => {
 
     void refreshNotifications()
 
-  }, 45_000)
+  }, 30_000)
 
 })
 
@@ -552,6 +690,8 @@ onBeforeUnmount(() => {
 
 const handleLogout = async () => {
 
+  notificationsStore.clear()
+
   await authStore.logout()
 
   router.push('/login')
@@ -565,6 +705,8 @@ const handleLogout = async () => {
 <style scoped>
 
 .topbar {
+
+  --assetra-topbar-h: clamp(52px, 13vw, 64px);
 
   background: #111827;
 
@@ -714,6 +856,18 @@ const handleLogout = async () => {
 
 
 
+.search-wrap {
+
+  position: relative;
+
+  display: flex;
+
+  align-items: flex-start;
+
+}
+
+
+
 .search-box {
 
   position: relative;
@@ -721,6 +875,154 @@ const handleLogout = async () => {
   display: flex;
 
   align-items: center;
+
+}
+
+
+
+.global-search-panel {
+
+  position: absolute;
+
+  top: calc(100% + 8px);
+
+  right: 0;
+
+  width: min(420px, 92vw);
+
+  max-height: min(70vh, 480px);
+
+  overflow-y: auto;
+
+  background: #1f2937;
+
+  border: 1px solid #374151;
+
+  border-radius: 12px;
+
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+
+  z-index: 70;
+
+  padding: 6px 0;
+
+}
+
+
+
+.global-search-status {
+
+  padding: 12px 14px;
+
+  color: #9ca3af;
+
+  font-size: 13px;
+
+  margin: 0;
+
+}
+
+
+
+.global-search-group-title {
+
+  font-size: 11px;
+
+  text-transform: uppercase;
+
+  letter-spacing: 0.06em;
+
+  color: #6b7280;
+
+  margin: 8px 12px 4px;
+
+  font-weight: 600;
+
+}
+
+
+
+.global-search-item {
+
+  display: flex;
+
+  align-items: flex-start;
+
+  gap: 10px;
+
+  width: 100%;
+
+  text-align: left;
+
+  padding: 10px 12px;
+
+  border: none;
+
+  border-radius: 8px;
+
+  background: transparent;
+
+  color: #fff;
+
+  cursor: pointer;
+
+}
+
+
+
+.global-search-item:hover {
+
+  background: #374151;
+
+}
+
+
+
+.global-search-item-text {
+
+  min-width: 0;
+
+}
+
+
+
+.global-search-item-title {
+
+  display: block;
+
+  font-size: 14px;
+
+  font-weight: 600;
+
+  line-height: 1.3;
+
+}
+
+
+
+.global-search-item-sub {
+
+  display: block;
+
+  font-size: 12px;
+
+  color: #9ca3af;
+
+  margin-top: 2px;
+
+  line-height: 1.35;
+
+}
+
+
+
+.global-search-item-icon {
+
+  flex-shrink: 0;
+
+  color: #60a5fa;
+
+  margin-top: 2px;
 
 }
 
@@ -890,6 +1192,14 @@ const handleLogout = async () => {
 
 
 
+.notif-backdrop {
+
+  display: none;
+
+}
+
+
+
 .notif-btn {
 
   display: flex;
@@ -962,15 +1272,19 @@ const handleLogout = async () => {
 
   position: absolute;
 
-  top: 44px;
+  top: calc(100% + 8px);
 
   right: 0;
 
-  width: 320px;
+  width: min(320px, calc(100vw - 24px));
 
-  max-height: 380px;
+  max-height: min(380px, calc(100dvh - 96px));
 
   overflow-y: auto;
+
+  overscroll-behavior: contain;
+
+  -webkit-overflow-scrolling: touch;
 
   background: #111827;
 
@@ -980,7 +1294,7 @@ const handleLogout = async () => {
 
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
 
-  z-index: 30;
+  z-index: 120;
 
 }
 
@@ -990,15 +1304,49 @@ const handleLogout = async () => {
 
   display: flex;
 
+  flex-wrap: wrap;
+
   justify-content: space-between;
 
   align-items: center;
+
+  gap: 6px 10px;
 
   padding: 10px 12px;
 
   border-bottom: 1px solid #1f2937;
 
   color: #e5e7eb;
+
+}
+
+
+
+.notif-mark-read {
+
+  margin-left: auto;
+
+  border: none;
+
+  background: transparent;
+
+  color: #60a5fa;
+
+  font-size: 12px;
+
+  font-weight: 600;
+
+  cursor: pointer;
+
+  padding: 0;
+
+}
+
+
+
+.notif-mark-read:hover {
+
+  text-decoration: underline;
 
 }
 
@@ -1034,11 +1382,35 @@ const handleLogout = async () => {
 
 
 
+.notif-item.unread {
+
+  background: rgba(59, 130, 246, 0.12);
+
+  border-left: 3px solid #3b82f6;
+
+}
+
+
+
 .notif-title {
 
   font-size: 13px;
 
   font-weight: 600;
+
+}
+
+
+
+.notif-message {
+
+  margin: 4px 0 0;
+
+  font-size: 12px;
+
+  color: #d1d5db;
+
+  line-height: 1.4;
 
 }
 
@@ -1178,7 +1550,51 @@ const handleLogout = async () => {
 
   .search-toggle { display: flex; }
 
-  .search-box {
+  .topbar,
+  .topbar-right,
+  .user-profile,
+  .notifications {
+    overflow: visible;
+  }
+
+  .topbar-right {
+
+    position: relative;
+
+  }
+
+  .notif-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 199;
+    border: none;
+    padding: 0;
+    margin: 0;
+    background: rgba(15, 23, 42, 0.55);
+    cursor: pointer;
+  }
+
+  .notif-dropdown {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + var(--assetra-topbar-h, 56px));
+    right: 0;
+    left: 0;
+    bottom: auto;
+    width: 100%;
+    max-width: none;
+    max-height: min(
+      78dvh,
+      calc(100dvh - var(--assetra-topbar-h, 56px) - env(safe-area-inset-top, 0px) - 12px)
+    );
+    z-index: 200;
+    border-radius: 0 0 16px 16px;
+    border-top: none;
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.35);
+    animation: notif-slide-down 0.22s ease-out;
+  }
+
+  .search-wrap {
 
     position: absolute;
 
@@ -1192,17 +1608,29 @@ const handleLogout = async () => {
 
     z-index: 60;
 
+    flex-direction: column;
+
   }
 
-  .search-box.open {
+  .search-wrap.open {
 
     display: flex;
 
   }
 
-  .search-box.open .search-input {
+  .search-wrap.open .search-input {
 
     width: 100%;
+
+  }
+
+  .global-search-panel {
+
+    position: static;
+
+    width: 100%;
+
+    margin-top: 6px;
 
   }
 
@@ -1224,11 +1652,36 @@ const handleLogout = async () => {
 
 
 
+@keyframes notif-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 640px) {
 
   .user-info { display: none; }
 
   .user-profile { padding: 4px 6px; gap: 6px; }
+
+  .topbar {
+    --assetra-topbar-h: 52px;
+  }
+
+  .notif-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .notif-meta span:last-child {
+    align-self: flex-end;
+  }
 
 }
 

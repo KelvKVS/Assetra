@@ -146,7 +146,7 @@
       <div class="search-bar search-bar--page">
         <Search :size="18" :stroke-width="2" />
         <input
-          v-model.trim="searchQuery"
+          v-model.trim="pageSearch"
           type="search"
           placeholder="Buscar por tag, descrição, setor ou responsável..."
         />
@@ -394,7 +394,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { usePageSearch } from '../composables/usePageSearch'
+import { useLocalPageSearch } from '../composables/useLocalPageSearch'
 import { useAssetViewMode } from '../composables/useAssetViewMode'
 import { type Asset, type AssetStatus, type AttachmentRef } from '../types/assetra'
 import { useAuthStore } from '../stores/auth'
@@ -417,7 +417,7 @@ const authStore = useAuthStore()
 const assignedFilter = computed(() => String(route.query.assigned ?? '').trim().toLowerCase())
 const canManageAssets = computed(() => ['ADM', 'GESTOR'].includes(authStore.user?.role ?? ''))
 
-const { searchQuery, setPlaceholder, clear: clearSearch } = usePageSearch()
+const { pageSearch, matchesPageSearch } = useLocalPageSearch()
 const { viewMode } = useAssetViewMode()
 const statusFilter = ref<'all' | AssetStatus>('all')
 
@@ -451,17 +451,13 @@ const newAsset = reactive<Asset>({
 })
 
 const filteredAssets = computed(() => {
-  const term = searchQuery.value.toLowerCase()
   return assets.value.filter((asset) => {
     if (assignedFilter.value) {
       const email = (asset.assignedTo ?? '').trim().toLowerCase()
       if (email !== assignedFilter.value) return false
     }
     if (statusFilter.value !== 'all' && asset.status !== statusFilter.value) return false
-    if (!term) return true
-    return [asset.tag, asset.description, asset.sector, asset.status, asset.assignedTo ?? ''].some((value) =>
-      String(value).toLowerCase().includes(term),
-    )
+    return matchesPageSearch(asset.tag, asset.description, asset.sector, asset.status, asset.assignedTo)
   })
 })
 const availableUsers = computed(() => inventory.users.filter((u) => u.status === 'Ativo'))
@@ -489,16 +485,11 @@ const usageStats = computed(() => ({
 }))
 
 onMounted(async () => {
-  setPlaceholder('Buscar ativos (tag, descrição, setor...)')
   try {
     await Promise.all([inventory.fetchAssets(), inventory.fetchUsers()])
   } catch {
     formError.value = inventory.error || 'Não foi possível carregar os ativos.'
   }
-})
-
-onBeforeUnmount(() => {
-  clearSearch()
 })
 const pickCreateResponsible = (email: string) => {
   newAsset.assignedTo = email

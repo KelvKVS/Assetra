@@ -34,7 +34,11 @@
 
     <div class="search-bar">
       <Search :size="18" :stroke-width="2" />
-      <input v-model.trim="search" type="text" placeholder="Buscar por tipo, ativo, descrição ou solicitante..." />
+      <input
+        v-model.trim="pageSearch"
+        type="search"
+        placeholder="Buscar por tipo, ativo, descrição ou solicitante..."
+      />
     </div>
 
     <div class="filter-tabs">
@@ -94,7 +98,7 @@
             <span v-if="item.requestedByName"><User :size="12" /> {{ item.requestedByName }}</span>
             <span v-if="item.requiredApproverRole">
               <ShieldCheck :size="12" />
-              Aprovação: {{ item.requiredApproverRole }}
+              Aprovação: {{ formatApproverRole(item.requiredApproverRole) }}
             </span>
             <span v-if="item.decidedByName">
               <ShieldCheck :size="12" />
@@ -136,8 +140,8 @@
 
     <div v-if="filteredApprovals.length === 0" class="empty-state">
       <ClipboardCheck :size="64" :stroke-width="1.5" class="empty-icon" />
-      <h3>Nenhuma aprovação encontrada</h3>
-      <p>Nada para revisar no momento.</p>
+      <h3>{{ listEmptyState.title }}</h3>
+      <p>{{ listEmptyState.description }}</p>
     </div>
   </div>
 </template>
@@ -147,6 +151,7 @@ import { computed, onMounted, reactive, ref, type Component } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useInventoryStore, type ApprovalRow } from '../stores/inventory'
 import { useConfirmAction } from '../composables/useConfirmAction'
+import { useLocalPageSearch } from '../composables/useLocalPageSearch'
 import { useImageLightbox } from '../composables/useImageLightbox'
 import type { AttachmentRef } from '../types/assetra'
 import {
@@ -178,7 +183,7 @@ onMounted(async () => {
   await Promise.allSettled([inventory.fetchApprovalsSafe(), inventory.fetchAssets(), inventory.fetchUsers()])
 })
 
-const search = ref('')
+const { pageSearch, matchesPageSearch } = useLocalPageSearch()
 const filter = ref<'all' | ApprovalStatus>('all')
 const reassignmentTargetByApprovalId = reactive<Record<string, string>>({})
 
@@ -193,18 +198,44 @@ const filteredApprovals = computed(() => {
   if (filter.value !== 'all') {
     items = items.filter((item) => item.status === filter.value)
   }
-  const term = search.value.toLowerCase()
-  if (!term) return items
   return items.filter((item) =>
-    [
-      item.type,
-      item.assetTag,
-      item.description,
-      item.status,
-      item.requestedByName ?? '',
-      item.feedback ?? '',
-    ].some((value) => String(value).toLowerCase().includes(term)),
+    matchesPageSearch(item.type, item.assetTag, item.description, item.status, item.requestedByName, item.feedback),
   )
+})
+
+const hasPageSearch = computed(() => pageSearch.value.trim().length > 0)
+
+const listEmptyState = computed(() => {
+  if (hasPageSearch.value) {
+    return {
+      title: 'Nenhum resultado na pesquisa',
+      description: `Não encontrámos aprovações para «${pageSearch.value.trim()}». Experimente outro termo ou limpe a pesquisa.`,
+    }
+  }
+
+  const byFilter: Record<
+    'all' | ApprovalStatus,
+    { title: string; description: string }
+  > = {
+    all: {
+      title: 'Nenhuma solicitação registada',
+      description: 'Quando alguém enviar uma solicitação, ela aparecerá aqui para revisão.',
+    },
+    Pendente: {
+      title: 'Nenhuma aprovação pendente',
+      description: 'Não há solicitações à espera de decisão neste momento.',
+    },
+    Aprovada: {
+      title: 'Nenhuma aprovação aprovada',
+      description: 'Ainda não existem solicitações com estado aprovado para consultar.',
+    },
+    Reprovada: {
+      title: 'Nenhuma aprovação reprovada',
+      description: 'Não existem solicitações reprovadas para consultar.',
+    },
+  }
+
+  return byFilter[filter.value]
 })
 
 const setStatus = async (item: ApprovalRow, decision: 'APPROVED' | 'REJECTED') => {
@@ -249,6 +280,13 @@ const typeClass = (type: string) =>
 
 const statusClass = (status: string) =>
   status.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(' ', '-')
+
+function formatApproverRole(role?: string) {
+  const normalized = String(role ?? '').trim().toUpperCase()
+  if (normalized === 'GESTOR') return 'Gestor / ADM'
+  if (normalized === 'ADM') return 'Administrador (ADM)'
+  return role ?? ''
+}
 
 const typeIcon = (type: string): Component => (type.includes('Moviment') ? ArrowRightLeft : Wrench)
 

@@ -172,12 +172,11 @@
       </form>
     </div>
 
-    <!-- Busca -->
     <div class="list-toolbar">
       <div class="search-bar search-bar--page">
         <Search :size="18" :stroke-width="2" />
         <input
-          v-model.trim="searchQuery"
+          v-model.trim="pageSearch"
           type="search"
           placeholder="Buscar por ativo, tipo, descrição ou técnico..."
         />
@@ -339,8 +338,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { usePageSearch } from '../composables/usePageSearch'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useLocalPageSearch } from '../composables/useLocalPageSearch'
 import { type AttachmentRef, type MaintenanceRow, useInventoryStore } from '../stores/inventory'
 import { useConfirmAction } from '../composables/useConfirmAction'
 import { UPLOAD_LIMITS_HINT, mergeUploadFiles } from '../utils/uploadLimits'
@@ -366,7 +365,7 @@ const uploadLimitsHint = UPLOAD_LIMITS_HINT
 const confirm = useConfirmAction()
 const authStore = useAuthStore()
 
-const { searchQuery, setPlaceholder, clear: clearSearch } = usePageSearch()
+const { pageSearch, matchesPageSearch } = useLocalPageSearch()
 
 const showForm = ref(false)
 const showBulkAssign = ref(false)
@@ -402,14 +401,9 @@ const editMaintenance = reactive({
 const inventory = useInventoryStore()
 
 onMounted(() => {
-  setPlaceholder('Buscar manutenções (ativo, tipo, técnico...)')
   void inventory.fetchMaintenances()
   void inventory.fetchAssets()
   void inventory.fetchUsers()
-})
-
-onBeforeUnmount(() => {
-  clearSearch()
 })
 
 const isTechnician = computed(() => authStore.user?.role === 'TECNICO')
@@ -495,15 +489,18 @@ const maintenanceStats = computed(() => ({
   inProgress: inventory.maintenances.filter((m) => m.status === 'Em andamento').length,
 }))
 
-const filteredMaintenances = computed(() => {
-  const term = searchQuery.value.toLowerCase()
-  if (!term) return scopedMaintenances.value
-  return scopedMaintenances.value.filter((item) =>
-    [item.assetTag, item.type, item.description, item.status, item.assignedTechnicianEmail ?? ''].some((value) =>
-      String(value).toLowerCase().includes(term),
+const filteredMaintenances = computed(() =>
+  scopedMaintenances.value.filter((item) =>
+    matchesPageSearch(
+      item.assetTag,
+      item.type,
+      item.description,
+      item.status,
+      item.assignedTechnicianEmail,
+      item.assignedTechnicianName,
     ),
-  )
-})
+  ),
+)
 
 const addMaintenance = async () => {
   const ok = await confirm.ask('Confirme com a sua senha para abrir este chamado de manutenção.')
