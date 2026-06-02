@@ -2,18 +2,31 @@ import axios from 'axios'
 
 const defaultApiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || '/api'
 
+/** Backend Render em produção (fallback se .env.production não for aplicado). */
+const PROD_RENDER_API = 'https://assetra-44la.onrender.com/api'
+
 /** Timeout para uploads grandes (800 MB em ligações lentas). */
 const UPLOAD_TIMEOUT_MS = 2 * 60 * 60 * 1000
 
 /**
  * Em produção na Vercel, POST /api passa pelo proxy (~4,5 MB).
- * Defina VITE_API_UPLOAD_BASE_URL com a URL direta do Render, ex.:
- * https://assetra-44la.onrender.com/api
+ * Leitura de anexos deve ir direto ao Render (VITE_API_UPLOAD_BASE_URL ou .env.production).
  */
 export function resolveUploadApiBaseUrl(): string {
   const direct = (import.meta.env.VITE_API_UPLOAD_BASE_URL as string | undefined)?.trim()
   if (direct) return direct.replace(/\/+$/, '')
-  return defaultApiBase
+
+  const apiBase = defaultApiBase.replace(/\/+$/, '')
+  if (apiBase.startsWith('http')) return apiBase
+
+  if (import.meta.env.PROD && typeof window !== 'undefined') {
+    const host = window.location.hostname
+    if (host.endsWith('.vercel.app') || host.includes('assetra')) {
+      return PROD_RENDER_API
+    }
+  }
+
+  return apiBase || '/api'
 }
 
 let sessionToken = ''

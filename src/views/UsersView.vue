@@ -18,7 +18,18 @@
       v-if="emailSetup && !emailSetup.realInboxDelivery"
       class="page-notice page-notice-warn"
     >
-      <p><strong>E-mail em modo teste.</strong> {{ emailSetup.message }}</p>
+      <p><strong>E-mail não entrega em produção.</strong> {{ emailSetup.message }}</p>
+      <p v-if="emailSetup.missing?.length" class="page-notice-hint">
+        Variáveis em falta no Render: {{ emailSetup.missing.join(', ') }}
+      </p>
+      <button
+        type="button"
+        class="btn-secondary btn-email-test"
+        :disabled="emailTestSending"
+        @click="sendEmailTest"
+      >
+        {{ emailTestSending ? 'A enviar…' : 'Enviar e-mail de teste para mim' }}
+      </button>
     </div>
 
     <div
@@ -392,11 +403,14 @@ const emailSetup = ref<{
   mode: string
   realInboxDelivery: boolean
   message: string
+  missing?: string[]
 } | null>(null)
+const emailTestSending = ref(false)
 
 function applyInviteResult(data: {
   emailSent?: boolean
   emailTestOnly?: boolean
+  emailDeliveryMode?: string
   emailHint?: string
   emailError?: string | null
   confirmUrl?: string
@@ -404,13 +418,24 @@ function applyInviteResult(data: {
 }, actionLabel: string) {
   const testOnly = Boolean(data.emailTestOnly)
   const sentReal = Boolean(data.emailSent)
+  const pending = data.emailDeliveryMode === 'pending'
+
+  let text: string
+  if (sentReal) {
+    text = `${actionLabel}. E-mail enviado para a caixa de entrada do colaborador.`
+  } else if (testOnly) {
+    text = `${actionLabel}. E-mail em modo TESTE — não chega ao Gmail do colaborador.`
+  } else if (pending && data.emailHint) {
+    text = `${actionLabel}. ${data.emailHint}`
+  } else if (data.emailHint) {
+    text = `${actionLabel}. ${data.emailHint}`
+  } else {
+    text = `${actionLabel}. E-mail não enviado — use os links abaixo.`
+  }
+
   pageNotice.value = {
-    text: sentReal
-      ? `${actionLabel}. E-mail enviado para a caixa de entrada do colaborador.`
-      : testOnly
-        ? `${actionLabel}. E-mail em modo TESTE — não chega ao Gmail do colaborador.`
-        : `${actionLabel}. E-mail não enviado — use os links abaixo.`,
-    hint: data.emailError || data.emailHint,
+    text,
+    hint: data.emailError || undefined,
     previewUrl: data.emailPreviewUrl ?? undefined,
     confirmUrl: !sentReal ? data.confirmUrl : undefined,
     testOnly,
@@ -566,6 +591,39 @@ async function checkEmailAvailability() {
   }
 }
 
+async function loadEmailSetup() {
+  if (!isAdmin.value) return
+  try {
+    const { data } = await api.get<{
+      mode: string
+      realInboxDelivery: boolean
+      message: string
+      missing?: string[]
+    }>('/users/email-setup')
+    emailSetup.value = data
+  } catch {
+    emailSetup.value = null
+  }
+}
+
+async function sendEmailTest() {
+  if (emailTestSending.value) return
+  formError.value = ''
+  pageNotice.value = null
+  emailTestSending.value = true
+  try {
+    const { data } = await api.post<{ message?: string }>('/users/email-test')
+    pageNotice.value = { text: data?.message ?? 'E-mail de teste enviado. Verifique a sua caixa de entrada.' }
+    await loadEmailSetup()
+    scrollToFeedback()
+  } catch (e: unknown) {
+    formError.value = formatApiError(e, 'Falha ao enviar e-mail de teste.')
+    scrollToFeedback()
+  } finally {
+    emailTestSending.value = false
+  }
+}
+
 onMounted(async () => {
   void inventory.fetchAssets()
   try {
@@ -573,18 +631,7 @@ onMounted(async () => {
   } catch {
     departmentOptions.value = [...DEFAULT_DEPARTMENTS]
   }
-  if (isAdmin.value) {
-    try {
-      const { data } = await api.get<{
-        mode: string
-        realInboxDelivery: boolean
-        message: string
-      }>('/users/email-setup')
-      emailSetup.value = data
-    } catch {
-      emailSetup.value = null
-    }
-  }
+  await loadEmailSetup()
   await inventory.fetchUsers()
 })
 
@@ -653,7 +700,9 @@ const addUser = async () => {
         {
           emailSent: created?.registrationEmailSent,
           emailTestOnly: created?.emailTestOnly,
+          emailDeliveryMode: created?.emailDeliveryMode,
           emailHint: created?.emailHint,
+          emailError: created?.emailError,
           confirmUrl: created?.registrationConfirmUrl,
           emailPreviewUrl: created?.registrationEmailPreviewUrl,
         },
@@ -1111,6 +1160,10 @@ const saveUserEdit = async () => {
   background: rgba(234, 179, 8, 0.15);
   color: #a16207;
   border-left-color: #ca8a04;
+}
+
+.btn-email-test {
+  margin-top: 12px;
 }
 
 .page-notice-link a {

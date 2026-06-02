@@ -228,6 +228,7 @@ export async function createUserInTenant(prisma, tenantId, input, inviter = null
         inviteMeta = {
           registrationEmailSent: queued.emailSent,
           emailTestOnly: queued.emailTestOnly,
+          emailDeliveryMode: queued.emailDeliveryMode,
           emailHint: queued.emailHint,
           emailError: queued.emailError,
           registrationConfirmUrl: queued.confirmUrl,

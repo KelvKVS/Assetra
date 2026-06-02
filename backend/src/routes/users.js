@@ -17,7 +17,7 @@ import {
   confirmUserRegistrationByAdmin,
   resendRegistrationInvite,
 } from '../services/registrationInviteService.js'
-import { getEmailSetupStatus } from '../services/emailService.js'
+import { getEmailSetupStatus, sendTestEmail } from '../services/emailService.js'
 
 const router = Router()
 
@@ -27,6 +27,29 @@ router.get(
   authorize(['ADM']),
   asyncHandler(async (_req, res) => {
     res.json(getEmailSetupStatus())
+  }),
+)
+
+router.post(
+  '/email-test',
+  authMiddleware,
+  authorize(['ADM']),
+  asyncHandler(async (req, res) => {
+    const to = String(req.user?.email ?? '').trim()
+    if (!to) {
+      return res.status(400).json({ message: 'Utilizador sem e-mail na sessão.' })
+    }
+    const result = await sendTestEmail(to)
+    if (!result.sent) {
+      return res.status(502).json({
+        message: result.emailError || 'Falha ao enviar e-mail de teste.',
+        ...result,
+      })
+    }
+    res.json({
+      message: `E-mail de teste enviado para ${to}. Verifique a caixa de entrada (e spam).`,
+      ...result,
+    })
   }),
 )
 

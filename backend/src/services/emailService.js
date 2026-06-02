@@ -39,7 +39,27 @@ function getSmtpConfig() {
     .replace(/\s+/g, '')
   const from = String(process.env.SMTP_FROM ?? user).trim()
   if (!host || !from) return null
+  if (user && !pass) return null
   return { host, port, user, pass, from }
+}
+
+function isResendConfigured() {
+  return Boolean(String(process.env.RESEND_API_KEY ?? '').trim())
+}
+
+function getResendFromAddress() {
+  const explicit = String(process.env.RESEND_FROM ?? '').trim()
+  if (explicit) return explicit
+  return getDefaultFromAddress()
+}
+
+/** Render free bloqueia portas SMTP 25/465/587 — Gmail só funciona em localhost ou plano pago. */
+export function isRenderFreeSmtpBlocked() {
+  if (process.env.NODE_ENV !== 'production') return false
+  if (process.env.RENDER !== 'true') return false
+  const tier = String(process.env.RENDER_INSTANCE_TYPE ?? 'free').toLowerCase()
+  if (tier && tier !== 'free') return false
+  return isSmtpConfigured() && !isResendConfigured()
 }
 
 function isDevEtherealEnabled() {
@@ -54,12 +74,13 @@ export function isSmtpConfigured() {
 }
 
 export function isEmailConfigured() {
-  return isSmtpConfigured() || isDevEtherealEnabled()
+  return isResendConfigured() || isSmtpConfigured() || isDevEtherealEnabled()
 }
 
-/** @returns {'smtp' | 'ethereal' | 'none'} */
+/** @returns {'resend' | 'smtp' | 'ethereal' | 'none'} */
 export function getEmailTransportMode() {
-  if (isSmtpConfigured()) return 'smtp'
+  if (isResendConfigured()) return 'resend'
+  if (isSmtpConfigured() && !isRenderFreeSmtpBlocked()) return 'smtp'
   if (isDevEtherealEnabled()) return 'ethereal'
   return 'none'
 }
@@ -68,18 +89,49 @@ export function getEmailSetupStatus() {
   const mode = getEmailTransportMode()
   const missing = []
   if (!parseEmailAddress(process.env.EMAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER)) {
-    missing.push('EMAIL_FROM (e-mail remetente real, ex.: 2024130004@aesa-cesa.br)')
+    missing.push('EMAIL_FROM (e-mail remetente verificado, ex.: kelvinkv2030@gmail.com)')
   }
+
+  if (isRenderFreeSmtpBlocked()) {
+    return {
+      mode: 'smtp_blocked_render_free',
+      realInboxDelivery: false,
+      message:
+        'Render (plano free) bloqueia SMTP (portas 587/465). Por isso o Gmail funciona no localhost mas não no deploy. ' +
+        'Adicione RESEND_API_KEY no painel do Render (recomendado, usa HTTPS) ou faça upgrade do serviço.',
+      missing: ['RESEND_API_KEY', 'RESEND_FROM (opcional, mesmo e-mail verificado na Resend)'],
+    }
+  }
+
   if (mode === 'none') {
-    missing.push('SMTP_HOST, SMTP_USER, SMTP_PASS (Gmail) — ou EMAIL_DEV_ETHEREAL=true só para teste')
+    if (isSmtpConfigured() && process.env.RENDER === 'true') {
+      missing.push('RESEND_API_KEY (SMTP bloqueado no Render free)')
+    } else {
+      missing.push('RESEND_API_KEY (produção) ou SMTP_HOST, SMTP_USER, SMTP_PASS (localhost/plano pago)')
+    }
+    return {
+      mode,
+      realInboxDelivery: false,
+      message: 'E-mail desativado em produção. Configure RESEND_API_KEY no Render ou SMTP no .env local.',
+      missing,
+    }
   }
   if (mode === 'ethereal') {
     return {
       mode,
       realInboxDelivery: false,
       message:
-        'Modo de TESTE (Ethereal): o e-mail NÃO chega ao Gmail/Outlook do destinatário. Abra o link de preview ou configure SMTP no backend/.env.',
+        'Modo de TESTE (Ethereal): o e-mail NÃO chega ao Gmail/Outlook do destinatário. Abra o link de preview ou configure RESEND/SMTP.',
       missing: missing.length ? missing : [],
+    }
+  }
+  if (mode === 'resend') {
+    return {
+      mode,
+      realInboxDelivery: true,
+      message:
+        'Resend API ativa (HTTPS): e-mails devem chegar à caixa de entrada. O remetente deve estar verificado no painel da Resend.',
+      missing: [],
     }
   }
   if (mode === 'smtp') {
@@ -95,6 +147,80 @@ export function getEmailSetupStatus() {
     realInboxDelivery: false,
     message: 'E-mail desativado. Configure backend/.env (veja backend/.env.example).',
     missing,
+  }
+}
+
+export function logEmailTransportOnStartup() {
+  const mode = getEmailTransportMode()
+  if (process.env.NODE_ENV !== 'production') {
+    console.info(`[email] Modo: ${mode}`)
+    return
+  }
+  if (mode === 'resend') {
+    console.info('[email] Produção: envio via Resend API (HTTPS) — compatível com Render free.')
+    return
+  }
+  if (isRenderFreeSmtpBlocked()) {
+    console.error(
+      '[email] SMTP configurado mas BLOQUEADO no Render free. Defina RESEND_API_KEY no painel do Render.',
+    )
+    return
+  }
+  if (mode === 'smtp') {
+    console.info('[email] Produção: envio via SMTP.')
+    return
+  }
+  console.error('[email] Produção sem transporte de e-mail — configure RESEND_API_KEY.')
+}
+
+async function sendViaResend(mail) {
+  const apiKey = String(process.env.RESEND_API_KEY ?? '').trim()
+  const from = mail.from || getResendFromAddress()
+  if (!from) {
+    return {
+      sent: false,
+      reason: 'from_not_configured',
+      emailError: 'Defina EMAIL_FROM ou RESEND_FROM com um e-mail verificado na Resend.',
+    }
+  }
+
+  const payload = {
+    from,
+    to: [mail.to],
+    subject: mail.subject,
+    html: mail.html,
+    text: mail.text,
+  }
+  if (mail.replyTo) {
+    payload.reply_to = mail.replyTo
+  }
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      const msg = body?.message || body?.error || res.statusText || 'Resend rejeitou o envio'
+      console.error('[email] Resend falhou:', msg)
+      return {
+        sent: false,
+        reason: 'send_failed',
+        emailError: String(msg).slice(0, 280),
+        mode: 'resend',
+      }
+    }
+    console.info('[email] Enviado via Resend:', mail.subject, '→', mail.to, body?.id ? `id=${body.id}` : '')
+    return { sent: true, mode: 'resend', realInbox: true }
+  } catch (err) {
+    const emailError = String(err?.message ?? err).slice(0, 280)
+    console.error('[email] Resend erro de rede:', emailError)
+    return { sent: false, reason: 'send_failed', emailError, mode: 'resend' }
   }
 }
 
@@ -206,9 +332,23 @@ async function deliverWithContext(ctx, mail) {
  * }} mail
  */
 export async function sendMail(mail) {
+  if (isResendConfigured()) {
+    const from = mail.from || getResendFromAddress()
+    const primary = await sendViaResend({ ...mail, from })
+    if (primary.sent) return primary
+
+    const canFallback =
+      process.env.NODE_ENV !== 'production' &&
+      isDevEtherealEnabled() &&
+      primary.reason === 'send_failed'
+
+    if (!canFallback) return primary
+    console.warn('[email] Resend falhou; a tentar Ethereal em dev…')
+  }
+
   const smtp = await getSmtpTransporter()
 
-  if (smtp) {
+  if (smtp && !isRenderFreeSmtpBlocked()) {
     const primary = await deliverWithContext(smtp, mail)
     if (primary.sent) return primary
 
@@ -241,11 +381,21 @@ export async function sendMail(mail) {
     return deliverWithContext(ethereal, mail)
   }
 
-  console.warn('[email] SMTP não configurado — e-mail não enviado:', mail.subject, '→', mail.to)
+  if (isRenderFreeSmtpBlocked()) {
+    console.error('[email] SMTP bloqueado no Render free — e-mail não enviado:', mail.to)
+    return {
+      sent: false,
+      reason: 'render_smtp_blocked',
+      emailError:
+        'Render (plano free) bloqueia SMTP. Adicione RESEND_API_KEY no painel do Render (https://resend.com).',
+    }
+  }
+
+  console.warn('[email] Transporte de e-mail não configurado — não enviado:', mail.subject, '→', mail.to)
   return {
     sent: false,
     reason: 'smtp_not_configured',
-    emailError: 'Configure SMTP no backend/.env ou ative EMAIL_DEV_ETHEREAL=true.',
+    emailError: 'Configure RESEND_API_KEY (produção) ou SMTP no backend/.env (localhost).',
   }
 }
 
@@ -317,15 +467,15 @@ export async function sendUserRegistrationInviteEmail(params) {
 </body>
 </html>`
 
-  const from =
-    formatEmailFrom(inviterName || 'Assetra', inviterEmail) || getDefaultFromAddress()
+  // Gmail/Resend exigem remetente verificado — não usar e-mail do ADM como From.
+  const from = getDefaultFromAddress()
   return sendMail({
     to,
     subject,
     text,
     html,
     from: from ?? undefined,
-    replyTo: inviterEmail,
+    replyTo: inviterEmail || undefined,
   })
 }
 
@@ -399,7 +549,7 @@ export async function sendNotificationEmail(params) {
 </body>
 </html>`
 
-  const from = formatEmailFrom(sender, parseEmailAddress(sender)) || getDefaultFromAddress()
+  const from = getDefaultFromAddress()
   return sendMail({
     to,
     subject,
@@ -408,4 +558,24 @@ export async function sendNotificationEmail(params) {
     from: from ?? undefined,
     replyTo: parseEmailAddress(sender) || undefined,
   })
+}
+
+/**
+ * E-mail de teste para o ADM validar a configuração em produção.
+ * @param {string} to
+ */
+export async function sendTestEmail(to) {
+  const subject = 'Teste de e-mail — Assetra'
+  const text = [
+    'Este é um e-mail de teste do Assetra.',
+    '',
+    `Transporte: ${getEmailTransportMode()}`,
+    `Ambiente: ${process.env.NODE_ENV || 'development'}`,
+    '',
+    'Se recebeu esta mensagem, convites e notificações devem funcionar.',
+  ].join('\n')
+  const html = `<p>Este é um e-mail de <strong>teste</strong> do Assetra.</p>
+<p>Transporte: <code>${escapeHtml(getEmailTransportMode())}</code></p>
+<p>Se recebeu esta mensagem, convites e notificações devem funcionar.</p>`
+  return sendMail({ to, subject, text, html })
 }

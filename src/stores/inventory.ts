@@ -424,6 +424,7 @@ export const useInventoryStore = defineStore('inventory', {
       const { data } = await api.post<{
         registrationEmailSent?: boolean
         emailTestOnly?: boolean
+        emailDeliveryMode?: string
         emailHint?: string
         emailError?: string | null
         registrationConfirmUrl?: string

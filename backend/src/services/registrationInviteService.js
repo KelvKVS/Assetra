@@ -118,7 +118,7 @@ export function queueRegistrationInviteEmail(prisma, { user, tenant, inviter }) 
     emailPreviewUrl: null,
     emailError: null,
     emailHint:
-      'Utilizador criado. O e-mail de convite está a ser enviado — use o link abaixo se o colaborador não receber.',
+      'O e-mail de convite está a ser enviado. Se não chegar, use o link de confirmação abaixo.',
   }
 }
 

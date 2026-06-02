@@ -14,7 +14,8 @@
     "seed": "node seed.js",
     "seed:safe": "node seed.js",
     "seed:if-enabled": "node scripts/seed-if-enabled.js",
-    "test": "node --test"
+    "test": "node --test",
+    "email:test": "node scripts/test-resend-email.js"
   },
   "keywords": [],
   "author": "",

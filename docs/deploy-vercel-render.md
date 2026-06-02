@@ -64,11 +64,30 @@ Opções:
 
 ## 3) E-mail em produção (checklist)
 
-1. **Não** commite `SMTP_PASS` no Git — só no painel do Render (Web + Worker).
-2. `EMAIL_DEV_ETHEREAL` deve ser `false` (em produção não há Ethereal).
-3. `FRONTEND_URL` = URL da Vercel (links de confirmação de cadastro).
-4. Teste após deploy: cadastre um utilizador Google como ADM → reenviar convite → verificar caixa do colaborador.
-5. Se falhar, veja os logs do serviço `assetra-backend` no Render (mensagem `BadCredentials` = senha de aplicação errada).
+### Render FREE bloqueia SMTP
+
+O plano **free** do Render **não permite** ligações às portas SMTP **25, 465 e 587**. Por isso o Gmail (`SMTP_HOST=smtp.gmail.com`) funciona no **localhost** mas **falha no deploy** (timeout ou erro silencioso).
+
+**Solução recomendada (grátis): [Resend](https://resend.com)** — envia por HTTPS (porta 443), compatível com Render free.
+
+1. Crie conta em https://resend.com
+2. Em **Domains** ou **Single Sender**, verifique o e-mail remetente (ex.: `kelvinkv2030@gmail.com`)
+3. Gere uma **API Key** (`re_...`)
+4. No painel do Render (**assetra-backend** e **assetra-events-worker**), adicione:
+   - `RESEND_API_KEY=re_...`
+   - `EMAIL_FROM=kelvinkv2030@gmail.com`
+   - `RESEND_FROM=Assetra <kelvinkv2030@gmail.com>` (opcional)
+   - `EMAIL_DEV_ETHEREAL=false`
+5. Faça redeploy do backend e do worker.
+6. No app (Utilizadores, como ADM), use **Enviar e-mail de teste** ou cadastre um utilizador e verifique a caixa.
+
+**Alternativa:** upgrade do serviço Render para plano **pago** — aí o SMTP Gmail volta a funcionar.
+
+### Outras variáveis
+
+1. **Não** commite `SMTP_PASS` nem `RESEND_API_KEY` no Git.
+2. `FRONTEND_URL` = URL da Vercel (links de confirmação de cadastro).
+3. Logs do Render: procure `[email] Produção: envio via Resend` ou erro `Resend falhou`.
 
 ## 4) Google OAuth (produção)
 

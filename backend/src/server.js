@@ -31,6 +31,7 @@ import notificationRoutes from './routes/notifications.js'
 import { AppError } from './utils/AppError.js'
 import { getEventBusHealth } from './lib/eventBus.js'
 import { formatUploadLimitLabel } from './config/uploadLimits.js'
+import { logEmailTransportOnStartup } from './services/emailService.js'
 
 const isProd = process.env.NODE_ENV === 'production'
 const jwtSecret = String(process.env.JWT_SECRET ?? '').trim()
@@ -265,6 +266,8 @@ app.use((error, req, res, _next) => {
       : `Erro interno: ${error?.message ?? 'desconhecido'}`,
   })
 })
+
+logEmailTransportOnStartup()
 
 const server = app.listen(port, () => {
   console.log(`API rodando em http://localhost:${port}`)
