@@ -4,11 +4,6 @@ import prisma from '../lib/prisma.js'
 import { AppError } from '../utils/AppError.js'
 import { logAudit } from './auditService.js'
 import { publishDomainEventSafely } from '../lib/eventBus.js'
-import {
-  dispatchAssetInMaintenanceEmail,
-  dispatchTechnicianAssignmentEmail,
-  dispatchUnassignedMaintenanceEmails,
-} from './notificationEmailDispatchService.js'
 import { enrichAttachmentUrls } from '../utils/enrichAttachments.js'
 import { sanitizeAttachmentsForDb } from '../utils/sanitizeAttachments.js'
 
@@ -131,11 +126,6 @@ export async function refreshAssetStatusForTag(tenantId, assetTag) {
   }
   await asset.save()
 
-  if (previousStatus !== 'Em manutenção' && asset.status === 'Em manutenção') {
-    await dispatchAssetInMaintenanceEmail(tenantId, asset).catch((err) => {
-      console.warn('[notifications] Falha ao enfileirar e-mail (asset maintenance):', err?.message ?? err)
-    })
-  }
 }
 
 export async function listMaintenancesForTenant(tenantId) {
@@ -194,15 +184,6 @@ export async function createMaintenance(tenantId, userId, dto, actor = null) {
     assetTag: m.assetTag,
     status: m.status,
   }, { service: 'maintenanceService', action: 'createMaintenance' })
-  const maintObj = m.toObject()
-  await dispatchUnassignedMaintenanceEmails(tenantId, maintObj).catch((err) => {
-    console.warn('[notifications] Falha ao enfileirar e-mail (maintenance.created):', err?.message ?? err)
-  })
-  if (maintObj.assignedTechnicianEmail) {
-    await dispatchTechnicianAssignmentEmail(tenantId, maintObj).catch((err) => {
-      console.warn('[notifications] Falha ao enfileirar e-mail (technician assign):', err?.message ?? err)
-    })
-  }
   return toDto(m)
 }
 
@@ -263,12 +244,6 @@ export async function updateMaintenance(tenantId, maintenanceId, dto, actor = nu
     status: m.status,
   }, { service: 'maintenanceService', action: 'updateMaintenance' })
 
-  const maintObj = m.toObject()
-  if (dto.assignedTechnicianEmail !== undefined && maintObj.assignedTechnicianEmail) {
-    await dispatchTechnicianAssignmentEmail(tenantId, maintObj).catch((err) => {
-      console.warn('[notifications] Falha ao enfileirar e-mail (maintenance.updated):', err?.message ?? err)
-    })
-  }
   return toDto(m)
 }
 

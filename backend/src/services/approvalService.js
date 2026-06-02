@@ -14,8 +14,8 @@ import { registerMovementFromApproval } from './movementService.js'
 import { logAudit } from './auditService.js'
 import { publishDomainEventSafely } from '../lib/eventBus.js'
 import {
-  dispatchApprovalCreatedEmails,
   dispatchApprovalDecidedEmail,
+  dispatchValidationSubmittedEmail,
 } from './notificationEmailDispatchService.js'
 import { enrichAttachmentUrls } from '../utils/enrichAttachments.js'
 import { sanitizeAttachmentsForDb } from '../utils/sanitizeAttachments.js'
@@ -323,9 +323,11 @@ export async function createApproval(tenantId, user, dto) {
     status: a.status,
     requiredApproverRole: a.requiredApproverRole,
   }, { service: 'approvalService', action: 'createApproval' })
-  await dispatchApprovalCreatedEmails(tenantId, a).catch((err) => {
-    console.warn('[notifications] Falha ao enfileirar e-mail (approval.created):', err?.message ?? err)
-  })
+  if (approvalPhase === 'validacao') {
+    await dispatchValidationSubmittedEmail(tenantId, a).catch((err) => {
+      console.warn('[notifications] Falha ao enfileirar e-mail (validation.submitted):', err?.message ?? err)
+    })
+  }
   const [enriched] = await mapApprovalsWithEnrichment([a])
   return enriched
 }
