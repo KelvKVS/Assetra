@@ -42,6 +42,55 @@
             <p v-if="error" class="profile-error">{{ error }}</p>
           </div>
 
+          <section
+            ref="passwordSectionRef"
+            class="password-section"
+            :class="{ 'password-section--highlight': highlightPassword }"
+          >
+            <h4 class="password-section-title">
+              <Lock :size="16" :stroke-width="2.5" />
+              Senha de acesso
+            </h4>
+            <p class="password-section-lead">
+              Usada apenas para <strong>confirmar ações sensíveis</strong> no Assetra (excluir, aprovar).
+              Não altera o login com Google.
+            </p>
+            <form class="password-form" @submit.prevent="savePassword">
+              <div v-if="user.hasConfirmationPassword" class="password-field">
+                <label>Senha atual</label>
+                <PasswordInput
+                  v-model="passwordForm.currentPassword"
+                  autocomplete="current-password"
+                  placeholder="Senha atual"
+                  :disabled="savingPassword"
+                />
+              </div>
+              <div class="password-field">
+                <label>{{ user.hasConfirmationPassword ? 'Nova senha' : 'Criar senha' }}</label>
+                <PasswordInput
+                  v-model="passwordForm.newPassword"
+                  autocomplete="new-password"
+                  placeholder="Mínimo 8 caracteres"
+                  :disabled="savingPassword"
+                />
+              </div>
+              <div class="password-field">
+                <label>Confirmar senha</label>
+                <PasswordInput
+                  v-model="passwordForm.confirmPassword"
+                  autocomplete="new-password"
+                  placeholder="Repita a senha"
+                  :disabled="savingPassword"
+                />
+              </div>
+              <p v-if="passwordError" class="profile-error">{{ passwordError }}</p>
+              <p v-if="passwordSuccess" class="profile-success">{{ passwordSuccess }}</p>
+              <button type="submit" class="btn-save-password" :disabled="savingPassword">
+                {{ savingPassword ? 'A guardar...' : user.hasConfirmationPassword ? 'Atualizar senha' : 'Criar senha de acesso' }}
+              </button>
+            </form>
+          </section>
+
           <dl class="info-list">
             <div>
               <dt>Nome</dt>
@@ -73,30 +122,75 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { Camera, X } from 'lucide-vue-next'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { Camera, Lock, X } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useInventoryStore } from '../stores/inventory'
 import { roleLabelPt } from '../utils/roleLabels'
 import { resolveMediaUrl } from '../utils/mediaUrl'
+import PasswordInput from './PasswordInput.vue'
 
 const open = defineModel<boolean>('open', { default: false })
+
+const props = withDefaults(
+  defineProps<{
+    focusPassword?: boolean
+  }>(),
+  { focusPassword: false },
+)
 
 const authStore = useAuthStore()
 const inventory = useInventoryStore()
 
 const uploading = ref(false)
+const savingPassword = ref(false)
 const error = ref('')
+const passwordError = ref('')
+const passwordSuccess = ref('')
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const passwordSectionRef = ref<HTMLElement | null>(null)
+
+const passwordForm = reactive({
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+})
+
+const highlightPassword = ref(false)
 
 const user = computed(() => authStore.user)
 const initial = computed(() => user.value?.name?.charAt(0).toUpperCase() ?? 'U')
 const roleLabel = computed(() => roleLabelPt(user.value?.role))
 const avatarDisplayUrl = computed(() => resolveMediaUrl(user.value?.avatarUrl ?? '') || '')
 
-watch(open, (isOpen) => {
-  if (isOpen) error.value = ''
+function resetPasswordForm() {
+  passwordForm.currentPassword = ''
+  passwordForm.newPassword = ''
+  passwordForm.confirmPassword = ''
+  passwordError.value = ''
+  passwordSuccess.value = ''
+}
+
+watch(open, async (isOpen) => {
+  if (isOpen) {
+    error.value = ''
+    resetPasswordForm()
+    highlightPassword.value = props.focusPassword
+    if (props.focusPassword) {
+      await nextTick()
+      passwordSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  } else {
+    highlightPassword.value = false
+  }
 })
+
+watch(
+  () => props.focusPassword,
+  (v) => {
+    if (v && open.value) highlightPassword.value = true
+  },
+)
 
 const close = () => {
   if (uploading.value) return
@@ -128,6 +222,41 @@ const onFilePicked = async (event: Event) => {
     error.value = ax?.response?.data?.message ?? 'Não foi possível atualizar a foto.'
   } finally {
     uploading.value = false
+  }
+}
+
+const savePassword = async () => {
+  passwordError.value = ''
+  passwordSuccess.value = ''
+  if (passwordForm.newPassword.length < 8) {
+    passwordError.value = 'A senha deve ter pelo menos 8 caracteres.'
+    return
+  }
+  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    passwordError.value = 'A confirmação não corresponde à nova senha.'
+    return
+  }
+  if (user.value?.hasConfirmationPassword && !passwordForm.currentPassword.trim()) {
+    passwordError.value = 'Informe a senha atual.'
+    return
+  }
+  savingPassword.value = true
+  try {
+    await authStore.updateMyPassword({
+      currentPassword: user.value?.hasConfirmationPassword
+        ? passwordForm.currentPassword
+        : undefined,
+      newPassword: passwordForm.newPassword,
+      confirmPassword: passwordForm.confirmPassword,
+    })
+    passwordSuccess.value = 'Senha de acesso guardada. Já pode confirmar ações sensíveis.'
+    resetPasswordForm()
+    highlightPassword.value = false
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: { message?: string } } }
+    passwordError.value = ax?.response?.data?.message ?? 'Não foi possível guardar a senha.'
+  } finally {
+    savingPassword.value = false
   }
 }
 
@@ -317,6 +446,83 @@ const removePhoto = async () => {
   background: var(--danger-light);
   border-radius: 8px;
   border-left: 3px solid var(--danger);
+}
+
+.profile-success {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #059669;
+  background: rgba(16, 185, 129, 0.12);
+  border-radius: 8px;
+  border-left: 3px solid #10b981;
+}
+
+.password-section {
+  padding: 14px;
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  background: var(--bg-primary);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.password-section--highlight {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.password-section-title {
+  margin: 0 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.password-section-lead {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.password-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.password-field label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.btn-save-password {
+  margin-top: 4px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-save-password:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.btn-save-password:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .info-list {

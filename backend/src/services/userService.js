@@ -49,6 +49,22 @@ export async function listUsersByTenant(prisma, tenantId) {
   return users.map((u) => mapUserDto(u))
 }
 
+/** Lista reduzida para seleção de destino em movimentações (todos os perfis autenticados). */
+export async function listUsersDirectory(prisma, tenantId) {
+  const users = await prisma.user.findMany({
+    where: { tenantId, active: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      department: true,
+      active: true,
+    },
+    orderBy: { name: 'asc' },
+  })
+  return users.map((u) => mapUserDto(u))
+}
+
 /**
  * @param {import('@prisma/client').PrismaClient} prisma
  * @param {string} tenantId
@@ -176,6 +192,7 @@ export async function createUserInTenant(prisma, tenantId, input) {
         name: input.name.trim(),
         email: normalizeEmail(input.email),
         passwordHash,
+        hasConfirmationPassword: isDemo,
         role,
         department,
         active,

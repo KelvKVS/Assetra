@@ -6,6 +6,8 @@ const movementSchema = new mongoose.Schema(
     assetTag: { type: String, required: true },
     origin: { type: String, required: true },
     destination: { type: String, required: true },
+    fromUserEmail: { type: String, default: '' },
+    toUserEmail: { type: String, default: '' },
     responsible: { type: String, required: true },
     occurredAt: { type: Date, default: Date.now },
   },

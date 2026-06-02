@@ -45,5 +45,6 @@ export function serializeSessionUser(user) {
     avatarFilename: user.avatarFilename ?? null,
     avatarExternalUrl: user.avatarExternalUrl ?? null,
     avatarUrl: buildUserAvatarUrl(user),
+    hasConfirmationPassword: Boolean(user.hasConfirmationPassword),
   }
 }

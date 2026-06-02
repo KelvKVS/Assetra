@@ -9,11 +9,22 @@ import {
   deleteUserInTenant,
   listDepartmentOptions,
   listUsersByTenant,
+  listUsersDirectory,
   updateUserInTenant,
 } from '../services/userService.js'
 import { verifyGoogleIdToken } from '../services/googleTokenService.js'
 
 const router = Router()
+
+router.get(
+  '/directory',
+  authMiddleware,
+  authorize(['ADM', 'GESTOR', 'TECNICO', 'FUNCIONARIO']),
+  asyncHandler(async (req, res) => {
+    const users = await listUsersDirectory(prisma, req.user.tenantId)
+    res.json(users)
+  }),
+)
 
 router.get(
   '/',

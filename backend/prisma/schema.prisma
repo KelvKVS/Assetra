@@ -29,6 +29,8 @@ model User {
   name         String
   email        String
   passwordHash String
+  /// Senha definida pelo utilizador para confirmar ações sensíveis (independente do login Google).
+  hasConfirmationPassword Boolean @default(false)
   role         String   @default("TECNICO")
   /// Área/setor da empresa (ex.: RH, Financeiro) — definido pelo ADM
   department   String?

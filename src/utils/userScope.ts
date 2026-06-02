@@ -31,7 +31,15 @@ export function movementsWhereResponsibleIsName<T extends { responsible?: string
   return movements.filter((m) => (m.responsible ?? '').trim().toLowerCase() === n)
 }
 
-export function movementsInvolvingUser<T extends { responsible?: string | null }>(
+export function movementsInvolvingUser<
+  T extends {
+    responsible?: string | null
+    fromUserEmail?: string | null
+    toUserEmail?: string | null
+    origin?: string | null
+    destination?: string | null
+  },
+>(
   movements: T[],
   user: { name?: string | null; email?: string | null } | null | undefined,
 ): T[] {
@@ -39,8 +47,16 @@ export function movementsInvolvingUser<T extends { responsible?: string | null }
   const email = user?.email?.trim().toLowerCase()
   if (!name && !email) return []
   return movements.filter((m) => {
+    const from = (m.fromUserEmail ?? '').trim().toLowerCase()
+    const to = (m.toUserEmail ?? '').trim().toLowerCase()
+    if (email && (from === email || to === email)) return true
     const responsible = (m.responsible ?? '').trim().toLowerCase()
-    return Boolean(responsible && (responsible === name || responsible === email))
+    const origin = (m.origin ?? '').trim().toLowerCase()
+    const destination = (m.destination ?? '').trim().toLowerCase()
+    return Boolean(
+      (email && (responsible.includes(email) || origin.includes(email) || destination.includes(email))) ||
+        (name && (responsible.includes(name) || origin.includes(name) || destination.includes(name))),
+    )
   })
 }
 

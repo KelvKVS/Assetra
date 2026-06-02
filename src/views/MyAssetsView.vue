@@ -53,67 +53,90 @@
         />
       </div>
       <div class="view-toggle" role="group" aria-label="Modo de visualização">
-        <button type="button" class="view-toggle-btn" :class="{ active: viewMode === 'cards' }" @click="viewMode = 'cards'">
-          <LayoutGrid :size="16" /> <span>Detalhes</span>
+        <button
+          type="button"
+          class="view-toggle-btn"
+          :class="{ active: viewMode === 'tiles' }"
+          title="Grelha de miniaturas"
+          @click="viewMode = 'tiles'"
+        >
+          <LayoutGrid :size="16" :stroke-width="2.5" />
+          <span>Miniaturas</span>
         </button>
-        <button type="button" class="view-toggle-btn" :class="{ active: viewMode === 'compact' }" @click="viewMode = 'compact'">
-          <LayoutList :size="16" /> <span>Miniaturas</span>
+        <button
+          type="button"
+          class="view-toggle-btn"
+          :class="{ active: viewMode === 'list' }"
+          title="Lista em linha"
+          @click="viewMode = 'list'"
+        >
+          <List :size="16" :stroke-width="2.5" />
+          <span>Lista</span>
         </button>
       </div>
     </div>
 
-    <div :class="['assets-grid', viewMode === 'compact' && 'assets-grid--compact']">
+    <div :class="viewMode === 'list' ? 'assets-list' : ['assets-grid', 'assets-grid--tiles']">
       <article
         v-for="asset in filteredAssets"
         :key="asset.id ?? asset.tag"
-        :class="['asset-card', viewMode === 'compact' && 'asset-card--compact', !coverPhoto(asset) && 'asset-card--no-cover']"
+        :class="[
+          'asset-card',
+          viewMode === 'tiles' && 'asset-card--tiles',
+          viewMode === 'list' && 'asset-card--list',
+        ]"
       >
-        <template v-if="viewMode === 'cards'">
+        <template v-if="viewMode === 'tiles'">
           <button
             v-if="coverPhoto(asset)"
             type="button"
-            class="asset-cover asset-cover-btn"
+            class="tile-thumb"
             :aria-label="`Ver fotos de ${asset.tag}`"
             @click.stop="openGallery(asset, coverPhoto(asset)!)"
           >
             <AssetImage :attachment="coverPhoto(asset)!" :alt="coverPhoto(asset)!.originalName ?? asset.tag" />
           </button>
-          <div class="asset-header" :class="{ 'asset-header--with-cover': coverPhoto(asset) }">
-            <div v-if="!coverPhoto(asset)" class="asset-icon">
-              <Monitor :size="24" :stroke-width="2" />
-            </div>
-            <div class="asset-status">
+          <div v-else class="tile-thumb tile-thumb--empty" aria-hidden="true">
+            <Monitor :size="22" :stroke-width="2" />
+          </div>
+          <div class="tile-body">
+            <h3 class="asset-tag tile-tag">{{ asset.tag }}</h3>
+            <div class="tile-badges-row">
               <span :class="['status-badge', `status-${statusClass(asset.status)}`]">{{ asset.status }}</span>
             </div>
-          </div>
-          <div class="asset-info">
-            <h3 class="asset-tag">{{ asset.tag }}</h3>
-            <p class="asset-description">{{ asset.description }}</p>
-            <div class="asset-details">
-              <div class="detail-item">
-                <MapPin :size="14" :stroke-width="2.5" />
-                <span>{{ asset.sector }}</span>
-              </div>
-            </div>
+            <p class="tile-desc">{{ asset.description }}</p>
+            <small class="tile-meta">
+              <MapPin :size="12" />
+              {{ asset.sector }}
+            </small>
           </div>
         </template>
+
         <template v-else>
           <button
             v-if="coverPhoto(asset)"
             type="button"
-            class="compact-thumb"
+            class="list-thumb"
+            :aria-label="`Ver fotos de ${asset.tag}`"
             @click.stop="openGallery(asset, coverPhoto(asset)!)"
           >
             <AssetImage :attachment="coverPhoto(asset)!" :alt="coverPhoto(asset)!.originalName ?? asset.tag" />
           </button>
-          <div v-else class="compact-thumb compact-thumb--empty"><Monitor :size="22" /></div>
-          <div class="compact-body">
-            <div class="compact-title-row">
-              <h3 class="asset-tag">{{ asset.tag }}</h3>
-              <span :class="['status-badge', `status-${statusClass(asset.status)}`]">{{ asset.status }}</span>
+          <div v-else class="list-thumb list-thumb--empty" aria-hidden="true">
+            <Monitor :size="20" :stroke-width="2" />
+          </div>
+          <div class="list-main">
+            <div class="list-ident">
+              <h3 class="asset-tag list-tag">{{ asset.tag }}</h3>
+              <p class="list-desc">{{ asset.description }}</p>
             </div>
-            <p class="asset-description">{{ asset.description }}</p>
-            <small class="compact-meta">{{ asset.sector }}</small>
+            <span class="list-sector">
+              <MapPin :size="12" />
+              {{ asset.sector }}
+            </span>
+          </div>
+          <div class="list-badges">
+            <span :class="['status-badge', `status-${statusClass(asset.status)}`]">{{ asset.status }}</span>
           </div>
         </template>
       </article>
@@ -139,7 +162,7 @@ import { assetsAssignedToEmail } from '../utils/userScope'
 import AssetImage from '../components/AssetImage.vue'
 import { imageAttachments, useImageLightbox } from '../composables/useImageLightbox'
 import type { Asset, AttachmentRef } from '../types/assetra'
-import { Monitor, Search, CheckCircle, Wrench, Shield, MapPin, LayoutGrid, LayoutList } from 'lucide-vue-next'
+import { Monitor, Search, CheckCircle, Wrench, Shield, MapPin, LayoutGrid, List } from 'lucide-vue-next'
 
 const imageLightbox = useImageLightbox()
 const openGallery = (asset: Asset, clicked?: AttachmentRef) => imageLightbox.openFromAsset(asset, clicked)
@@ -174,6 +197,8 @@ const statusClass = (status: string) => {
 </script>
 
 <style scoped>
+@import '../styles/asset-list-view.css';
+
 .my-assets-page { animation: fade-up 0.5s ease; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 .page-header h2 { margin: 0 0 4px; font-size: 28px; font-weight: 700; color: var(--text-primary); }
@@ -213,38 +238,57 @@ const statusClass = (status: string) => {
 .view-toggle-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border: none; background: transparent; color: var(--text-secondary); font-size: 13px; font-weight: 600; cursor: pointer; }
 .view-toggle-btn.active { background: var(--primary-light); color: var(--primary); }
 
-.assets-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; align-items: start; }
-.assets-grid--compact { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
-.asset-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; transition: all 0.2s ease; height: auto; }
-.asset-card--compact { display: flex; flex-direction: row; align-items: center; gap: 12px; padding: 10px 12px; }
-.compact-thumb { flex-shrink: 0; width: 56px; height: 56px; padding: 0; border: none; border-radius: 10px; overflow: hidden; cursor: zoom-in; background: var(--bg-hover); }
-.compact-thumb img { width: 100%; height: 100%; object-fit: cover; }
-.compact-thumb--empty { display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
-.compact-body { flex: 1; min-width: 0; }
-.compact-title-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 4px; }
-.compact-title-row .asset-tag { margin: 0; font-size: 15px; }
-.compact-body .asset-description { margin: 0; font-size: 12px; -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
-.compact-meta { font-size: 11px; color: var(--text-muted); }
-.asset-header--with-cover { justify-content: flex-end; margin-bottom: 8px; }
-.asset-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); border-color: var(--primary); }
-.asset-cover-btn {
-  display: block;
-  width: 100%;
-  max-width: calc(100% + 40px);
-  margin: -20px -20px 12px;
+.assets-grid { display: grid; gap: 12px; align-items: start; }
+.assets-grid--tiles { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+
+.asset-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+.asset-card:hover {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border-light));
+  box-shadow: var(--shadow-md);
+}
+
+.asset-card--tiles {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  overflow: hidden;
+}
+.asset-card--tiles:hover { transform: translateY(-2px); }
+
+.tile-thumb {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
   padding: 0;
   border: none;
-  background: transparent;
-  cursor: zoom-in;
-  max-height: 140px;
+  border-radius: 10px;
   overflow: hidden;
-  box-sizing: border-box;
+  cursor: zoom-in;
+  background: var(--bg-hover);
 }
-.asset-cover-btn img { width: 100%; height: 140px; object-fit: cover; display: block; transition: transform 0.2s ease; }
-.asset-cover-btn:hover img { transform: scale(1.03); }
-
-.asset-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.asset-icon { width: 48px; height: 48px; background: var(--primary-light); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--primary); }
+.tile-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tile-thumb--empty { display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
+.tile-body { flex: 1; min-width: 0; }
+.tile-tag { margin: 0 0 6px; font-size: 15px; }
+.tile-badges-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.tile-desc {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tile-meta { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); }
 
 .status-badge {
   padding: 4px 12px;
@@ -259,15 +303,7 @@ const statusClass = (status: string) => {
 .status-disponivel { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
 .status-em-manutencao { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
 
-.asset-info { flex: 1; }
-.asset-tag { margin: 0 0 8px; font-size: 18px; font-weight: 700; color: var(--text-primary); }
-.asset-description { margin: 0 0 12px; font-size: 14px; color: var(--text-secondary); line-height: 1.4; }
-.asset-details { display: flex; gap: 12px; }
-.detail-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-muted); }
-.asset-gallery { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.gallery-thumb { padding: 0; border: none; background: transparent; cursor: zoom-in; border-radius: 8px; }
-.gallery-thumb img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-light); }
-.gallery-thumb:hover img { box-shadow: 0 0 0 2px var(--primary); }
+.asset-tag { margin: 0; font-weight: 700; color: var(--text-primary); }
 
 .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
 .empty-icon { margin-bottom: 16px; opacity: 0.3; }
@@ -279,6 +315,6 @@ const statusClass = (status: string) => {
 @media (max-width: 768px) {
   .page-header { flex-direction: column; gap: 16px; align-items: flex-start; }
   .stats-grid { grid-template-columns: 1fr; }
-  .assets-grid { grid-template-columns: 1fr; }
+  .assets-grid--tiles { grid-template-columns: 1fr; }
 }
 </style>

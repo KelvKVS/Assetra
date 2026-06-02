@@ -15,6 +15,8 @@ export type MovementRow = {
   assetTag: string
   origin: string
   destination: string
+  fromUserEmail?: string
+  toUserEmail?: string
   responsible: string
 }
 
@@ -88,6 +90,8 @@ export type ApprovalRow = {
   decidedByName?: string
   decidedAt?: string | null
   notes?: string
+  destinationUserEmail?: string
+  destinationSector?: string
   createdAt?: string
 }
 
@@ -162,7 +166,15 @@ export const useInventoryStore = defineStore('inventory', {
       }))
     },
     async fetchUsers() {
-      const { data } = await api.get<DirectoryUser[]>('/users')
+      const auth = useAuthStore()
+      const role = String(auth.user?.role ?? '').toUpperCase()
+      const path = role === 'ADM' || role === 'GESTOR' ? '/users' : '/users/directory'
+      const { data } = await api.get<DirectoryUser[]>(path)
+      this.users = data
+    },
+    /** Utilizadores ativos para seleção (movimentação, etc.) — qualquer perfil autenticado. */
+    async fetchUsersDirectory() {
+      const { data } = await api.get<DirectoryUser[]>('/users/directory')
       this.users = data
     },
     async fetchApprovals() {
@@ -204,46 +216,19 @@ export const useInventoryStore = defineStore('inventory', {
       await api.delete(`/assets/${id}`)
       await this.fetchAssets()
     },
-    async createMovement(payload: Omit<MovementRow, 'id' | 'date'>) {
-      const tagKey = payload.assetTag.trim().toLowerCase()
-      const mediaSnapshot = new Map(
-        this.assets.map((a) => [a.tag.trim().toLowerCase(), a.attachments] as const),
-      )
+    async createMovement(payload: { assetTag: string; destinationEmail: string }) {
       await api.post('/movements', payload)
       await this.fetchMovements()
       await this.fetchAssets()
-      const idx = this.assets.findIndex((a) => a.tag.trim().toLowerCase() === tagKey)
-      if (idx < 0) return
-      const current = this.assets[idx]
-      const prevMedia = mediaSnapshot.get(tagKey)
-      this.assets[idx] = {
-        ...current,
-        sector: payload.destination.trim(),
-        assignedTo: payload.responsible.includes('@')
-          ? payload.responsible.trim().toLowerCase()
-          : current.assignedTo,
-        attachments: mergeAttachments(prevMedia, current.attachments) ?? prevMedia,
-      }
     },
-    async updateMovement(id: string, payload: Partial<Omit<MovementRow, 'id'>>) {
-      const tagKey = payload.assetTag?.trim().toLowerCase()
-      const mediaSnapshot =
-        payload.destination != null
-          ? new Map(this.assets.map((a) => [a.tag.trim().toLowerCase(), a.attachments] as const))
-          : null
+    async updateMovement(
+      id: string,
+      payload: { assetTag?: string; destinationEmail?: string; date?: string },
+    ) {
       await api.patch(`/movements/${id}`, payload)
       await this.fetchMovements()
-      if (payload.destination == null) return
-      await this.fetchAssets()
-      if (!tagKey) return
-      const idx = this.assets.findIndex((a) => a.tag.trim().toLowerCase() === tagKey)
-      if (idx < 0) return
-      const current = this.assets[idx]
-      const prevMedia = mediaSnapshot?.get(tagKey)
-      this.assets[idx] = {
-        ...current,
-        sector: payload.destination?.trim() ?? current.sector,
-        attachments: mergeAttachments(prevMedia, current.attachments) ?? prevMedia,
+      if (payload.destinationEmail != null) {
+        await this.fetchAssets()
       }
     },
     async deleteMovement(id: string) {
@@ -324,6 +309,7 @@ export const useInventoryStore = defineStore('inventory', {
       assetTag: string
       description: string
       destinationSector?: string
+      destinationUserEmail?: string
       feedback?: string
       attachments?: AttachmentRef[]
     }) {

@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import bcrypt from 'bcryptjs'
 import prisma from '../lib/prisma.js'
 import { AppError } from '../utils/AppError.js'
 import { assertAvatarFilename, serializeSessionUser } from '../utils/userAvatar.js'
@@ -40,4 +41,43 @@ export async function removeMyAvatar(userId) {
     include: { tenant: true },
   })
   return serializeSessionUser(user)
+}
+
+/**
+ * Cria ou altera a senha de confirmação de ações sensíveis (perfil do utilizador).
+ */
+export async function updateMyPassword(userId, { currentPassword, newPassword }) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, include: { tenant: true } })
+  if (!user || !user.active) {
+    throw new AppError(404, 'Utilizador não encontrado.')
+  }
+
+  const next = String(newPassword ?? '')
+  if (next.length < 8) {
+    throw new AppError(400, 'A senha deve ter pelo menos 8 caracteres.')
+  }
+
+  if (user.hasConfirmationPassword) {
+    const current = String(currentPassword ?? '')
+    if (!current) {
+      throw new AppError(400, 'Informe a senha atual para alterar.')
+    }
+    let match = false
+    try {
+      match = await bcrypt.compare(current, user.passwordHash)
+    } catch {
+      match = false
+    }
+    if (!match) {
+      throw new AppError(401, 'Senha atual incorreta.')
+    }
+  }
+
+  const passwordHash = await bcrypt.hash(next, 10)
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash, hasConfirmationPassword: true },
+    include: { tenant: true },
+  })
+  return serializeSessionUser(updated)
 }

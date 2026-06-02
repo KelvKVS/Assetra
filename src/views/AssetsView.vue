@@ -192,138 +192,62 @@
           <button
             type="button"
             class="view-toggle-btn"
-            :class="{ active: viewMode === 'cards' }"
-            title="Cartões detalhados"
-            @click="viewMode = 'cards'"
+            :class="{ active: viewMode === 'tiles' }"
+            title="Grelha de miniaturas"
+            @click="viewMode = 'tiles'"
           >
             <LayoutGrid :size="16" :stroke-width="2.5" />
-            <span>Detalhes</span>
+            <span>Miniaturas</span>
           </button>
           <button
             type="button"
             class="view-toggle-btn"
-            :class="{ active: viewMode === 'compact' }"
-            title="Miniatura e nome"
-            @click="viewMode = 'compact'"
+            :class="{ active: viewMode === 'list' }"
+            title="Lista em linha"
+            @click="viewMode = 'list'"
           >
-            <LayoutList :size="16" :stroke-width="2.5" />
-            <span>Miniaturas</span>
+            <List :size="16" :stroke-width="2.5" />
+            <span>Lista</span>
           </button>
         </div>
       </div>
     </div>
 
-    <!-- Assets Grid -->
-    <div :class="['assets-grid', viewMode === 'compact' && 'assets-grid--compact']">
+    <div :class="viewMode === 'list' ? 'assets-list' : ['assets-grid', 'assets-grid--tiles']">
       <article
         v-for="asset in filteredAssets"
         :key="asset.id ?? asset.tag"
         :class="[
           'asset-card',
-          viewMode === 'compact' && 'asset-card--compact',
-          !coverPhoto(asset) && 'asset-card--no-cover',
+          viewMode === 'tiles' && 'asset-card--tiles',
+          viewMode === 'list' && 'asset-card--list',
         ]"
       >
-        <template v-if="viewMode === 'cards'">
-        <button
-          v-if="coverPhoto(asset)"
-          type="button"
-          class="asset-cover asset-cover-btn"
-          :aria-label="`Ver fotos de ${asset.tag}`"
-          @click.stop="openGallery(asset, coverPhoto(asset)!)"
-        >
-            <AssetImage :attachment="coverPhoto(asset)!" :alt="coverPhoto(asset)!.originalName ?? asset.tag" />
-          </button>
-          <div class="asset-header" :class="{ 'asset-header--with-cover': coverPhoto(asset) }">
-            <div v-if="!coverPhoto(asset)" class="asset-icon">
-              <Monitor :size="24" :stroke-width="2" />
-            </div>
-            <div class="asset-badges">
-              <span :class="['status-badge', `status-${asset.status.toLowerCase().replace(' ', '-')}`]">
-                {{ asset.status }}
-              </span>
-              <span
-                v-if="showAssigneeHighlight"
-                :class="['owner-badge', !asset.assignedTo?.trim() && 'owner-badge--unassigned']"
-              >
-                <User :size="12" :stroke-width="2.5" />
-                <span class="owner-badge-text">
-                  <span class="owner-name">{{ assigneeInfo(asset.assignedTo).name }}</span>
-                  <span v-if="assigneeInfo(asset.assignedTo).email" class="owner-email">
-                    {{ assigneeInfo(asset.assignedTo).email }}
-                  </span>
-                </span>
-              </span>
-            </div>
-          </div>
-        <div class="asset-info">
-          <h3 class="asset-tag">
-            {{ asset.tag }}
-            <span v-if="asset.shortCode" class="asset-short-code">{{ asset.shortCode }}</span>
-          </h3>
-          <p class="asset-description">{{ asset.description }}</p>
-          <div class="asset-details">
-            <div class="detail-item">
-              <MapPin :size="14" :stroke-width="2.5" />
-              <span>{{ asset.sector }}</span>
-            </div>
-            <div v-if="asset.assignedTo" class="detail-item">
-              <span class="detail-label">Resp.</span>
-              <span>{{ asset.assignedTo }}</span>
-            </div>
-            <div v-if="asset.attachments?.length" class="detail-item">
-              <Paperclip :size="14" :stroke-width="2.5" />
-              <span>{{ asset.attachments.length }} anexo(s)</span>
-            </div>
-          </div>
-          <div v-if="imageAttachments(asset.attachments).length > 1" class="asset-gallery">
-            <button
-              v-for="(att, idx) in imageAttachments(asset.attachments).slice(1)"
-              :key="`${asset.tag}-photo-${idx}`"
-              type="button"
-              class="gallery-thumb"
-              :aria-label="`Abrir foto ${idx + 2} de ${asset.tag}`"
-              @click.stop="openGallery(asset, att)"
-            >
-              <img :src="att.url" :alt="att.originalName ?? att.filename" />
-            </button>
-          </div>
-        </div>
-        <div v-if="canManageAssets" class="asset-actions">
-          <button class="btn-icon" @click="startAssetEdit(asset)" title="Editar">
-            <Edit :size="18" :stroke-width="2.5" />
-          </button>
-          <button class="btn-icon btn-danger" @click="removeAsset(asset)" title="Excluir">
-            <Trash2 :size="18" :stroke-width="2.5" />
-          </button>
-        </div>
-        </template>
-
-        <template v-else>
+        <template v-if="viewMode === 'tiles'">
           <button
             v-if="coverPhoto(asset)"
             type="button"
-            class="compact-thumb"
+            class="tile-thumb"
             :aria-label="`Ver fotos de ${asset.tag}`"
             @click.stop="openGallery(asset, coverPhoto(asset)!)"
           >
             <AssetImage :attachment="coverPhoto(asset)!" :alt="coverPhoto(asset)!.originalName ?? asset.tag" />
           </button>
-          <div v-else class="compact-thumb compact-thumb--empty" aria-hidden="true">
+          <div v-else class="tile-thumb tile-thumb--empty" aria-hidden="true">
             <Monitor :size="22" :stroke-width="2" />
           </div>
-          <div class="compact-body">
-            <h3 class="asset-tag compact-tag">
+          <div class="tile-body">
+            <h3 class="asset-tag tile-tag">
               {{ asset.tag }}
               <span v-if="asset.shortCode" class="asset-short-code">{{ asset.shortCode }}</span>
             </h3>
-            <div class="compact-badges-row">
+            <div class="tile-badges-row">
               <span :class="['status-badge', `status-${asset.status.toLowerCase().replace(' ', '-')}`]">
                 {{ asset.status }}
               </span>
               <span
                 v-if="showAssigneeHighlight"
-                :class="['owner-badge', 'owner-badge--compact', !asset.assignedTo?.trim() && 'owner-badge--unassigned']"
+                :class="['owner-badge', 'owner-badge--tile', !asset.assignedTo?.trim() && 'owner-badge--unassigned']"
               >
                 <User :size="11" :stroke-width="2.5" />
                 <span class="owner-badge-text">
@@ -334,10 +258,69 @@
                 </span>
               </span>
             </div>
-            <p class="asset-description">{{ asset.description }}</p>
-            <small class="compact-meta">{{ asset.sector }}</small>
+            <p class="asset-description tile-desc">{{ asset.description }}</p>
+            <small class="tile-meta">
+              <MapPin :size="12" />
+              {{ asset.sector }}
+            </small>
           </div>
-          <div v-if="canManageAssets" class="compact-actions">
+          <div v-if="canManageAssets" class="tile-actions">
+            <button class="btn-icon" @click="startAssetEdit(asset)" title="Editar">
+              <Edit :size="16" :stroke-width="2.5" />
+            </button>
+            <button class="btn-icon btn-danger" @click="removeAsset(asset)" title="Excluir">
+              <Trash2 :size="16" :stroke-width="2.5" />
+            </button>
+          </div>
+        </template>
+
+        <template v-else>
+          <button
+            v-if="coverPhoto(asset)"
+            type="button"
+            class="list-thumb"
+            :aria-label="`Ver fotos de ${asset.tag}`"
+            @click.stop="openGallery(asset, coverPhoto(asset)!)"
+          >
+            <AssetImage :attachment="coverPhoto(asset)!" :alt="coverPhoto(asset)!.originalName ?? asset.tag" />
+          </button>
+          <div v-else class="list-thumb list-thumb--empty" aria-hidden="true">
+            <Monitor :size="20" :stroke-width="2" />
+          </div>
+
+          <div class="list-main">
+            <div class="list-ident">
+              <h3 class="asset-tag list-tag">
+                {{ asset.tag }}
+                <span v-if="asset.shortCode" class="asset-short-code">{{ asset.shortCode }}</span>
+              </h3>
+              <p class="list-desc">{{ asset.description }}</p>
+            </div>
+            <span class="list-sector">
+              <MapPin :size="12" />
+              {{ asset.sector }}
+            </span>
+          </div>
+
+          <div class="list-badges">
+            <span :class="['status-badge', `status-${asset.status.toLowerCase().replace(' ', '-')}`]">
+              {{ asset.status }}
+            </span>
+            <span
+              v-if="showAssigneeHighlight"
+              :class="['owner-badge', 'owner-badge--list', !asset.assignedTo?.trim() && 'owner-badge--unassigned']"
+            >
+              <User :size="11" :stroke-width="2.5" />
+              <span class="owner-badge-text">
+                <span class="owner-name">{{ assigneeInfo(asset.assignedTo).name }}</span>
+                <span v-if="assigneeInfo(asset.assignedTo).email" class="owner-email">
+                  {{ assigneeInfo(asset.assignedTo).email }}
+                </span>
+              </span>
+            </span>
+          </div>
+
+          <div v-if="canManageAssets" class="list-actions">
             <button class="btn-icon" @click="startAssetEdit(asset)" title="Editar">
               <Edit :size="16" :stroke-width="2.5" />
             </button>
@@ -480,7 +463,7 @@ import {
   X,
   Paperclip,
   LayoutGrid,
-  LayoutList,
+  List,
   User,
 } from 'lucide-vue-next'
 
@@ -698,8 +681,6 @@ const removeEditAttachment = (index: number) => {
 const addAsset = async () => {
   if (isSaving.value) return
   formError.value = ''
-  const ok = await confirm.ask('Confirme com a sua senha para cadastrar este ativo.')
-  if (!ok) return
   isSaving.value = true
   try {
     const assigned = newAsset.assignedTo?.trim()
@@ -738,9 +719,9 @@ const addAsset = async () => {
 
 const removeAsset = async (asset: Asset & { id?: string }) => {
   if (!asset.id) return
-  const ok = await confirm.ask(
-    `Confirme com a sua senha para excluir o ativo ${asset.tag}.`,
-    'Confirmar exclusão',
+  const ok = await confirm.askSensitive(
+    `O ativo ${asset.tag} será removido do inventário.`,
+    'Excluir ativo',
   )
   if (!ok) return
   try {
@@ -775,8 +756,6 @@ const saveAssetEdit = async () => {
   if (isSaving.value) return
   formError.value = ''
   if (!editingAssetId.value) return
-  const ok = await confirm.ask('Confirme com a sua senha para guardar as alterações.')
-  if (!ok) return
   isSaving.value = true
   try {
     const assigned = editAsset.assignedTo?.trim()
@@ -811,6 +790,7 @@ const saveAssetEdit = async () => {
 </script>
 
 <style scoped>
+@import '../styles/asset-list-view.css';
 /* Estilos permanecem os mesmos */
 .assets-page {
   animation: fade-up 0.5s ease;
@@ -1378,7 +1358,7 @@ const saveAssetEdit = async () => {
   align-items: start;
 }
 
-.assets-grid--compact {
+.assets-grid--tiles {
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 }
 
@@ -1386,12 +1366,16 @@ const saveAssetEdit = async () => {
   background: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: 12px;
-  padding: 20px;
   transition: all 0.2s ease;
-  height: auto;
 }
 
-.asset-card--compact {
+.asset-card:hover {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border-light));
+  box-shadow: var(--shadow-md);
+}
+
+/* —— Miniaturas (grelha) —— */
+.asset-card--tiles {
   display: flex;
   flex-direction: row;
   align-items: flex-start;
@@ -1400,11 +1384,11 @@ const saveAssetEdit = async () => {
   overflow: hidden;
 }
 
-.asset-card--compact:hover {
+.asset-card--tiles:hover {
   transform: translateY(-2px);
 }
 
-.compact-thumb {
+.tile-thumb {
   flex-shrink: 0;
   width: 56px;
   height: 56px;
@@ -1416,33 +1400,33 @@ const saveAssetEdit = async () => {
   background: var(--bg-hover);
 }
 
-.compact-thumb img {
+.tile-thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
 
-.compact-thumb--empty {
+.tile-thumb--empty {
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
 }
 
-.compact-body {
+.tile-body {
   flex: 1;
   min-width: 0;
 }
 
-.compact-tag {
+.tile-tag {
   margin: 0 0 6px;
   font-size: 15px;
   width: 100%;
   min-width: 0;
 }
 
-.compact-badges-row {
+.tile-badges-row {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
@@ -1452,70 +1436,32 @@ const saveAssetEdit = async () => {
   min-width: 0;
 }
 
-.compact-body .asset-description {
+.tile-desc {
   margin: 0 0 4px;
   font-size: 12px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  color: var(--text-secondary);
+  line-height: 1.4;
 }
 
-.compact-meta {
+.tile-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   color: var(--text-muted);
 }
 
-.compact-actions {
+.tile-actions {
   display: flex;
   gap: 6px;
   flex-shrink: 0;
+  align-self: center;
 }
 
-.asset-header--with-cover {
-  justify-content: flex-end;
-  margin-bottom: 8px;
-}
-
-.asset-header--with-cover .asset-badges {
-  margin-left: auto;
-}
-
-.asset-card--no-cover .asset-header {
-  margin-bottom: 16px;
-}
-
-.asset-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
-  border-color: var(--primary);
-}
-
-.asset-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.asset-icon {
-  width: 48px;
-  height: 48px;
-  background: var(--primary-light);
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--primary);
-}
-
-.asset-badges {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-  flex-shrink: 0;
-}
 .status-badge {
   padding: 4px 12px;
   border-radius: 20px;
@@ -1540,7 +1486,7 @@ const saveAssetEdit = async () => {
   max-width: min(100%, 220px);
   min-width: 0;
 }
-.owner-badge--compact {
+.owner-badge--tile {
   flex: 1 1 140px;
   max-width: 100%;
 }
@@ -1763,7 +1709,7 @@ const saveAssetEdit = async () => {
   }
 
   .stats-grid,
-  .assets-grid {
+  .assets-grid--tiles {
     grid-template-columns: 1fr;
   }
 

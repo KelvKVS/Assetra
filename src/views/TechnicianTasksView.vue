@@ -254,7 +254,6 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useInventoryStore } from '../stores/inventory'
 import type { AttachmentRef, TaskRow } from '../stores/inventory'
-import { useConfirmAction } from '../composables/useConfirmAction'
 import { useAuthStore } from '../stores/auth'
 import {
   Search,
@@ -279,7 +278,6 @@ import { UPLOAD_LIMITS_HINT, mergeUploadFiles } from '../utils/uploadLimits'
 const uploadAcceptAttr = UPLOAD_ACCEPT_ATTR
 const uploadLimitsHint = `${UPLOAD_LIMITS_HINT} · ${UPLOAD_TYPES_SHORT_LABEL}`
 
-const confirm = useConfirmAction()
 
 const inventory = useInventoryStore()
 const authStore = useAuthStore()
@@ -344,8 +342,6 @@ const completedCount = computed(() => tasks.value.filter((item) => item.status =
 const highPriorityCount = computed(() => tasks.value.filter((item) => item.priority === 'Alta').length)
 
 const advanceStatus = async (id: string) => {
-  const ok = await confirm.ask('Confirme com a sua senha para avançar o estado da tarefa.')
-  if (!ok) return
   await inventory.advanceTask(id)
 }
 
@@ -431,8 +427,6 @@ const submitExtensionRequest = async () => {
     extensionError.value = 'Descreva o motivo do adiamento.'
     return
   }
-  const ok = await confirm.ask('Confirme com a sua senha para enviar o pedido de adiamento.')
-  if (!ok) return
   sendingExtension.value = true
   try {
     await inventory.requestMaintenanceExtension(extensionModal.task.id, {
@@ -468,9 +462,6 @@ const sendReportForValidation = async () => {
     reportError.value = 'Anexe pelo menos um ficheiro como evidência (foto, PDF ou relatório).'
     return
   }
-
-  const ok = await confirm.ask('Confirme com a sua senha para enviar o relatório ao gestor.')
-  if (!ok) return
 
   sendingReport.value = true
   try {

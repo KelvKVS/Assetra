@@ -22,8 +22,10 @@ const approvalSchema = new mongoose.Schema(
     parentApprovalId: { type: String, default: '' },
     assetTag: { type: String, required: true },
     description: { type: String, required: true },
-    /** Setor de destino (solicitações de movimentação). */
+    /** Setor de destino (legado — preferir destinationUserEmail). */
     destinationSector: { type: String },
+    /** Utilizador que passará a ser responsável pelo ativo após aprovação. */
+    destinationUserEmail: { type: String },
     /** Justificativa / contexto adicional do solicitante. */
     feedback: { type: String },
     /** Anexos (fotos, prints, PDFs) carregados via /api/uploads. */

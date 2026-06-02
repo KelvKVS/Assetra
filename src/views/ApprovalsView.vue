@@ -436,9 +436,14 @@ function approvalSummary(item: ApprovalRow): string {
   const st = item.status
 
   if (phase === 'movement') {
-    if (st === 'Pendente') return `${who} pediu movimentação do ativo ${asset}`
-    if (st === 'Aprovada') return `Movimentação do ativo ${asset} foi aprovada`
-    return `Movimentação do ativo ${asset} foi reprovada`
+    const destEmail = String(item.destinationUserEmail ?? '').trim().toLowerCase()
+    const destUser = destEmail
+      ? inventory.users.find((u) => u.email.toLowerCase() === destEmail)
+      : null
+    const destLabel = destUser ? destUser.name : destEmail || 'utilizador indicado'
+    if (st === 'Pendente') return `${who} pediu transferir o ativo ${asset} para ${destLabel}`
+    if (st === 'Aprovada') return `Ativo ${asset} transferido para ${destLabel}`
+    return `Transferência do ativo ${asset} para ${destLabel} foi reprovada`
   }
   if (phase === 'opening') {
     if (st === 'Pendente') return `${who} pediu abrir manutenção no ativo ${asset}`
@@ -600,8 +605,8 @@ async function executeDecision(
   if (decision === 'APPROVED' && needsTechnicianPick(item) && approveDisabled(item)) return
 
   const action = decision === 'APPROVED' ? approveLabel(item).toLowerCase() : rejectLabel(item).toLowerCase()
-  const ok = await confirm.ask(
-    `Confirme com a sua senha para ${action} a solicitação ${item.assetTag}.`,
+  const ok = await confirm.askSensitive(
+    `Deseja ${action} a solicitação do ativo ${item.assetTag}?`,
     'Confirmar decisão',
   )
   if (!ok) return
@@ -628,8 +633,6 @@ const saveMaintenanceDue = async (item: ApprovalRow) => {
   if (!item.maintenanceId) return
   const raw = validationDueByMaintenanceId[item.maintenanceId]
   if (!raw) return
-  const ok = await confirm.ask('Confirme com a sua senha para atualizar o prazo desta ordem.', 'Atualizar prazo')
-  if (!ok) return
   await inventory.setMaintenanceValidationDue(item.maintenanceId, new Date(raw).toISOString())
 }
 
@@ -649,11 +652,6 @@ const reassignMaintenance = async (item: ApprovalRow) => {
   }
   reassignErrorByApprovalId[item.id] = ''
   const selectedTech = technicianUsers.value.find((tech) => tech.email.trim().toLowerCase() === targetEmail)
-  const ok = await confirm.ask(
-    `A solicitação será devolvida para execução técnica com ${selectedTech?.name ?? targetEmail}. Confirme com a sua senha.`,
-    'Encaminhar para técnico',
-  )
-  if (!ok) return
   const notes = `${reason}\n\nEncaminhada para ${selectedTech?.name ?? targetEmail} (${targetEmail}).`
   await inventory.respondApproval(item.id, 'REJECTED', notes)
   await inventory.updateMaintenance(item.maintenanceId, {

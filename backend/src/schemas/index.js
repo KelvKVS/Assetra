@@ -100,16 +100,12 @@ export const assetUpdateSchema = z.object({
 
 export const movementCreateSchema = z.object({
   assetTag: z.string().min(1).max(40),
-  origin: z.string().min(1).max(200),
-  destination: z.string().min(1).max(200),
-  responsible: z.string().min(1).max(120),
+  destinationEmail: z.string().email().max(120),
 })
 
 export const movementUpdateSchema = z.object({
   assetTag: z.string().min(1).max(40).optional(),
-  origin: z.string().min(1).max(200).optional(),
-  destination: z.string().min(1).max(200).optional(),
-  responsible: z.string().min(1).max(120).optional(),
+  destinationEmail: z.string().email().max(120).optional(),
   /** Data exibida (ex.: dd/mm/aaaa) ou ISO */
   date: z.string().max(40).optional(),
 })
@@ -157,7 +153,8 @@ export const approvalCreateSchema = z.object({
   maintenanceId: z.string().min(1).max(64).optional(),
   assetTag: z.string().min(1).max(40),
   description: z.string().min(1).max(500),
-  destinationSector: z.string().min(1).max(200).optional(),
+  destinationSector: z.string().max(200).optional(),
+  destinationUserEmail: z.string().email().max(120).optional(),
   feedback: z.string().max(2000).optional(),
   attachments: z.array(attachmentRefSchema).max(6).optional(),
 })
@@ -174,6 +171,17 @@ export const approvalRespondSchema = z.object({
 export const passwordVerifySchema = z.object({
   password: z.string().min(1).max(120),
 })
+
+export const myPasswordUpdateSchema = z
+  .object({
+    currentPassword: z.string().min(1).max(120).optional(),
+    newPassword: z.string().min(8).max(100),
+    confirmPassword: z.string().min(8).max(100),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: 'A confirmação da senha não corresponde.',
+    path: ['confirmPassword'],
+  })
 
 export const avatarUpdateSchema = z.object({
   filename: z.string().min(1).max(200),

@@ -1,4 +1,5 @@
 import Movement from '../models/Movement.js'
+import prisma from '../lib/prisma.js'
 import { AppError } from '../utils/AppError.js'
 import { findAssetByTag } from './assetService.js'
 
@@ -6,6 +7,27 @@ function formatDatePt(d) {
   if (!d) return ''
   const dt = d instanceof Date ? d : new Date(d)
   return dt.toLocaleDateString('pt-BR')
+}
+
+function userLabel(user) {
+  if (!user) return 'Não atribuído'
+  return `${user.name} (${user.email})`
+}
+
+async function findActiveUserByEmail(tenantId, email) {
+  const lower = String(email ?? '').trim().toLowerCase()
+  if (!lower) return null
+  return prisma.user.findFirst({
+    where: { tenantId, email: lower, active: true },
+    select: { id: true, name: true, email: true, department: true },
+  })
+}
+
+async function labelForAssigneeEmail(tenantId, email) {
+  const lower = String(email ?? '').trim().toLowerCase()
+  if (!lower) return 'Não atribuído'
+  const user = await findActiveUserByEmail(tenantId, lower)
+  return user ? userLabel(user) : lower
 }
 
 function toDto(doc) {
@@ -16,18 +38,25 @@ function toDto(doc) {
     assetTag: o.assetTag,
     origin: o.origin,
     destination: o.destination,
+    fromUserEmail: o.fromUserEmail ?? '',
+    toUserEmail: o.toUserEmail ?? '',
     responsible: o.responsible,
   }
 }
 
 /**
- * Atualiza o setor do ativo para o destino da movimentação (localização atual).
+ * Transfere o ativo para o utilizador de destino (assignedTo + setor da área do destino).
  */
-async function applyAssetRelocation(tenantId, userId, { assetTag, origin, destination, responsible }) {
+async function applyAssetTransfer(tenantId, userId, { assetTag, destinationEmail }) {
   const tag = String(assetTag ?? '').trim()
-  const dest = String(destination ?? '').trim()
-  if (!tag || !dest) {
-    throw new AppError(400, 'Tag do ativo e destino são obrigatórios.')
+  const toEmail = String(destinationEmail ?? '').trim().toLowerCase()
+  if (!tag || !toEmail) {
+    throw new AppError(400, 'Tag do ativo e utilizador de destino são obrigatórios.')
+  }
+
+  const destUser = await findActiveUserByEmail(tenantId, toEmail)
+  if (!destUser) {
+    throw new AppError(400, 'Utilizador de destino não encontrado ou inativo nesta organização.')
   }
 
   const asset = await findAssetByTag(tenantId, tag)
@@ -35,23 +64,28 @@ async function applyAssetRelocation(tenantId, userId, { assetTag, origin, destin
     throw new AppError(404, `Ativo "${tag}" não encontrado.`)
   }
 
-  const previousSector = asset.sector
-  asset.sector = dest
-
-  const resp = String(responsible ?? '').trim()
-  if (resp.includes('@')) {
-    asset.assignedTo = resp.toLowerCase()
+  const fromEmail = String(asset.assignedTo ?? '').trim().toLowerCase()
+  if (fromEmail === toEmail) {
+    throw new AppError(400, 'O ativo já está atribuído a este utilizador.')
   }
 
-  const originLabel = String(origin ?? '').trim() || previousSector
+  const fromLabel = await labelForAssigneeEmail(tenantId, fromEmail)
+  const toLabel = userLabel(destUser)
+
+  asset.assignedTo = toEmail
+  const dept = String(destUser.department ?? '').trim()
+  if (dept) {
+    asset.sector = dept
+  }
+
   asset.history.push({
     action: 'MOVIMENTAÇÃO',
     userId,
-    details: `Local: ${originLabel} → ${dest}${resp ? ` · Resp.: ${resp}` : ''}`,
+    details: `Atribuído: ${fromLabel} → ${toLabel}`,
   })
 
   await asset.save()
-  return asset
+  return { fromLabel, toLabel, fromEmail, toEmail }
 }
 
 export async function listMovementsForTenant(tenantId) {
@@ -60,25 +94,25 @@ export async function listMovementsForTenant(tenantId) {
 }
 
 export async function createMovement(tenantId, userId, dto) {
-  const asset = await findAssetByTag(tenantId, dto.assetTag.trim())
-  const origin = String(dto.origin ?? '').trim() || asset?.sector || ''
+  const tag = dto.assetTag.trim()
+  const toEmail = dto.destinationEmail.trim().toLowerCase()
+
+  const { fromLabel, toLabel, fromEmail } = await applyAssetTransfer(tenantId, userId, {
+    assetTag: tag,
+    destinationEmail: toEmail,
+  })
 
   const m = new Movement({
     tenantId,
-    assetTag: dto.assetTag.trim(),
-    origin,
-    destination: dto.destination.trim(),
-    responsible: dto.responsible.trim(),
+    assetTag: tag,
+    origin: fromLabel,
+    destination: toLabel,
+    fromUserEmail: fromEmail || undefined,
+    toUserEmail: toEmail,
+    responsible: toLabel,
     occurredAt: new Date(),
   })
   await m.save()
-
-  await applyAssetRelocation(tenantId, userId, {
-    assetTag: dto.assetTag,
-    origin,
-    destination: dto.destination,
-    responsible: dto.responsible,
-  })
 
   return toDto(m)
 }
@@ -102,24 +136,25 @@ export async function updateMovement(tenantId, movementId, dto, userId = null) {
     throw new AppError(404, 'Movimentação não encontrada.')
   }
   if (dto.assetTag != null) m.assetTag = dto.assetTag.trim()
-  if (dto.origin != null) m.origin = dto.origin.trim()
-  if (dto.destination != null) m.destination = dto.destination.trim()
-  if (dto.responsible != null) m.responsible = dto.responsible.trim()
   if (dto.date) {
     const dt = parseDisplayDate(dto.date)
     if (dt) m.occurredAt = dt
   }
-  await m.save()
 
-  if (dto.destination != null && userId) {
-    await applyAssetRelocation(tenantId, userId, {
+  if (dto.destinationEmail != null && userId) {
+    const toEmail = dto.destinationEmail.trim().toLowerCase()
+    const { fromLabel, toLabel, fromEmail } = await applyAssetTransfer(tenantId, userId, {
       assetTag: m.assetTag,
-      origin: m.origin,
-      destination: m.destination,
-      responsible: m.responsible,
+      destinationEmail: toEmail,
     })
+    m.origin = fromLabel
+    m.destination = toLabel
+    m.fromUserEmail = fromEmail || undefined
+    m.toUserEmail = toEmail
+    m.responsible = toLabel
   }
 
+  await m.save()
   return toDto(m)
 }
 
@@ -132,9 +167,13 @@ export async function deleteMovement(tenantId, movementId) {
 
 /** Usado ao aprovar solicitação de movimentação. */
 export async function registerMovementFromApproval(tenantId, userId, payload) {
-  return createMovement(tenantId, userId, payload)
+  return createMovement(tenantId, userId, {
+    assetTag: payload.assetTag,
+    destinationEmail: payload.destinationEmail,
+  })
 }
 
+/** Legado: extrai setor de descrições antigas (não usado para transferir ativo). */
 export function parseDestinationFromDescription(description) {
   const match = String(description ?? '').match(/\(destino:\s*([^)]+)\)/i)
   return match?.[1]?.trim() ?? ''

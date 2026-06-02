@@ -1,16 +1,19 @@
 import { ref, watch } from 'vue'
 
-export type AssetViewMode = 'cards' | 'compact'
+/** tiles = grelha de miniaturas; list = fila horizontal */
+export type AssetViewMode = 'tiles' | 'list'
 
 const STORAGE_KEY = 'assetra-asset-view-mode'
 
 function loadMode(): AssetViewMode {
   try {
     const v = localStorage.getItem(STORAGE_KEY)
-    return v === 'compact' ? 'compact' : 'cards'
+    if (v === 'list') return 'list'
+    if (v === 'tiles' || v === 'compact' || v === 'cards') return 'tiles'
   } catch {
-    return 'cards'
+    /* ignore */
   }
+  return 'tiles'
 }
 
 const viewMode = ref<AssetViewMode>(loadMode())

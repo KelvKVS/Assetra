@@ -577,8 +577,6 @@ const filteredMaintenances = computed(() =>
 
 const addMaintenance = async () => {
   formError.value = ''
-  const ok = await confirm.ask('Confirme com a sua senha para abrir este chamado de manutenção.')
-  if (!ok) return
   try {
     let attachments: AttachmentRef[] = []
     if (selectedCreateFiles.value.length) {
@@ -610,7 +608,7 @@ const addMaintenance = async () => {
 }
 
 const removeMaintenance = async (id: string) => {
-  const ok = await confirm.ask('Confirme com a sua senha para excluir este chamado.', 'Confirmar exclusão')
+  const ok = await confirm.askSensitive('Este chamado de manutenção será excluído.', 'Excluir chamado')
   if (!ok) return
   await inventory.deleteMaintenance(id)
 }
@@ -637,12 +635,6 @@ const decideExtension = async (maintenance: MaintenanceRow, decision: 'APPROVED'
     if (reason.length < 3) return
     notes = reason
   }
-  const label = decision === 'APPROVED' ? 'aprovar' : 'recusar'
-  const ok = await confirm.ask(
-    `Confirme com a sua senha para ${label} o adiamento até ${ext.proposedDueDisplay ?? 'nova data'}.`,
-    'Decidir adiamento',
-  )
-  if (!ok) return
   await inventory.decideMaintenanceExtension(maintenance.id, ext.id, decision, notes)
 }
 
@@ -652,8 +644,6 @@ const cancelMaintenanceEdit = () => {
 
 const saveMaintenanceEdit = async () => {
   if (!editingId.value) return
-  const ok = await confirm.ask('Confirme com a sua senha para guardar as alterações.')
-  if (!ok) return
   const { validationDueAtLocal, ...rest } = editMaintenance
   const payload: Partial<Omit<MaintenanceRow, 'id'>> = { ...rest }
   if (validationDueAtLocal) {
@@ -724,8 +714,6 @@ const removeEditFile = (index: number) => {
 const assignMaintenancesInBatch = async () => {
   if (!bulkTechnicianEmail.value) return
   if (!bulkCandidates.value.length) return
-  const ok = await confirm.ask('Confirme com a sua senha para atribuir os chamados em lote.')
-  if (!ok) return
   await inventory.bulkAssignMaintenances(
     bulkCandidates.value.map((m) => String(m.id)),
     bulkTechnicianEmail.value,

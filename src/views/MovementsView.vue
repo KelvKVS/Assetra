@@ -6,6 +6,9 @@
         <span class="hero-eyebrow">Logística</span>
         <h2>Movimentações</h2>
         <p class="muted">{{ pageSubtitle }}</p>
+        <p v-if="canManageMovements" class="muted hero-hint">
+          A movimentação transfere o ativo para outro utilizador; o responsável atual passa a ser o destino.
+        </p>
       </div>
       <button v-if="canManageMovements" class="btn-primary" @click="toggleMovementForm">
         <Plus :size="18" :stroke-width="2.5" />
@@ -20,14 +23,16 @@
         <h3>Registrar movimentação</h3>
       </div>
       <form @submit.prevent="addMovement" class="movement-form modern-form">
-        <div class="form-group field">
+        <div class="form-group field field--suggest">
           <label>Tag do ativo</label>
           <input
             v-model.trim="newMovement.assetTag"
             type="text"
             placeholder="Ex.: AST-200"
             required
+            autocomplete="off"
             @focus="isAssetInputFocused = true"
+            @input="isAssetInputFocused = true"
             @blur="hideAssetSuggestions"
           />
           <div v-if="showAssetSuggestions" class="suggestion-panel">
@@ -44,46 +49,41 @@
           </div>
         </div>
         <div class="form-group field">
-          <label>Origem</label>
-          <input v-model.trim="newMovement.origin" type="text" list="origin-suggestions" placeholder="Local de origem" required />
-          <datalist id="origin-suggestions">
-            <option v-for="sector in sectorSuggestions" :key="`origin-${sector}`" :value="sector"></option>
-          </datalist>
-        </div>
-        <div class="form-group field">
-          <label>Destino</label>
+          <label>Origem (responsável atual)</label>
           <input
-            v-model.trim="newMovement.destination"
+            :value="originPreview"
             type="text"
-            list="destination-suggestions"
-            placeholder="Local de destino"
-            required
+            readonly
+            class="input-readonly"
+            placeholder="Selecione um ativo"
           />
-          <datalist id="destination-suggestions">
-            <option v-for="sector in sectorSuggestions" :key="`destination-${sector}`" :value="sector"></option>
-          </datalist>
         </div>
-        <div class="form-group field">
-          <label>Responsável</label>
+        <div class="form-group field field--suggest">
+          <label>Destino (novo responsável)</label>
           <input
-            v-model.trim="newMovement.responsible"
+            v-model.trim="newMovement.destinationEmail"
             type="text"
-            placeholder="Nome ou email"
+            autocomplete="off"
+            placeholder="Digite nome ou e-mail — escolha na lista"
             required
-            @focus="isResponsibleInputFocused = true"
-            @blur="hideResponsibleSuggestions"
+            @focus="isDestinationInputFocused = true"
+            @input="isDestinationInputFocused = true"
+            @blur="hideDestinationSuggestions"
           />
-          <div v-if="showResponsibleSuggestions" class="suggestion-panel">
+          <div v-if="showDestinationSuggestions" class="suggestion-panel">
             <button
-              v-for="user in filteredResponsibleSuggestions"
-              :key="`responsible-${user.id}`"
+              v-for="user in filteredDestinationSuggestions"
+              :key="`dest-${user.id}`"
               type="button"
               class="suggestion-item"
-              @mousedown.prevent="pickResponsible(user.email)"
+              @mousedown.prevent="pickDestination(user)"
             >
               <strong>{{ user.name }}</strong>
               <span>{{ user.email }}</span>
             </button>
+            <p v-if="!filteredDestinationSuggestions.length" class="suggestion-empty">
+              Nenhum utilizador corresponde à pesquisa.
+            </p>
           </div>
         </div>
         <div class="form-actions field-wide">
@@ -113,7 +113,9 @@
           <div class="timeline-header">
             <div class="timeline-info">
               <h4>{{ movement.assetTag }}</h4>
-              <p class="timeline-route">{{ movement.origin }} → {{ movement.destination }}</p>
+              <p class="timeline-route" :title="movementRouteTitle(movement)">
+                {{ movement.origin }} → {{ movement.destination }}
+              </p>
             </div>
             <div class="timeline-date">
               <Calendar :size="14" :stroke-width="2" />
@@ -121,9 +123,9 @@
             </div>
           </div>
           <div class="timeline-footer">
-            <div class="responsible-badge">
+            <div class="responsible-badge" :title="movement.destination">
               <User :size="14" :stroke-width="2" />
-              <span>{{ movement.responsible }}</span>
+              <span>Novo responsável: {{ movement.destination }}</span>
             </div>
             <div v-if="canManageMovements" class="timeline-actions">
               <button class="btn-icon" @click="startMovementEdit(movement)" title="Editar">
@@ -165,15 +167,11 @@
           </div>
           <div class="form-group">
             <label>Origem</label>
-            <input v-model.trim="editMovement.origin" type="text" required />
+            <input :value="editMovement.origin" type="text" readonly class="input-readonly" />
           </div>
           <div class="form-group">
-            <label>Destino</label>
-            <input v-model.trim="editMovement.destination" type="text" required />
-          </div>
-          <div class="form-group">
-            <label>Responsável</label>
-            <input v-model.trim="editMovement.responsible" type="text" required />
+            <label>Destino (e-mail do utilizador)</label>
+            <input v-model.trim="editMovement.destinationEmail" type="email" required />
           </div>
           <div class="modal-actions">
             <button type="submit" class="btn-primary">Salvar</button>
@@ -212,21 +210,18 @@ const showForm = ref(false)
 const movementError = ref('')
 const editingMovementId = ref<string | null>(null)
 const isAssetInputFocused = ref(false)
-const isResponsibleInputFocused = ref(false)
+const isDestinationInputFocused = ref(false)
 
 const newMovement = reactive({
   assetTag: '',
-  origin: '',
-  destination: '',
-  responsible: '',
+  destinationEmail: '',
 })
 
 const editMovement = reactive({
   date: '',
   assetTag: '',
   origin: '',
-  destination: '',
-  responsible: '',
+  destinationEmail: '',
 })
 
 const inventory = useInventoryStore()
@@ -257,38 +252,54 @@ const filteredAssetSuggestions = computed(() => {
     .filter((asset) => `${asset.tag} ${asset.description}`.toLowerCase().includes(q))
     .slice(0, 6)
 })
-const filteredResponsibleSuggestions = computed(() => {
-  const q = newMovement.responsible.trim().toLowerCase()
-  if (!q) return userOptions.value.slice(0, 8)
-  return userOptions.value
-    .filter((user) => `${user.name} ${user.email}`.toLowerCase().includes(q))
-    .slice(0, 6)
+function userLabelByEmail(email: string | undefined | null) {
+  const e = (email ?? '').trim().toLowerCase()
+  if (!e) return 'Não atribuído'
+  const u = userOptions.value.find((x) => x.email.toLowerCase() === e)
+  return u ? `${u.name} (${u.email})` : e
+}
+
+const selectedMovementAsset = computed(() =>
+  inventory.assets.find((a) => a.tag.toLowerCase() === newMovement.assetTag.trim().toLowerCase()),
+)
+
+const originPreview = computed(() => userLabelByEmail(selectedMovementAsset.value?.assignedTo))
+
+const filteredDestinationSuggestions = computed(() => {
+  const current = (selectedMovementAsset.value?.assignedTo ?? '').trim().toLowerCase()
+  const q = newMovement.destinationEmail.trim().toLowerCase()
+  let pool = userOptions.value.filter((u) => u.email.toLowerCase() !== current)
+  if (q) {
+    pool = pool.filter((user) => `${user.name} ${user.email}`.toLowerCase().includes(q))
+  }
+  return pool.slice(0, 8)
 })
+
 const showAssetSuggestions = computed(() => isAssetInputFocused.value && filteredAssetSuggestions.value.length > 0)
-const showResponsibleSuggestions = computed(
-  () => isResponsibleInputFocused.value && filteredResponsibleSuggestions.value.length > 0,
-)
-const sectorSuggestions = computed(() =>
-  Array.from(new Set(inventory.assets.map((asset) => asset.sector?.trim()).filter(Boolean) as string[])),
-)
+const showDestinationSuggestions = computed(() => isDestinationInputFocused.value)
+
+const movementRouteTitle = (movement: MovementRow) => {
+  const parts = [movement.origin, movement.destination].filter(Boolean)
+  return parts.join(' → ')
+}
+
 const pickMovementAsset = (tag: string) => {
   newMovement.assetTag = tag
-  const asset = inventory.assets.find((a) => a.tag.toLowerCase() === tag.toLowerCase())
-  if (asset?.sector) newMovement.origin = asset.sector
+  newMovement.destinationEmail = ''
   isAssetInputFocused.value = false
 }
-const pickResponsible = (value: string) => {
-  newMovement.responsible = value
-  isResponsibleInputFocused.value = false
+const pickDestination = (user: { email: string }) => {
+  newMovement.destinationEmail = user.email
+  isDestinationInputFocused.value = false
 }
 const hideAssetSuggestions = () => {
   window.setTimeout(() => {
     isAssetInputFocused.value = false
   }, 120)
 }
-const hideResponsibleSuggestions = () => {
+const hideDestinationSuggestions = () => {
   window.setTimeout(() => {
-    isResponsibleInputFocused.value = false
+    isDestinationInputFocused.value = false
   }, 120)
 }
 
@@ -309,14 +320,13 @@ const filteredMovements = computed(() =>
 
 const addMovement = async () => {
   movementError.value = ''
-  const ok = await confirm.ask('Confirme com a sua senha para registar esta movimentação.')
-  if (!ok) return
   try {
-    await inventory.createMovement({ ...newMovement })
+    await inventory.createMovement({
+      assetTag: newMovement.assetTag,
+      destinationEmail: newMovement.destinationEmail,
+    })
     newMovement.assetTag = ''
-    newMovement.origin = ''
-    newMovement.destination = ''
-    newMovement.responsible = ''
+    newMovement.destinationEmail = ''
     closeMovementForm()
   } catch (e: unknown) {
     const ax = e as { response?: { data?: { message?: string } } }
@@ -325,7 +335,7 @@ const addMovement = async () => {
 }
 
 const removeMovement = async (id: string) => {
-  const ok = await confirm.ask('Confirme com a sua senha para excluir esta movimentação.', 'Confirmar exclusão')
+  const ok = await confirm.askSensitive('Esta movimentação será removida do histórico.', 'Excluir movimentação')
   if (!ok) return
   await inventory.deleteMovement(id)
 }
@@ -335,8 +345,7 @@ const startMovementEdit = (movement: MovementRow) => {
   editMovement.date = movement.date
   editMovement.assetTag = movement.assetTag
   editMovement.origin = movement.origin
-  editMovement.destination = movement.destination
-  editMovement.responsible = movement.responsible
+  editMovement.destinationEmail = movement.toUserEmail || ''
 }
 
 const cancelMovementEdit = () => {
@@ -345,9 +354,11 @@ const cancelMovementEdit = () => {
 
 const saveMovementEdit = async () => {
   if (!editingMovementId.value) return
-  const ok = await confirm.ask('Confirme com a sua senha para guardar as alterações.')
-  if (!ok) return
-  await inventory.updateMovement(editingMovementId.value, { ...editMovement })
+  await inventory.updateMovement(editingMovementId.value, {
+    date: editMovement.date,
+    assetTag: editMovement.assetTag,
+    destinationEmail: editMovement.destinationEmail,
+  })
   editingMovementId.value = null
 }
 </script>
@@ -368,6 +379,12 @@ const saveMovementEdit = async () => {
 }
 .hero-text h2 { margin: 0 0 4px; font-size: 28px; font-weight: 700; color: var(--text-primary); }
 .hero-text p { margin: 0; font-size: 14px; color: var(--text-secondary); }
+.hero-hint { margin-top: 6px; font-size: 13px; }
+.input-readonly {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  cursor: default;
+}
 .hero-eyebrow {
   font-size: 11px;
   font-weight: 800;
@@ -471,6 +488,23 @@ const saveMovementEdit = async () => {
   box-shadow: 0 0 0 3px var(--primary-light);
 }
 .field-wide { grid-column: 1 / -1; }
+.field--suggest {
+  position: relative;
+}
+.field--suggest .suggestion-panel {
+  position: absolute;
+  top: calc(100% - 2px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+}
+.suggestion-empty {
+  margin: 0;
+  padding: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+}
 .suggestion-panel {
   margin-top: 4px;
   border: 1px solid var(--border-light);

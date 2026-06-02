@@ -15,7 +15,7 @@
           </button>
         </header>
 
-        <form class="pcm-form" @submit.prevent="confirm">
+        <form v-if="mode === 'password'" class="pcm-form" @submit.prevent="confirm">
           <input
             type="text"
             name="username"
@@ -28,19 +28,20 @@
           />
           <label>
             <Lock :size="14" :stroke-width="2.5" />
-            Senha do utilizador
+            Senha de acesso
           </label>
           <PasswordInput
             ref="passwordInputRef"
             v-model="password"
             autocomplete="current-password"
-            placeholder="Digite a sua senha"
+            placeholder="Senha definida no seu perfil"
             :disabled="loading"
             required
           />
-          <small class="pcm-helper">A confirmação é necessária para continuar com segurança.</small>
+          <small class="pcm-helper">
+            Esta senha é a que definiu em «O meu perfil» — não é a password da conta Google.
+          </small>
           <p v-if="error" class="pcm-error">{{ error }}</p>
-
           <div class="pcm-actions">
             <button type="button" class="pcm-btn-ghost" :disabled="loading" @click="cancel">
               Cancelar
@@ -52,6 +53,20 @@
             </button>
           </div>
         </form>
+
+        <div v-else class="pcm-form pcm-form--need-password">
+          <p class="pcm-dialog-note">
+            Crie uma <strong>senha de acesso</strong> no seu perfil para confirmar exclusões e outras
+            ações sensíveis. O login com Google continua igual; esta senha serve só para confirmações
+            no Assetra.
+          </p>
+          <div class="pcm-actions">
+            <button type="button" class="pcm-btn-ghost" @click="cancel">Cancelar</button>
+            <button type="button" class="pcm-btn-primary" @click="goToProfile">
+              Criar senha de acesso
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </Teleport>
@@ -71,16 +86,19 @@ const props = withDefaults(
     open: boolean
     title?: string
     message?: string
+    mode?: 'password' | 'needPassword'
   }>(),
   {
     title: 'Confirmar com a sua senha',
-    message: 'Esta ação requer a sua senha atual para ser executada.',
+    message: 'Esta ação requer a sua senha de acesso.',
+    mode: 'password',
   },
 )
 
 const emit = defineEmits<{
   (e: 'confirmed'): void
   (e: 'cancel'): void
+  (e: 'open-profile'): void
 }>()
 
 const password = ref('')
@@ -96,7 +114,9 @@ watch(
       error.value = ''
       loading.value = false
       await nextTick()
-      passwordInputRef.value?.focus()
+      if (props.mode === 'password') {
+        passwordInputRef.value?.focus()
+      }
     }
   },
 )
@@ -104,6 +124,10 @@ watch(
 const cancel = () => {
   if (loading.value) return
   emit('cancel')
+}
+
+const goToProfile = () => {
+  emit('open-profile')
 }
 
 const confirm = async () => {
@@ -258,6 +282,13 @@ const confirm = async () => {
   margin-top: 2px;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.pcm-dialog-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.45;
 }
 
 .pcm-error {

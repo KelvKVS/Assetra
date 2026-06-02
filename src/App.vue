@@ -26,9 +26,13 @@
       :open="confirm.state.open"
       :title="confirm.state.title"
       :message="confirm.state.message"
+      :mode="confirm.state.mode"
       @confirmed="confirm.onConfirmed"
       @cancel="confirm.onCancel"
+      @open-profile="confirm.openProfileForPassword"
     />
+
+    <ProfilePanel v-model:open="profileOpen" :focus-password="focusPasswordSection" />
 
     <ImageLightbox
       :open="imageLightbox.state.open"
@@ -47,12 +51,15 @@ import { useAuthStore } from './stores/auth'
 import Sidebar from './components/Sidebar.vue'
 import Topbar from './components/Topbar.vue'
 import PasswordConfirmModal from './components/PasswordConfirmModal.vue'
+import ProfilePanel from './components/ProfilePanel.vue'
 import ImageLightbox from './components/ImageLightbox.vue'
 import { useConfirmAction } from './composables/useConfirmAction'
+import { useProfilePanel } from './composables/useProfilePanel'
 import { useImageLightbox } from './composables/useImageLightbox'
 import { setupGlobalImageZoom } from './composables/setupGlobalImageZoom'
 
 const confirm = useConfirmAction()
+const { profileOpen, focusPasswordSection } = useProfilePanel()
 const imageLightbox = useImageLightbox()
 let teardownImageZoom: (() => void) | undefined
 

@@ -8,8 +8,9 @@ import {
   googleAuthSchema,
   loginSchema,
   passwordVerifySchema,
+  myPasswordUpdateSchema,
 } from '../schemas/index.js'
-import { removeMyAvatar, updateMyAvatar } from '../services/profileService.js'
+import { removeMyAvatar, updateMyAvatar, updateMyPassword } from '../services/profileService.js'
 import { serializeSessionUser } from '../utils/userAvatar.js'
 import {
   authenticateGoogleUser,
@@ -159,6 +160,13 @@ router.post(
     if (!user || !user.active) {
       return res.status(401).json({ message: 'Sessão inválida.' })
     }
+    if (!user.hasConfirmationPassword) {
+      return res.status(400).json({
+        ok: false,
+        code: 'NEED_CONFIRMATION_PASSWORD',
+        message: 'Crie uma senha de acesso no seu perfil para confirmar esta ação.',
+      })
+    }
     const ok = await bcrypt.compare(parsed.data.password, user.passwordHash)
     if (!ok) {
       return res.status(401).json({ ok: false, message: 'Senha incorreta.' })
@@ -183,6 +191,19 @@ router.get(
       return res.json({ user: null })
     }
     return res.json({ user: serializeSessionUser(user) })
+  }),
+)
+
+router.patch(
+  '/me/password',
+  authMiddleware,
+  asyncHandler(async (req, res) => {
+    const parsed = myPasswordUpdateSchema.safeParse(req.body)
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Dados inválidos.', issues: parsed.error.flatten() })
+    }
+    const sessionUser = await updateMyPassword(req.user.sub, parsed.data)
+    return res.json({ user: sessionUser })
   }),
 )
 

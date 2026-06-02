@@ -268,9 +268,9 @@
           type="button"
           class="user-profile"
           aria-haspopup="dialog"
-          :aria-expanded="profileOpen"
+          :aria-expanded="profilePanel.profileOpen"
           title="Ver perfil"
-          @click="profileOpen = true"
+          @click="profilePanel.openProfile()"
         >
           <div class="user-avatar">
             <img v-if="avatarDisplayUrl" :src="avatarDisplayUrl" :alt="`Foto de ${authStore.user.name}`" />
@@ -289,7 +289,6 @@
           <LogOut :size="18" />
         </button>
 
-        <ProfilePanel v-model:open="profileOpen" />
       </div>
 
     </div>
@@ -316,7 +315,7 @@ import { useSidebar } from '../composables/useSidebar'
 
 import { useGlobalSearch, type GlobalSearchItem, type GlobalSearchKind } from '../composables/useGlobalSearch'
 
-import ProfilePanel from './ProfilePanel.vue'
+import { useProfilePanel } from '../composables/useProfilePanel'
 import { resolveMediaUrl } from '../utils/mediaUrl'
 import { Search, LogOut, Menu, Bell, X, User, Monitor, Wrench, ArrowLeftRight, ClipboardCheck, FileText } from 'lucide-vue-next'
 
@@ -353,7 +352,7 @@ const notificationsStore = useNotificationsStore()
 const router = useRouter()
 
 const notificationsOpen = ref(false)
-const profileOpen = ref(false)
+const profilePanel = useProfilePanel()
 
 const searchOpen = ref(false)
 

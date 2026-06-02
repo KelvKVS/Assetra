@@ -23,6 +23,8 @@ type AuthUser = {
   tenant?: TenantInfo
   avatarUrl?: string | null
   avatarFilename?: string | null
+  /** Senha definida no perfil para confirmar ações sensíveis */
+  hasConfirmationPassword?: boolean
 }
 
 function mapAuthUser(raw: AuthUser & { tenant?: TenantInfo; tenantId?: string }): AuthUser {
@@ -36,6 +38,7 @@ function mapAuthUser(raw: AuthUser & { tenant?: TenantInfo; tenantId?: string })
     tenant: raw.tenant,
     avatarUrl: raw.avatarUrl ?? null,
     avatarFilename: raw.avatarFilename ?? null,
+    hasConfirmationPassword: Boolean(raw.hasConfirmationPassword),
   }
 }
 
@@ -175,6 +178,14 @@ export const useAuthStore = defineStore('auth', {
     },
     async removeAvatar() {
       const { data } = await api.delete<{ user: AuthUser }>('/auth/me/avatar')
+      if (data?.user) this.applySessionUser(data.user)
+    },
+    async updateMyPassword(payload: {
+      currentPassword?: string
+      newPassword: string
+      confirmPassword: string
+    }) {
+      const { data } = await api.patch<{ user: AuthUser }>('/auth/me/password', payload)
       if (data?.user) this.applySessionUser(data.user)
     },
     async logout() {

@@ -10,7 +10,7 @@ import {
 } from './maintenanceService.js'
 import { assertUserCanRequestAsset } from '../utils/assetAccess.js'
 import { findAssetByTag } from './assetService.js'
-import { parseDestinationFromDescription, registerMovementFromApproval } from './movementService.js'
+import { registerMovementFromApproval } from './movementService.js'
 import { logAudit } from './auditService.js'
 import { publishDomainEventSafely } from '../lib/eventBus.js'
 import { enrichAttachmentUrls } from '../utils/enrichAttachments.js'
@@ -175,6 +175,7 @@ function toDto(doc) {
     description: o.description,
     feedback: o.feedback ?? '',
     destinationSector: o.destinationSector ?? '',
+    destinationUserEmail: o.destinationUserEmail ?? '',
     attachments: enrichAttachmentUrls(null, o.attachments, o.tenantId),
     status: o.status,
     requestedBy: o.requestedBy ?? '',
@@ -221,13 +222,25 @@ export async function createApproval(tenantId, user, dto) {
     throw new AppError(403, 'Perfil sem permissão para solicitar aprovação.')
   }
 
+  const resolvedAssetTag = String(dto.assetTag ?? '').trim()
+  if (!resolvedAssetTag) {
+    throw new AppError(400, 'Informe o ativo da solicitação.')
+  }
+  await assertUserCanRequestAsset(tenantId, user, resolvedAssetTag)
+
   const normalizedType = String(dto.type ?? '').trim()
   const normalizedMaintenanceId = String(dto.maintenanceId ?? '').trim()
   if (normalizedType === 'Movimentação') {
-    const dest =
-      dto.destinationSector?.trim() || parseDestinationFromDescription(dto.description)
-    if (!dest) {
-      throw new AppError(400, 'Indique o setor de destino para a movimentação.')
+    const destEmail = String(dto.destinationUserEmail ?? '').trim().toLowerCase()
+    if (!destEmail) {
+      throw new AppError(400, 'Selecione o utilizador de destino para a movimentação.')
+    }
+    const destUser = await prisma.user.findFirst({
+      where: { tenantId, email: destEmail, active: true },
+      select: { id: true },
+    })
+    if (!destUser) {
+      throw new AppError(400, 'Utilizador de destino não encontrado ou inativo.')
     }
   }
   if (normalizedType === 'Manutenção') {
@@ -267,6 +280,10 @@ export async function createApproval(tenantId, user, dto) {
     feedback: dto.feedback?.trim() || undefined,
     destinationSector:
       normalizedType === 'Movimentação' ? dto.destinationSector?.trim() || undefined : undefined,
+    destinationUserEmail:
+      normalizedType === 'Movimentação'
+        ? String(dto.destinationUserEmail ?? '').trim().toLowerCase()
+        : undefined,
     attachments: sanitizeAttachmentsForDb(dto.attachments),
     requestedBy: user?.sub,
     requestedByName: user?.name,
@@ -342,21 +359,20 @@ export async function respondToApproval(
   await a.save()
 
   if (decision === 'APPROVED' && String(a.type) === 'Movimentação') {
-    const destination =
-      String(a.destinationSector ?? '').trim() || parseDestinationFromDescription(a.description)
-    if (!destination) {
+    let destEmail = String(a.destinationUserEmail ?? '').trim().toLowerCase()
+    if (!destEmail) {
+      const legacy = String(a.destinationSector ?? '').trim().toLowerCase()
+      if (legacy.includes('@')) destEmail = legacy
+    }
+    if (!destEmail) {
       throw new AppError(
         400,
-        'Não foi possível aplicar a movimentação: setor de destino em falta na solicitação.',
+        'Não foi possível aplicar a movimentação: utilizador de destino em falta. Peça uma nova solicitação.',
       )
     }
-    const asset = await findAssetByTag(tenantId, a.assetTag)
-    const origin = asset?.sector ?? ''
     await registerMovementFromApproval(tenantId, user?.sub, {
       assetTag: a.assetTag,
-      origin,
-      destination,
-      responsible: a.requestedByName || a.requestedBy || 'Solicitante',
+      destinationEmail: destEmail,
     })
   }
 

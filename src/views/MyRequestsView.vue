@@ -7,7 +7,7 @@
         <h2>Olá, {{ firstName }}. Precisa de algo?</h2>
         <p>
           Envie uma solicitação de <strong>manutenção</strong> de um ativo ou de
-          <strong>movimentação entre setores</strong>. Pode anexar
+          <strong>movimentação para outro utilizador</strong> (o ativo passa a ser dele). Pode anexar
           <strong>anexos</strong> (fotos, PDF, relatórios) e a sua justificativa — o aprovador é
           definido automaticamente pela hierarquia abaixo.
         </p>
@@ -51,7 +51,7 @@
           <ArrowRightLeft :size="32" :stroke-width="2.4" />
         </div>
         <h3>Trocar de Setor</h3>
-        <p>Movimentar um ativo de um setor para outro com aprovação do gestor ou ADM.</p>
+        <p>Transferir um ativo para outro colaborador com aprovação do gestor ou ADM.</p>
         <span class="choice-cta">
           Começar <ArrowRight :size="16" :stroke-width="2.5" />
         </span>
@@ -86,7 +86,7 @@
       <!-- Step 1 -->
       <form v-if="step === 1" class="wizard-body" @submit.prevent="goToStep(2)">
         <div class="grid-2">
-          <div class="field">
+          <div class="field field--suggest">
             <label>
               <Tag :size="14" />
               Ativo (tag ou código breve)
@@ -96,7 +96,9 @@
               type="text"
               :placeholder="assetSearchPlaceholder"
               required
+              autocomplete="off"
               @focus="isAssetTagFocused = true"
+              @input="isAssetTagFocused = true"
               @blur="hideAssetTagSuggestions"
             />
             <div v-if="showAssetTagSuggestions" class="suggestion-panel">
@@ -143,17 +145,41 @@
             </div>
           </div>
 
-          <div v-else class="field">
+          <div v-else class="field field--suggest">
             <label>
-              <MapPin :size="14" />
-              Setor de destino
+              <User :size="14" />
+              Utilizador de destino
             </label>
             <input
-              v-model.trim="form.destinationSector"
+              v-model.trim="form.destinationUserEmail"
               type="text"
-              placeholder="ex.: Financeiro"
+              autocomplete="off"
+              placeholder="Digite nome ou e-mail — escolha na lista"
               required
+              @focus="isDestinationUserFocused = true"
+              @input="isDestinationUserFocused = true"
+              @blur="hideDestinationUserSuggestions"
             />
+            <div v-if="showDestinationUserSuggestions" class="suggestion-panel">
+              <button
+                v-for="user in filteredDestinationUsers"
+                :key="`dest-user-${user.id}`"
+                type="button"
+                class="suggestion-item"
+                @mousedown.prevent="pickDestinationUser(user)"
+              >
+                <strong>{{ user.name }}</strong>
+                <span>{{ user.email }}</span>
+                <span v-if="user.department" class="suggestion-meta">{{ user.department }}</span>
+              </button>
+              <p v-if="!filteredDestinationUsers.length" class="suggestion-empty">
+                {{ usersDirectoryError || 'Nenhum utilizador corresponde à pesquisa.' }}
+              </p>
+            </div>
+            <p v-if="selectedAsset" class="field-hint">
+              Responsável atual:
+              <strong>{{ currentAssigneeLabel }}</strong>
+            </p>
           </div>
         </div>
 
@@ -289,8 +315,8 @@
           <div v-else>
             <dt>Destino</dt>
             <dd>
-              <span v-if="selectedAsset">{{ selectedAsset.sector }} → </span>
-              <strong>{{ form.destinationSector || '—' }}</strong>
+              <span v-if="selectedAsset">{{ currentAssigneeLabel }} → </span>
+              <strong>{{ destinationUserLabel || '—' }}</strong>
             </dd>
           </div>
           <div>
@@ -448,7 +474,6 @@
 import { computed, onMounted, reactive, ref, watch, type Component } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useInventoryStore, type AttachmentRef } from '../stores/inventory'
-import { useConfirmAction } from '../composables/useConfirmAction'
 import { useImageLightbox } from '../composables/useImageLightbox'
 import { useLocalPageSearch } from '../composables/useLocalPageSearch'
 import { UPLOAD_ACCEPT_ATTR, UPLOAD_TYPES_SHORT_LABEL, isImageAttachment } from '../constants/attachmentTypes'
@@ -464,6 +489,7 @@ import {
   Tag,
   AlertTriangle,
   MapPin,
+  User,
   FileText,
   MessageSquare,
   Image as ImageIcon,
@@ -493,7 +519,6 @@ type Preview = { name: string; src: string; kind: PreviewKind; file: File }
 
 const authStore = useAuthStore()
 const inventory = useInventoryStore()
-const confirm = useConfirmAction()
 const { pageSearch, matchesPageSearch } = useLocalPageSearch()
 const uploadLimitsHint = UPLOAD_LIMITS_HINT
 const uploadAcceptAttr = UPLOAD_ACCEPT_ATTR
@@ -508,6 +533,8 @@ const formError = ref('')
 const isDragging = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const isAssetTagFocused = ref(false)
+const isDestinationUserFocused = ref(false)
+const usersDirectoryError = ref('')
 
 const severities: { value: Severity; label: string; icon: Component }[] = [
   { value: 'baixa', label: 'Baixa', icon: Activity },
@@ -518,7 +545,7 @@ const severities: { value: Severity; label: string; icon: Component }[] = [
 const form = reactive({
   type: 'Manutenção' as RequestType,
   assetTag: '',
-  destinationSector: '',
+  destinationUserEmail: '',
   severity: 'media' as Severity,
   description: '',
   feedback: '',
@@ -557,6 +584,47 @@ function resolveAssetFromInput(input: string): AssetWithId | null {
 }
 
 const selectedAsset = computed(() => resolveAssetFromInput(form.assetTag))
+
+const activeUsers = computed(() =>
+  inventory.users.filter((u) => (u.status ?? 'Ativo') === 'Ativo'),
+)
+
+const currentAssigneeLabel = computed(() => {
+  const email = (selectedAsset.value?.assignedTo ?? '').trim().toLowerCase()
+  if (!email) return 'Não atribuído'
+  const u = activeUsers.value.find((x) => x.email.toLowerCase() === email)
+  return u ? `${u.name} (${u.email})` : email
+})
+
+const destinationUserLabel = computed(() => {
+  const email = form.destinationUserEmail.trim().toLowerCase()
+  if (!email) return ''
+  const u = activeUsers.value.find((x) => x.email.toLowerCase() === email)
+  return u ? `${u.name} (${u.email})` : email
+})
+
+const filteredDestinationUsers = computed(() => {
+  const current = (selectedAsset.value?.assignedTo ?? '').trim().toLowerCase()
+  const q = form.destinationUserEmail.trim().toLowerCase()
+  let pool = activeUsers.value.filter((u) => u.email.toLowerCase() !== current)
+  if (q) pool = pool.filter((u) => `${u.name} ${u.email}`.toLowerCase().includes(q))
+  return pool.slice(0, 8)
+})
+
+const showDestinationUserSuggestions = computed(
+  () => form.type === 'Movimentação' && isDestinationUserFocused.value,
+)
+
+const pickDestinationUser = (user: { name: string; email: string }) => {
+  form.destinationUserEmail = user.email
+  isDestinationUserFocused.value = false
+}
+
+const hideDestinationUserSuggestions = () => {
+  window.setTimeout(() => {
+    isDestinationUserFocused.value = false
+  }, 120)
+}
 
 const filteredAssetTagSuggestions = computed(() => {
   const q = form.assetTag.trim()
@@ -644,13 +712,19 @@ const historyEmptyState = computed(() => {
 })
 
 onMounted(async () => {
+  usersDirectoryError.value = ''
   await Promise.allSettled([inventory.fetchAssets(), inventory.fetchMyApprovalsSafe()])
+  try {
+    await inventory.fetchUsersDirectory()
+  } catch {
+    usersDirectoryError.value = 'Não foi possível carregar a lista de utilizadores.'
+  }
 })
 
 const openForm = (type: RequestType) => {
   form.type = type
   form.assetTag = ''
-  form.destinationSector = ''
+  form.destinationUserEmail = ''
   form.severity = 'media'
   form.description = ''
   form.feedback = ''
@@ -684,6 +758,24 @@ const goToStep = (n: number) => {
       return
     }
     form.assetTag = asset.tag
+
+    if (form.type === 'Movimentação') {
+      const dest = form.destinationUserEmail.trim().toLowerCase()
+      if (!dest) {
+        formError.value = 'Selecione o utilizador de destino.'
+        return
+      }
+      const destUser = activeUsers.value.find((u) => u.email.toLowerCase() === dest)
+      if (!destUser) {
+        formError.value = 'Utilizador de destino inválido. Escolha na lista.'
+        return
+      }
+      const current = (asset.assignedTo ?? '').trim().toLowerCase()
+      if (current && current === dest) {
+        formError.value = 'O destino deve ser diferente do responsável atual do ativo.'
+        return
+      }
+    }
   }
   step.value = n
   formError.value = ''
@@ -776,12 +868,6 @@ const onSubmit = async () => {
   if (submitting.value) return
   formError.value = ''
 
-  const ok = await confirm.ask(
-    'Confirme com a sua senha para enviar esta solicitação ao fluxo de aprovação.',
-    'Confirmar envio',
-  )
-  if (!ok) return
-
   const asset = resolveAssetFromInput(form.assetTag)
   if (!asset) {
     formError.value = isEmployee.value
@@ -797,10 +883,7 @@ const onSubmit = async () => {
       attachments = await inventory.uploadAttachments(files.value)
     }
 
-    const description =
-      form.type === 'Movimentação' && form.destinationSector
-        ? `${form.description} (destino: ${form.destinationSector})`
-        : form.description
+    const description = form.description
 
     const feedback =
       form.type === 'Manutenção'
@@ -811,7 +894,8 @@ const onSubmit = async () => {
       type: form.type,
       assetTag: asset.tag,
       description,
-      destinationSector: form.type === 'Movimentação' ? form.destinationSector.trim() : undefined,
+      destinationUserEmail:
+        form.type === 'Movimentação' ? form.destinationUserEmail.trim().toLowerCase() : undefined,
       feedback,
       attachments,
     })
@@ -960,6 +1044,16 @@ const onSubmit = async () => {
   border-radius: 10px; color: var(--text-primary); font-size: 14px; font-family: inherit;
   transition: all 0.15s ease;
 }
+.field--suggest {
+  position: relative;
+}
+.field--suggest .suggestion-panel {
+  position: absolute;
+  top: calc(100% - 2px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+}
 .suggestion-panel {
   margin-top: 4px;
   border: 1px solid var(--border-light);
@@ -969,6 +1063,17 @@ const onSubmit = async () => {
   max-height: 220px;
   overflow-y: auto;
   display: grid;
+}
+.suggestion-empty {
+  margin: 0;
+  padding: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.suggestion-meta {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 .suggestion-item {
   border: none;

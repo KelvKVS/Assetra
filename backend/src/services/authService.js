@@ -92,6 +92,14 @@ export async function authenticateUser(prisma, input) {
     throw new AppError(401, 'Credenciais inválidas.')
   }
 
+  if (!user.hasConfirmationPassword) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { hasConfirmationPassword: true },
+    })
+    user.hasConfirmationPassword = true
+  }
+
   const token = signSessionToken(user)
   return {
     token,

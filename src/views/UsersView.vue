@@ -523,8 +523,6 @@ const addUser = async () => {
     return
   }
 
-  const ok = await confirm.ask('Confirme com a sua senha para cadastrar este utilizador.')
-  if (!ok) return
   try {
     await inventory.createUser({
       name: newUser.name,
@@ -552,9 +550,9 @@ const addUser = async () => {
 }
 
 const removeUser = async (id: string) => {
-  const ok = await confirm.ask(
-    'Confirme com a sua senha para excluir este utilizador.',
-    'Confirmar exclusão',
+  const ok = await confirm.askSensitive(
+    'Esta ação remove o utilizador de forma permanente.',
+    'Excluir utilizador',
   )
   if (!ok) return
   try {
@@ -594,8 +592,6 @@ const saveUserEdit = async () => {
       return
     }
   }
-  const ok = await confirm.ask('Confirme com a sua senha para guardar as alterações.')
-  if (!ok) return
   try {
     const department = resolveDepartmentValue(editDepartmentSelect.value, editDepartmentCustom.value)
     if (editRequiresDepartment.value && !department) {
