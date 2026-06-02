@@ -239,7 +239,8 @@ export function logEmailTransportOnStartup() {
 
 async function sendViaResend(mail) {
   const apiKey = String(process.env.RESEND_API_KEY ?? '').trim()
-  const from = mail.from || getResendFromAddress()
+  // Resend: nunca usar mail.from @gmail.com — só RESEND_FROM / onboarding
+  const from = getResendFromAddress()
   if (!from) {
     return {
       sent: false,
@@ -281,7 +282,16 @@ async function sendViaResend(mail) {
         mode: 'resend',
       }
     }
-    console.info('[email] Enviado via Resend:', mail.subject, '→', mail.to, body?.id ? `id=${body.id}` : '')
+    console.info(
+      '[email] Enviado via Resend:',
+      mail.subject,
+      '→',
+      mail.to,
+      '| From:',
+      from,
+      replyTo ? `| Reply-To: ${replyTo}` : '',
+      body?.id ? `| id=${body.id}` : '',
+    )
     return { sent: true, mode: 'resend', realInbox: true }
   } catch (err) {
     const emailError = String(err?.message ?? err).slice(0, 280)
@@ -399,8 +409,7 @@ async function deliverWithContext(ctx, mail) {
  */
 export async function sendMail(mail) {
   if (isResendConfigured()) {
-    const from = mail.from || getResendFromAddress()
-    const primary = await sendViaResend({ ...mail, from })
+    const primary = await sendViaResend(mail)
     if (primary.sent) return primary
 
     const canFallback =
@@ -533,15 +542,12 @@ export async function sendUserRegistrationInviteEmail(params) {
 </body>
 </html>`
 
-  // Gmail/Resend exigem remetente verificado — não usar e-mail do ADM como From.
-  const from = getDefaultFromAddress()
   return sendMail({
     to,
     subject,
     text,
     html,
-    from: from ?? undefined,
-    replyTo: inviterEmail || undefined,
+    replyTo: inviterEmail || getResendReplyToAddress() || undefined,
   })
 }
 
@@ -569,8 +575,7 @@ export async function sendRegistrationDisputeNoticeEmail(params) {
 <p><strong>${escapeHtml(userName)}</strong> (<a href="mailto:${escapeHtml(userEmail)}">${escapeHtml(userEmail)}</a>) informou que <strong>não reconhece</strong> o cadastro na organização «${escapeHtml(tenantName)}».</p>
 <p>Verifique se o e-mail foi cadastrado por engano e, se necessário, desative ou remova o utilizador no painel de usuários.</p>`
 
-  const from = getDefaultFromAddress()
-  return sendMail({ to, subject, text, html, from: from ?? undefined, replyTo: userEmail })
+  return sendMail({ to, subject, text, html, replyTo: userEmail })
 }
 
 /**
@@ -615,14 +620,12 @@ export async function sendNotificationEmail(params) {
 </body>
 </html>`
 
-  const from = getDefaultFromAddress()
   return sendMail({
     to,
     subject,
     text,
     html,
-    from: from ?? undefined,
-    replyTo: parseEmailAddress(sender) || undefined,
+    replyTo: parseEmailAddress(sender) || getResendReplyToAddress() || undefined,
   })
 }
 
