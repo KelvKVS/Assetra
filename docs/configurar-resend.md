@@ -1,5 +1,8 @@
 # Configurar e-mail com Resend (Assetra)
 
+> **Limitação:** sem domínio verificado, a Resend só envia para **o seu próprio e-mail**.  
+> Para convites a colaboradores, use **[Brevo](configurar-brevo.md)** (recomendado) ou verifique um domínio em resend.com/domains.
+
 ## 1) Conta e API Key na Resend
 
 1. Aceda a [https://resend.com](https://resend.com) e crie conta.

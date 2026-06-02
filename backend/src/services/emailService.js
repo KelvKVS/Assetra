@@ -43,8 +43,31 @@ function getSmtpConfig() {
   return { host, port, user, pass, from }
 }
 
+function isBrevoConfigured() {
+  return Boolean(String(process.env.BREVO_API_KEY ?? '').trim())
+}
+
 function isResendConfigured() {
   return Boolean(String(process.env.RESEND_API_KEY ?? '').trim())
+}
+
+/** Remetente Brevo — deve estar verificado em Senders (não exige domínio próprio). */
+function getBrevoSender() {
+  const email = parseEmailAddress(process.env.EMAIL_FROM || process.env.SMTP_USER)
+  if (!email) return null
+  const name = String(process.env.BREVO_SENDER_NAME ?? 'Assetra').trim() || 'Assetra'
+  return { name, email }
+}
+
+function mapBrevoApiError(msg) {
+  const raw = String(msg ?? '')
+  if (/sender|not verified|authenticate/i.test(raw)) {
+    return (
+      'Remetente não verificado no Brevo. Em brevo.com → Senders, adicione e confirme EMAIL_FROM ' +
+      '(link no Gmail) antes de enviar convites.'
+    )
+  }
+  return raw.slice(0, 280) || 'Brevo rejeitou o envio.'
 }
 
 /** Domínios que a Resend não deixa verificar (ex.: gmail.com). */
@@ -105,6 +128,13 @@ function getResendFromAddress() {
 
 function mapResendApiError(msg) {
   const raw = String(msg ?? '')
+  if (/only send testing emails to your own/i.test(raw)) {
+    return (
+      'Resend sem domínio verificado só envia para a sua conta (' +
+      `${parseEmailAddress(process.env.EMAIL_FROM) || 'e-mail da conta'}). ` +
+      'Para convites a colaboradores, use BREVO_API_KEY (veja docs/configurar-brevo.md) ou verifique um domínio em resend.com/domains.'
+    )
+  }
   if (/gmail\.com domain is not verified|domain is not verified/i.test(raw)) {
     return (
       'A Resend não permite remetente @gmail.com. Use RESEND_FROM=onboarding@resend.dev no .env/Render ' +
@@ -120,7 +150,7 @@ export function isRenderFreeSmtpBlocked() {
   if (process.env.RENDER !== 'true') return false
   const tier = String(process.env.RENDER_INSTANCE_TYPE ?? 'free').toLowerCase()
   if (tier && tier !== 'free') return false
-  return isSmtpConfigured() && !isResendConfigured()
+  return isSmtpConfigured() && !isResendConfigured() && !isBrevoConfigured()
 }
 
 function isDevEtherealEnabled() {
@@ -135,11 +165,12 @@ export function isSmtpConfigured() {
 }
 
 export function isEmailConfigured() {
-  return isResendConfigured() || isSmtpConfigured() || isDevEtherealEnabled()
+  return isBrevoConfigured() || isResendConfigured() || isSmtpConfigured() || isDevEtherealEnabled()
 }
 
-/** @returns {'resend' | 'smtp' | 'ethereal' | 'none'} */
+/** @returns {'brevo' | 'resend' | 'smtp' | 'ethereal' | 'none'} */
 export function getEmailTransportMode() {
+  if (isBrevoConfigured()) return 'brevo'
   if (isResendConfigured()) return 'resend'
   if (isSmtpConfigured() && !isRenderFreeSmtpBlocked()) return 'smtp'
   if (isDevEtherealEnabled()) return 'ethereal'
@@ -159,22 +190,31 @@ export function getEmailSetupStatus() {
       realInboxDelivery: false,
       message:
         'Render (plano free) bloqueia SMTP (portas 587/465). Por isso o Gmail funciona no localhost mas não no deploy. ' +
-        'Adicione RESEND_API_KEY no painel do Render (recomendado, usa HTTPS) ou faça upgrade do serviço.',
-      missing: ['RESEND_API_KEY', 'RESEND_FROM (opcional, mesmo e-mail verificado na Resend)'],
+        'Adicione BREVO_API_KEY no Render (recomendado — envia para qualquer destinatário) ou RESEND com domínio verificado.',
+      missing: ['BREVO_API_KEY', 'EMAIL_FROM verificado em brevo.com → Senders'],
     }
   }
 
   if (mode === 'none') {
     if (isSmtpConfigured() && process.env.RENDER === 'true') {
-      missing.push('RESEND_API_KEY (SMTP bloqueado no Render free)')
+      missing.push('BREVO_API_KEY (SMTP bloqueado no Render free)')
     } else {
-      missing.push('RESEND_API_KEY (produção) ou SMTP_HOST, SMTP_USER, SMTP_PASS (localhost/plano pago)')
+      missing.push('BREVO_API_KEY (produção) ou SMTP_HOST, SMTP_USER, SMTP_PASS (localhost/plano pago)')
     }
     return {
       mode,
       realInboxDelivery: false,
-      message: 'E-mail desativado em produção. Configure RESEND_API_KEY no Render ou SMTP no .env local.',
+      message: 'E-mail desativado em produção. Configure BREVO_API_KEY no Render ou SMTP no .env local.',
       missing,
+    }
+  }
+  if (mode === 'brevo') {
+    return {
+      mode,
+      realInboxDelivery: true,
+      message:
+        'Brevo ativo: pode enviar convites para qualquer e-mail. Confirme EMAIL_FROM em brevo.com → Senders.',
+      missing: [],
     }
   }
   if (mode === 'ethereal') {
@@ -193,7 +233,7 @@ export function getEmailSetupStatus() {
       mode,
       realInboxDelivery: true,
       message: usesOnboarding
-        ? 'Resend ativo: remetente onboarding@resend.dev (válido sem domínio). Respostas vão para EMAIL_FROM.'
+        ? 'Resend ativo, mas SEM domínio só envia para a sua conta. Para convites use BREVO_API_KEY (docs/configurar-brevo.md).'
         : 'Resend API ativa: remetente com domínio verificado em resend.com/domains.',
       missing: [],
     }
@@ -220,13 +260,17 @@ export function logEmailTransportOnStartup() {
     console.info(`[email] Modo: ${mode}`)
     return
   }
+  if (mode === 'brevo') {
+    console.info('[email] Produção: envio via Brevo API (HTTPS) — qualquer destinatário após verificar Senders.')
+    return
+  }
   if (mode === 'resend') {
-    console.info('[email] Produção: envio via Resend API (HTTPS) — compatível com Render free.')
+    console.info('[email] Produção: envio via Resend API — sem domínio só envia para a conta da API.')
     return
   }
   if (isRenderFreeSmtpBlocked()) {
     console.error(
-      '[email] SMTP configurado mas BLOQUEADO no Render free. Defina RESEND_API_KEY no painel do Render.',
+      '[email] SMTP bloqueado no Render free. Defina BREVO_API_KEY (recomendado) no painel do Render.',
     )
     return
   }
@@ -234,7 +278,64 @@ export function logEmailTransportOnStartup() {
     console.info('[email] Produção: envio via SMTP.')
     return
   }
-  console.error('[email] Produção sem transporte de e-mail — configure RESEND_API_KEY.')
+  console.error('[email] Produção sem transporte de e-mail — configure BREVO_API_KEY.')
+}
+
+async function sendViaBrevo(mail) {
+  const apiKey = String(process.env.BREVO_API_KEY ?? '').trim()
+  const sender = getBrevoSender()
+  if (!sender) {
+    return {
+      sent: false,
+      reason: 'from_not_configured',
+      emailError: 'Defina EMAIL_FROM com o e-mail que verificou em brevo.com → Senders.',
+    }
+  }
+
+  const replyToEmail = mail.replyTo ? parseEmailAddress(mail.replyTo) : getResendReplyToAddress()
+  const payload = {
+    sender,
+    to: [{ email: mail.to }],
+    subject: mail.subject,
+    htmlContent: mail.html,
+    textContent: mail.text,
+  }
+  if (replyToEmail) {
+    payload.replyTo = { email: replyToEmail }
+  }
+
+  try {
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': apiKey,
+        'Content-Type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      const msg = body?.message || body?.error || res.statusText || 'Brevo rejeitou o envio'
+      const emailError = mapBrevoApiError(msg)
+      console.error('[email] Brevo falhou:', msg)
+      return { sent: false, reason: 'send_failed', emailError, mode: 'brevo' }
+    }
+    console.info(
+      '[email] Enviado via Brevo:',
+      mail.subject,
+      '→',
+      mail.to,
+      '| From:',
+      sender.email,
+      body?.messageId ? `| id=${body.messageId}` : '',
+    )
+    return { sent: true, mode: 'brevo', realInbox: true }
+  } catch (err) {
+    const emailError = String(err?.message ?? err).slice(0, 280)
+    console.error('[email] Brevo erro de rede:', emailError)
+    return { sent: false, reason: 'send_failed', emailError, mode: 'brevo' }
+  }
 }
 
 async function sendViaResend(mail) {
@@ -408,6 +509,19 @@ async function deliverWithContext(ctx, mail) {
  * }} mail
  */
 export async function sendMail(mail) {
+  if (isBrevoConfigured()) {
+    const primary = await sendViaBrevo(mail)
+    if (primary.sent) return primary
+
+    const canFallback =
+      process.env.NODE_ENV !== 'production' &&
+      isDevEtherealEnabled() &&
+      primary.reason === 'send_failed'
+
+    if (!canFallback) return primary
+    console.warn('[email] Brevo falhou; a tentar Ethereal em dev…')
+  }
+
   if (isResendConfigured()) {
     const primary = await sendViaResend(mail)
     if (primary.sent) return primary

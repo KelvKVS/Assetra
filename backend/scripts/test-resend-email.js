@@ -21,9 +21,12 @@ if (!to) {
 
 const setup = getEmailSetupStatus()
 console.log('Estado:', setup.mode, '—', setup.message)
-if (setup.mode !== 'resend') {
-  console.error('RESEND_API_KEY não configurada ou inválida no backend/.env')
+if (setup.mode !== 'brevo' && setup.mode !== 'resend') {
+  console.error('Configure BREVO_API_KEY (recomendado) ou RESEND_API_KEY no backend/.env')
   process.exit(1)
+}
+if (setup.mode === 'resend') {
+  console.warn('Aviso: Resend sem domínio só envia para a conta da API. Use Brevo para outros destinatários.')
 }
 
 const result = await sendTestEmail(to)
