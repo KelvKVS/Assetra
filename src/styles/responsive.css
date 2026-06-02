@@ -131,6 +131,20 @@ main.content .user-info {
   min-width: 0;
 }
 
+/* Cartões de utilizador: evitar quebra letra-a-letra em ecrãs largos */
+main.content .users-page .user-card :is(
+  .user-name,
+  .user-email,
+  .user-email-text,
+  .profile-badge,
+  .status-badge,
+  .account-badge,
+  .department-badge
+) {
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
 /* ---- Barras de pesquisa ---- */
 main.content .search-bar {
   width: 100%;
@@ -366,12 +380,12 @@ main.content .user-actions {
     align-items: center;
   }
 
-  main.content .user-card {
-    flex-direction: column;
-    align-items: stretch;
+  main.content .users-page .user-card {
+    flex-direction: unset;
+    align-items: start;
   }
 
-  main.content .user-actions {
+  main.content .users-page .user-actions {
     justify-content: flex-end;
   }
 

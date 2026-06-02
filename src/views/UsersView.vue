@@ -210,7 +210,7 @@
           <h3 class="user-name">{{ user.name }}</h3>
           <p class="user-email">
             <Mail :size="14" :stroke-width="2" />
-            {{ user.email }}
+            <span class="user-email-text">{{ user.email }}</span>
           </p>
           <div class="user-badges">
             <span :class="['profile-badge', `profile-${user.role.toLowerCase()}`]">
@@ -1234,20 +1234,43 @@ const saveUserEdit = async () => {
 
 .users-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: 1fr;
   gap: 16px;
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .users-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .users-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+}
+
+@media (min-width: 1600px) {
+  .users-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .user-card {
   background: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: 12px;
-  padding: 20px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 16px;
+  padding: 18px 20px;
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  grid-template-areas: 'avatar info actions';
+  align-items: start;
+  gap: 12px 16px;
   transition: all 0.2s ease;
+  overflow: hidden;
 }
 
 .user-card:hover {
@@ -1257,6 +1280,7 @@ const saveUserEdit = async () => {
 }
 
 .user-avatar {
+  grid-area: avatar;
   width: 56px;
   height: 56px;
   border-radius: 12px;
@@ -1271,33 +1295,74 @@ const saveUserEdit = async () => {
 }
 
 .user-info {
-  flex: 1;
+  grid-area: info;
   min-width: 0;
+  width: 100%;
 }
 
 .user-name {
-  margin: 0 0 4px;
+  margin: 0 0 6px;
   font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.35;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 .user-email {
-  margin: 0 0 8px;
+  margin: 0 0 10px;
   font-size: 13px;
   color: var(--text-secondary);
   display: flex;
-  align-items: center;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.4;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.user-email :deep(svg) {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.user-email-text {
+  min-width: 0;
+  flex: 1;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 .user-badges {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+.users-page .user-card :is(
+  .user-name,
+  .user-email,
+  .user-email-text,
+  .profile-badge,
+  .status-badge,
+  .account-badge,
+  .department-badge,
+  .user-assets-toggle
+) {
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.users-page .user-badges :is(.profile-badge, .status-badge, .account-badge) {
+  white-space: nowrap;
+}
+
+.users-page .department-badge,
+.users-page .account-badge.pending {
+  white-space: normal;
+  max-width: 100%;
 }
 
 .user-assets-toggle {
@@ -1396,9 +1461,46 @@ const saveUserEdit = async () => {
 }
 
 .user-actions {
+  grid-area: actions;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   flex-shrink: 0;
+  justify-content: flex-end;
+  align-self: start;
+}
+
+@media (max-width: 720px) {
+  .user-card {
+    grid-template-columns: 48px minmax(0, 1fr);
+    grid-template-areas:
+      'avatar info'
+      'actions actions';
+    gap: 12px;
+  }
+
+  .user-avatar {
+    width: 48px;
+    height: 48px;
+    font-size: 20px;
+  }
+
+  .user-actions {
+    padding-top: 10px;
+    border-top: 1px solid var(--border-light);
+  }
+}
+
+@media (max-width: 480px) {
+  .hero {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hero .btn-primary {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 .btn-icon {
