@@ -141,8 +141,7 @@ export async function sendRegistrationInviteAfterCreate(prisma, { user, tenant, 
     const isTimeout = String(err?.message ?? '') === 'invite_email_timeout'
     console.warn(
       '[registration-invite]',
-      isTimeout ? 'Envio de e-mail demorou; utilizador já criado. Link:',
-      : 'Falha ao enviar e-mail:',
+      isTimeout ? 'Envio de e-mail demorou; utilizador já criado. Link:' : 'Falha ao enviar e-mail:',
       urls.confirmUrl,
       err?.message ?? err,
     )
