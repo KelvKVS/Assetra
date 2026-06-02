@@ -9,6 +9,7 @@ import {
   loginSchema,
   passwordVerifySchema,
   myPasswordUpdateSchema,
+  registrationInviteTokenSchema,
 } from '../schemas/index.js'
 import { removeMyAvatar, updateMyAvatar, updateMyPassword } from '../services/profileService.js'
 import { serializeSessionUser } from '../utils/userAvatar.js'
@@ -28,6 +29,10 @@ import {
   signTenantPickCookie,
 } from '../services/googleOAuthService.js'
 import { AppError } from '../utils/AppError.js'
+import {
+  confirmRegistrationInvite,
+  disputeRegistrationInvite,
+} from '../services/registrationInviteService.js'
 
 const router = Router()
 const isProd = process.env.NODE_ENV === 'production'
@@ -42,6 +47,30 @@ function getCookieOptions() {
     maxAge: 60 * 60 * 24 * 7 * 1000,
   }
 }
+
+router.post(
+  '/registration-invite/confirm',
+  asyncHandler(async (req, res) => {
+    const parsed = registrationInviteTokenSchema.safeParse(req.body)
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Token inválido.', issues: parsed.error.flatten() })
+    }
+    const result = await confirmRegistrationInvite(prisma, parsed.data.token)
+    return res.json(result)
+  }),
+)
+
+router.post(
+  '/registration-invite/dispute',
+  asyncHandler(async (req, res) => {
+    const parsed = registrationInviteTokenSchema.safeParse(req.body)
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Token inválido.', issues: parsed.error.flatten() })
+    }
+    const result = await disputeRegistrationInvite(prisma, parsed.data.token)
+    return res.json(result)
+  }),
+)
 
 router.post(
   '/login',

@@ -124,6 +124,8 @@ export type DirectoryUser = {
   role: string
   department?: string | null
   status: string
+  registrationPending?: boolean
+  registrationDisputed?: boolean
 }
 
 export const useInventoryStore = defineStore('inventory', {
@@ -419,7 +421,13 @@ export const useInventoryStore = defineStore('inventory', {
       password?: string
       googleCredential?: string
     }) {
-      await api.post('/users', {
+      const { data } = await api.post<{
+        registrationEmailSent?: boolean
+        emailTestOnly?: boolean
+        emailHint?: string
+        registrationConfirmUrl?: string
+        registrationEmailPreviewUrl?: string | null
+      }>('/users', {
         name: payload.name,
         email: payload.email,
         profile: payload.profile,
@@ -429,6 +437,7 @@ export const useInventoryStore = defineStore('inventory', {
         googleCredential: payload.googleCredential,
       })
       await this.fetchUsers()
+      return data
     },
     async updateUser(
       id: string,
@@ -447,6 +456,20 @@ export const useInventoryStore = defineStore('inventory', {
     async deleteUser(id: string) {
       await api.delete(`/users/${id}`)
       await this.fetchUsers()
+    },
+    async confirmUserRegistration(id: string) {
+      await api.post(`/users/${id}/confirm-registration`)
+      await this.fetchUsers()
+    },
+    async resendUserInvite(id: string) {
+      const { data } = await api.post<{
+        emailSent?: boolean
+        emailTestOnly?: boolean
+        emailHint?: string
+        confirmUrl?: string
+        emailPreviewUrl?: string | null
+      }>(`/users/${id}/resend-invite`)
+      return data
     },
   },
 })

@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken'
 import { AppError } from '../utils/AppError.js'
 import { serializeSessionUser } from '../utils/userAvatar.js'
 import { verifyGoogleIdToken } from './googleTokenService.js'
+import { assertUserMayLoginWithGoogle } from '../utils/registrationGate.js'
 
 function signSessionToken(user) {
   const secret = process.env.JWT_SECRET
@@ -163,6 +164,8 @@ export async function resolveGoogleLoginUser(prisma, { email, tenantSlug, pictur
     /^https?:\/\//i.test(pictureUrl) &&
     !String(user.avatarFilename ?? '').trim() &&
     !String(user.avatarExternalUrl ?? '').trim()
+
+  assertUserMayLoginWithGoogle(user)
 
   if (shouldApplyGoogleAvatar) {
     user = await prisma.user.update({

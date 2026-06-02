@@ -4,6 +4,7 @@ import { AppError } from '../utils/AppError.js'
 import { profileToRole } from '../utils/profileRole.js'
 import { isDemoAssetraEmail, normalizeEmail, requiresGoogleVerification } from '../utils/emailPolicy.js'
 import { DEFAULT_DEPARTMENTS } from '../constants/departments.js'
+import { sendRegistrationInviteAfterCreate } from './registrationInviteService.js'
 
 function normalizeDepartment(raw) {
   const value = String(raw ?? '').trim()
@@ -43,10 +44,20 @@ export async function listUsersByTenant(prisma, tenantId) {
       department: true,
       active: true,
       createdAt: true,
+      invitedByUserId: true,
+      registrationAcknowledgedAt: true,
+      registrationDisputedAt: true,
     },
     orderBy: { createdAt: 'desc' },
   })
-  return users.map((u) => mapUserDto(u))
+  return users.map((u) =>
+    mapUserDto(u, {
+      registrationPending: Boolean(
+        u.invitedByUserId && !u.registrationAcknowledgedAt && !u.registrationDisputedAt,
+      ),
+      registrationDisputed: Boolean(u.registrationDisputedAt),
+    }),
+  )
 }
 
 /** Lista reduzida para seleção de destino em movimentações (todos os perfis autenticados). */
@@ -159,7 +170,7 @@ export async function checkUserEmailInTenant(prisma, tenantId, email) {
  * @param {string} tenantId
  * @param {object} input
  */
-export async function createUserInTenant(prisma, tenantId, input) {
+export async function createUserInTenant(prisma, tenantId, input, inviter = null) {
   const email = normalizeEmail(input.email)
   const isDemo = isDemoAssetraEmail(email)
 
@@ -197,9 +208,39 @@ export async function createUserInTenant(prisma, tenantId, input) {
         department,
         active,
         tenantId,
+        invitedByUserId: !isDemo && inviter?.sub ? inviter.sub : undefined,
       },
     })
-    return mapUserDto(user, { accountType: isDemo ? 'demo' : 'google' })
+
+    let inviteMeta = {}
+    if (!isDemo && inviter?.sub) {
+      const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
+      if (tenant) {
+        const inviteResult = await sendRegistrationInviteAfterCreate(prisma, {
+          user,
+          tenant,
+          inviter: {
+            id: inviter.sub,
+            name: inviter.name || 'Administrador',
+            email: inviter.email || '',
+          },
+        })
+        inviteMeta = {
+          registrationEmailSent: inviteResult.emailSent,
+          emailTestOnly: inviteResult.emailTestOnly,
+          emailDeliveryMode: inviteResult.emailDeliveryMode,
+          emailHint: inviteResult.emailHint,
+          registrationConfirmUrl: inviteResult.confirmUrl,
+          registrationEmailPreviewUrl: inviteResult.emailPreviewUrl,
+        }
+      }
+    }
+
+    return mapUserDto(user, {
+      accountType: isDemo ? 'demo' : 'google',
+      registrationPending: !isDemo && Boolean(inviter?.sub),
+      ...inviteMeta,
+    })
   } catch {
     throw new AppError(400, 'E-mail já existe nesta organização ou dados inválidos.')
   }

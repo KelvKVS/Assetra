@@ -13,6 +13,10 @@ import { findAssetByTag } from './assetService.js'
 import { registerMovementFromApproval } from './movementService.js'
 import { logAudit } from './auditService.js'
 import { publishDomainEventSafely } from '../lib/eventBus.js'
+import {
+  dispatchApprovalCreatedEmails,
+  dispatchApprovalDecidedEmail,
+} from './notificationEmailDispatchService.js'
 import { enrichAttachmentUrls } from '../utils/enrichAttachments.js'
 import { sanitizeAttachmentsForDb } from '../utils/sanitizeAttachments.js'
 import {
@@ -319,6 +323,9 @@ export async function createApproval(tenantId, user, dto) {
     status: a.status,
     requiredApproverRole: a.requiredApproverRole,
   }, { service: 'approvalService', action: 'createApproval' })
+  await dispatchApprovalCreatedEmails(tenantId, a).catch((err) => {
+    console.warn('[notifications] Falha ao enfileirar e-mail (approval.created):', err?.message ?? err)
+  })
   const [enriched] = await mapApprovalsWithEnrichment([a])
   return enriched
 }
@@ -417,6 +424,9 @@ export async function respondToApproval(
     status: a.status,
     maintenanceId: a.maintenanceId ?? '',
   }, { service: 'approvalService', action: 'respondToApproval' })
+  await dispatchApprovalDecidedEmail(tenantId, a).catch((err) => {
+    console.warn('[notifications] Falha ao enfileirar e-mail (approval.decided):', err?.message ?? err)
+  })
   const [enriched] = await mapApprovalsWithEnrichment([a])
   return enriched
 }

@@ -7,6 +7,10 @@ export const loginSchema = z.object({
   tenantSlug: z.string().trim().max(64).nullish(),
 })
 
+export const registrationInviteTokenSchema = z.object({
+  token: z.string().min(10, 'Token inválido.'),
+})
+
 export const googleAuthSchema = z.object({
   credential: z.string().min(1).max(4000),
   tenantSlug: z.string().trim().max(64).nullish(),

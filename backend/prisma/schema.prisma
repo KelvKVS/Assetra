@@ -39,6 +39,10 @@ model User {
   /// URL externa da foto (preenchida a partir do Google no primeiro login, se não houver foto local)
   avatarExternalUrl String?
   active       Boolean  @default(true)
+  /// Administrador que cadastrou o utilizador (convite Google).
+  invitedByUserId String?
+  registrationAcknowledgedAt DateTime?
+  registrationDisputedAt     DateTime?
   tenantId     String
   tenant       Tenant   @relation(fields: [tenantId], references: [id])
   createdAt    DateTime @default(now())

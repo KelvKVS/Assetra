@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
+import RegistrationInviteView from '../views/RegistrationInviteView.vue'
 import DashboardView from '../views/DashboardView.vue'
 import AssetsView from '../views/AssetsView.vue'
 import MovementsView from '../views/MovementsView.vue'
@@ -23,6 +24,12 @@ const router = createRouter({
       name: 'login',
       component: LoginView,
       meta: { guestOnly: true },
+    },
+    {
+      path: '/convite',
+      name: 'registration-invite',
+      component: RegistrationInviteView,
+      meta: { public: true },
     },
     { path: '/dashboard', name: 'dashboard', component: DashboardView, meta: { requiresAuth: true } },
     { path: '/ativos', name: 'assets', component: AssetsView, meta: { requiresAuth: true, roles: ['ADM', 'GESTOR', 'TECNICO'] } },

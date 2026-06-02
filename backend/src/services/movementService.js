@@ -1,6 +1,8 @@
 import Movement from '../models/Movement.js'
 import prisma from '../lib/prisma.js'
 import { AppError } from '../utils/AppError.js'
+import { publishDomainEventSafely } from '../lib/eventBus.js'
+import { dispatchMovementCreatedEmail } from './notificationEmailDispatchService.js'
 import { findAssetByTag } from './assetService.js'
 
 function formatDatePt(d) {
@@ -113,6 +115,15 @@ export async function createMovement(tenantId, userId, dto) {
     occurredAt: new Date(),
   })
   await m.save()
+
+  await publishDomainEventSafely(
+    'movement.created',
+    { tenantId, movementId: String(m._id), assetTag: m.assetTag },
+    { service: 'movementService', action: 'createMovement' },
+  )
+  await dispatchMovementCreatedEmail(tenantId, m.toObject()).catch((err) => {
+    console.warn('[notifications] Falha ao enfileirar e-mail (movement.created):', err?.message ?? err)
+  })
 
   return toDto(m)
 }

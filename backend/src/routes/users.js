@@ -13,8 +13,22 @@ import {
   updateUserInTenant,
 } from '../services/userService.js'
 import { verifyGoogleIdToken } from '../services/googleTokenService.js'
+import {
+  confirmUserRegistrationByAdmin,
+  resendRegistrationInvite,
+} from '../services/registrationInviteService.js'
+import { getEmailSetupStatus } from '../services/emailService.js'
 
 const router = Router()
+
+router.get(
+  '/email-setup',
+  authMiddleware,
+  authorize(['ADM']),
+  asyncHandler(async (_req, res) => {
+    res.json(getEmailSetupStatus())
+  }),
+)
 
 router.get(
   '/directory',
@@ -83,8 +97,28 @@ router.post(
     if (!parsed.success) {
       return res.status(400).json({ message: 'Dados inválidos.', issues: parsed.error.flatten() })
     }
-    const user = await createUserInTenant(prisma, req.user.tenantId, parsed.data)
+    const user = await createUserInTenant(prisma, req.user.tenantId, parsed.data, req.user)
     res.status(201).json(user)
+  }),
+)
+
+router.post(
+  '/:id/confirm-registration',
+  authMiddleware,
+  authorize(['ADM']),
+  asyncHandler(async (req, res) => {
+    const result = await confirmUserRegistrationByAdmin(prisma, req.user.tenantId, req.params.id)
+    res.json(result)
+  }),
+)
+
+router.post(
+  '/:id/resend-invite',
+  authMiddleware,
+  authorize(['ADM']),
+  asyncHandler(async (req, res) => {
+    const result = await resendRegistrationInvite(prisma, req.user.tenantId, req.params.id, req.user)
+    res.json(result)
   }),
 )
 

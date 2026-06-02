@@ -14,6 +14,31 @@
       </button>
     </header>
 
+    <div
+      v-if="emailSetup && !emailSetup.realInboxDelivery"
+      class="page-notice page-notice-warn"
+    >
+      <p><strong>E-mail em modo teste.</strong> {{ emailSetup.message }}</p>
+    </div>
+
+    <div
+      v-if="pageNotice"
+      :class="['page-notice', pageNotice.testOnly ? 'page-notice-warn' : '']"
+    >
+      <p>{{ pageNotice.text }}</p>
+      <p v-if="pageNotice.hint" class="page-notice-hint">{{ pageNotice.hint }}</p>
+      <p v-if="pageNotice.previewUrl" class="page-notice-link">
+        <a :href="pageNotice.previewUrl" target="_blank" rel="noopener noreferrer">
+          Abrir e-mail de teste (único lugar onde o e-mail aparece)
+        </a>
+      </p>
+      <p v-if="pageNotice.confirmUrl" class="page-notice-link">
+        <a :href="pageNotice.confirmUrl" target="_blank" rel="noopener noreferrer">
+          Link de confirmação (enviar ao colaborador)
+        </a>
+      </p>
+    </div>
+
     <!-- Add User Form -->
     <div v-if="isAdmin && showForm" class="form-card form-card-elevated">
       <div class="form-head">
@@ -178,6 +203,8 @@
             <span v-if="isDemoAssetraEmail(user.email)" class="account-badge demo">Demo</span>
             <span v-else class="account-badge google">Google</span>
             <span v-if="user.department" class="department-badge">{{ user.department }}</span>
+            <span v-if="user.registrationPending" class="account-badge pending">Confirmação pendente</span>
+            <span v-if="user.registrationDisputed" class="account-badge disputed">Contestado</span>
           </div>
           <RouterLink
             class="user-assets-toggle"
@@ -190,6 +217,24 @@
           </RouterLink>
         </div>
         <div v-if="isAdmin" class="user-actions">
+          <button
+            v-if="user.registrationPending"
+            class="btn-icon btn-confirm"
+            type="button"
+            title="Confirmar cadastro manualmente"
+            @click="confirmUserRegistration(user.id)"
+          >
+            <CheckCircle :size="18" :stroke-width="2.5" />
+          </button>
+          <button
+            v-if="user.registrationPending"
+            class="btn-icon"
+            type="button"
+            title="Reenviar e-mail de convite"
+            @click="resendUserInvite(user.id)"
+          >
+            <Mail :size="18" :stroke-width="2.5" />
+          </button>
           <button class="btn-icon" @click="startUserEdit(user)" title="Editar">
             <Edit :size="18" :stroke-width="2.5" />
           </button>
@@ -310,7 +355,9 @@ import {
   Trash2,
   X,
   Monitor,
+  CheckCircle,
 } from 'lucide-vue-next'
+import api from '../services/api'
 
 const authStore = useAuthStore()
 const isAdmin = computed(() => authStore.user?.role === 'ADM')
@@ -323,6 +370,42 @@ const showForm = ref(false)
 const userStep = ref(1)
 const userStepLabels = ['Dados iniciais', 'Acesso e segurança']
 const formError = ref('')
+const pageNotice = ref<{
+  text: string
+  hint?: string
+  confirmUrl?: string
+  previewUrl?: string
+  testOnly?: boolean
+} | null>(null)
+
+const emailSetup = ref<{
+  mode: string
+  realInboxDelivery: boolean
+  message: string
+} | null>(null)
+
+function applyInviteResult(data: {
+  emailSent?: boolean
+  emailTestOnly?: boolean
+  emailHint?: string
+  emailError?: string | null
+  confirmUrl?: string
+  emailPreviewUrl?: string | null
+}, actionLabel: string) {
+  const testOnly = Boolean(data.emailTestOnly)
+  const sentReal = Boolean(data.emailSent)
+  pageNotice.value = {
+    text: sentReal
+      ? `${actionLabel}. E-mail enviado para a caixa de entrada do colaborador.`
+      : testOnly
+        ? `${actionLabel}. E-mail em modo TESTE — não chega ao Gmail do colaborador.`
+        : `${actionLabel}. E-mail não enviado — use os links abaixo.`,
+    hint: data.emailError || data.emailHint,
+    previewUrl: data.emailPreviewUrl ?? undefined,
+    confirmUrl: !sentReal ? data.confirmUrl : undefined,
+    testOnly,
+  }
+}
 const editingUserId = ref<string | null>(null)
 const registrationMode = ref<'google' | 'demo'>('google')
 const emailStatus = ref({
@@ -480,6 +563,18 @@ onMounted(async () => {
   } catch {
     departmentOptions.value = [...DEFAULT_DEPARTMENTS]
   }
+  if (isAdmin.value) {
+    try {
+      const { data } = await api.get<{
+        mode: string
+        realInboxDelivery: boolean
+        message: string
+      }>('/users/email-setup')
+      emailSetup.value = data
+    } catch {
+      emailSetup.value = null
+    }
+  }
   await inventory.fetchUsers()
 })
 
@@ -524,7 +619,7 @@ const addUser = async () => {
   }
 
   try {
-    await inventory.createUser({
+    const created = await inventory.createUser({
       name: newUser.name,
       email,
       profile: newUser.profile,
@@ -532,6 +627,20 @@ const addUser = async () => {
       department: department || null,
       ...(registrationMode.value === 'demo' ? { password: newUser.password } : {}),
     })
+    if (registrationMode.value === 'google') {
+      applyInviteResult(
+        {
+          emailSent: created?.registrationEmailSent,
+          emailTestOnly: created?.emailTestOnly,
+          emailHint: created?.emailHint,
+          confirmUrl: created?.registrationConfirmUrl,
+          emailPreviewUrl: created?.registrationEmailPreviewUrl,
+        },
+        'Utilizador cadastrado',
+      )
+    } else {
+      pageNotice.value = { text: 'Utilizador demo cadastrado com sucesso.' }
+    }
     newUser.name = ''
     newUser.email = ''
     newUser.profile = 'TECNICO'
@@ -546,6 +655,31 @@ const addUser = async () => {
   } catch (e: unknown) {
     const ax = e as { response?: { data?: { message?: string } } }
     formError.value = ax?.response?.data?.message ?? 'Erro ao cadastrar usuário.'
+  }
+}
+
+const confirmUserRegistration = async (id: string) => {
+  const ok = await confirm.askSensitive(
+    'Confirma o cadastro deste utilizador sem o e-mail de convite?',
+    'Confirmar cadastro',
+  )
+  if (!ok) return
+  try {
+    await inventory.confirmUserRegistration(id)
+    pageNotice.value = { text: 'Cadastro confirmado. O utilizador já pode entrar com Google.' }
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: { message?: string } } }
+    formError.value = ax?.response?.data?.message ?? 'Erro ao confirmar cadastro.'
+  }
+}
+
+const resendUserInvite = async (id: string) => {
+  try {
+    const data = await inventory.resendUserInvite(id)
+    applyInviteResult(data, 'Convite reenviado')
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: { message?: string } } }
+    formError.value = ax?.response?.data?.message ?? 'Erro ao reenviar convite.'
   }
 }
 
@@ -913,6 +1047,58 @@ const saveUserEdit = async () => {
   display: flex;
   gap: 12px;
   align-items: flex-end;
+}
+
+.page-notice {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  background: rgba(34, 197, 94, 0.12);
+  color: #16a34a;
+  border-radius: 8px;
+  border-left: 3px solid #16a34a;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.page-notice-link {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+.page-notice-hint {
+  margin: 6px 0 0;
+  font-size: 13px;
+  opacity: 0.95;
+}
+
+.page-notice-warn {
+  background: rgba(234, 179, 8, 0.15);
+  color: #a16207;
+  border-left-color: #ca8a04;
+}
+
+.page-notice-link a {
+  color: #2563eb;
+  word-break: break-all;
+  font-weight: 600;
+}
+
+.page-notice-warn .page-notice-link a {
+  color: #1d4ed8;
+}
+
+.account-badge.pending {
+  background: rgba(234, 179, 8, 0.15);
+  color: #ca8a04;
+}
+
+.account-badge.disputed {
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+}
+
+.btn-icon.btn-confirm:hover {
+  color: #16a34a;
 }
 
 .error-message {
