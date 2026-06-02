@@ -1,19 +1,32 @@
 # Configurar e-mail com Resend (Assetra)
 
-## 1) Conta e remetente na Resend
+## 1) Conta e API Key na Resend
 
 1. Aceda a [https://resend.com](https://resend.com) e crie conta.
-2. Menu **Emails** → **Add** → verifique `kelvinkv2030@gmail.com` (ou o e-mail que usará como remetente).
-3. Abra o e-mail de confirmação da Resend e clique no link.
-4. Menu **API Keys** → **Create API Key** → permissão **Sending access**.
-5. Copie a chave (começa com `re_`). Guarde — só aparece uma vez.
+2. Menu **API Keys** → **Create API Key** → permissão **Sending access**.
+3. Copie a chave (começa com `re_`). Guarde — só aparece uma vez.
+
+### Erro «gmail.com domain is not verified»
+
+A Resend **não** deixa enviar com remetente `@gmail.com` (o domínio `gmail.com` é do Google, não seu).
+
+**Solução imediata (recomendada):** use o remetente de teste da própria Resend:
+
+```env
+RESEND_FROM=onboarding@resend.dev
+EMAIL_FROM=kelvinkv2030@gmail.com
+```
+
+Os e-mails aparecem como enviados por `onboarding@resend.dev`; as **respostas** vão para `EMAIL_FROM` (seu Gmail).
+
+**Solução definitiva (opcional):** se tiver um domínio (ex. `suaempresa.com.br`), em [resend.com/domains](https://resend.com/domains) adicione o domínio, configure DNS e use `RESEND_FROM=Assetra <noreply@suaempresa.com.br>`.
 
 ## 2) Backend local (`backend/.env`)
 
 ```env
 RESEND_API_KEY=re_COLE_AQUI
+RESEND_FROM=onboarding@resend.dev
 EMAIL_FROM=kelvinkv2030@gmail.com
-RESEND_FROM="Assetra" <kelvinkv2030@gmail.com>
 EMAIL_DEV_ETHEREAL=false
 ```
 
@@ -36,7 +49,7 @@ No painel do Render, serviços **`assetra-backend`** e **`assetra-events-worker`
 |----------|--------|
 | `RESEND_API_KEY` | `re_...` (a mesma chave) |
 | `EMAIL_FROM` | `kelvinkv2030@gmail.com` |
-| `RESEND_FROM` | `Assetra <kelvinkv2030@gmail.com>` |
+| `RESEND_FROM` | `onboarding@resend.dev` |
 | `EMAIL_DEV_ETHEREAL` | `false` |
 
 **Não** é necessário remover `SMTP_*` — com `RESEND_API_KEY` definida, o sistema usa Resend automaticamente.

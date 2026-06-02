@@ -76,7 +76,7 @@ O plano **free** do Render **não permite** ligações às portas SMTP **25, 465
 4. No painel do Render (**assetra-backend** e **assetra-events-worker**), adicione:
    - `RESEND_API_KEY=re_...`
    - `EMAIL_FROM=kelvinkv2030@gmail.com`
-   - `RESEND_FROM=Assetra <kelvinkv2030@gmail.com>` (opcional)
+   - `RESEND_FROM=onboarding@resend.dev` (não use @gmail.com como remetente)
    - `EMAIL_DEV_ETHEREAL=false`
 5. Faça redeploy do backend e do worker.
 6. No app (Utilizadores, como ADM), use **Enviar e-mail de teste** ou cadastre um utilizador e verifique a caixa.

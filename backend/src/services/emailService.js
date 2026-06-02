@@ -47,10 +47,71 @@ function isResendConfigured() {
   return Boolean(String(process.env.RESEND_API_KEY ?? '').trim())
 }
 
+/** Domínios que a Resend não deixa verificar (ex.: gmail.com). */
+const RESEND_NON_DOMAIN_FROM = new Set([
+  'gmail.com',
+  'googlemail.com',
+  'hotmail.com',
+  'outlook.com',
+  'live.com',
+  'yahoo.com',
+  'icloud.com',
+])
+
+function isResendOnboardingFrom(value) {
+  return parseEmailAddress(value) === 'onboarding@resend.dev'
+}
+
+function usesNonVerifiableFromDomain(address) {
+  const email = parseEmailAddress(address)
+  if (!email) return false
+  const domain = email.split('@')[1]?.toLowerCase()
+  return RESEND_NON_DOMAIN_FROM.has(domain)
+}
+
+/** Remetente aceite pela Resend sem domínio próprio (plano free / teste). */
+function getResendOnboardingFrom() {
+  return formatEmailFrom('Assetra', 'onboarding@resend.dev') || 'onboarding@resend.dev'
+}
+
+export function getResendReplyToAddress() {
+  return (
+    parseEmailAddress(process.env.EMAIL_REPLY_TO) ||
+    parseEmailAddress(process.env.EMAIL_FROM) ||
+    parseEmailAddress(process.env.SMTP_USER) ||
+    ''
+  )
+}
+
 function getResendFromAddress() {
   const explicit = String(process.env.RESEND_FROM ?? '').trim()
-  if (explicit) return explicit
-  return getDefaultFromAddress()
+  const allowGmailFrom = String(process.env.RESEND_ALLOW_GMAIL_FROM ?? '').toLowerCase() === 'true'
+
+  if (explicit) {
+    if (isResendOnboardingFrom(explicit)) return explicit
+    if (usesNonVerifiableFromDomain(explicit) && !allowGmailFrom) {
+      return getResendOnboardingFrom()
+    }
+    return explicit
+  }
+
+  const defaultFrom = getDefaultFromAddress()
+  if (defaultFrom && usesNonVerifiableFromDomain(defaultFrom) && !allowGmailFrom) {
+    return getResendOnboardingFrom()
+  }
+
+  return defaultFrom || getResendOnboardingFrom()
+}
+
+function mapResendApiError(msg) {
+  const raw = String(msg ?? '')
+  if (/gmail\.com domain is not verified|domain is not verified/i.test(raw)) {
+    return (
+      'A Resend não permite remetente @gmail.com. Use RESEND_FROM=onboarding@resend.dev no .env/Render ' +
+      '(respostas vão para EMAIL_FROM). Ou verifique um domínio seu em resend.com/domains.'
+    )
+  }
+  return raw.slice(0, 280) || 'Resend rejeitou o envio.'
 }
 
 /** Render free bloqueia portas SMTP 25/465/587 — Gmail só funciona em localhost ou plano pago. */
@@ -126,11 +187,14 @@ export function getEmailSetupStatus() {
     }
   }
   if (mode === 'resend') {
+    const from = getResendFromAddress()
+    const usesOnboarding = isResendOnboardingFrom(from)
     return {
       mode,
       realInboxDelivery: true,
-      message:
-        'Resend API ativa (HTTPS): e-mails devem chegar à caixa de entrada. O remetente deve estar verificado no painel da Resend.',
+      message: usesOnboarding
+        ? 'Resend ativo: remetente onboarding@resend.dev (válido sem domínio). Respostas vão para EMAIL_FROM.'
+        : 'Resend API ativa: remetente com domínio verificado em resend.com/domains.',
       missing: [],
     }
   }
@@ -184,6 +248,7 @@ async function sendViaResend(mail) {
     }
   }
 
+  const replyTo = mail.replyTo || getResendReplyToAddress()
   const payload = {
     from,
     to: [mail.to],
@@ -191,8 +256,8 @@ async function sendViaResend(mail) {
     html: mail.html,
     text: mail.text,
   }
-  if (mail.replyTo) {
-    payload.reply_to = mail.replyTo
+  if (replyTo) {
+    payload.reply_to = replyTo
   }
 
   try {
@@ -207,11 +272,12 @@ async function sendViaResend(mail) {
     const body = await res.json().catch(() => ({}))
     if (!res.ok) {
       const msg = body?.message || body?.error || res.statusText || 'Resend rejeitou o envio'
+      const emailError = mapResendApiError(msg)
       console.error('[email] Resend falhou:', msg)
       return {
         sent: false,
         reason: 'send_failed',
-        emailError: String(msg).slice(0, 280),
+        emailError,
         mode: 'resend',
       }
     }
