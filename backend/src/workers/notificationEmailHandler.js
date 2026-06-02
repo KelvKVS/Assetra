@@ -1,4 +1,5 @@
 import { sendNotificationEmail } from '../services/emailService.js'
+import { getFrontendBaseUrl } from '../utils/frontendUrl.js'
 
 /**
  * @param {Record<string, unknown>} payload
@@ -15,7 +16,7 @@ export async function processNotificationEmailEvent(payload) {
     title: String(payload?.title ?? 'Notificação'),
     message: String(payload?.message ?? ''),
     sender: String(payload?.sender ?? 'Assetra'),
-    actionUrl: String(payload?.actionUrl ?? process.env.FRONTEND_URL ?? 'http://localhost:5173'),
+    actionUrl: String(payload?.actionUrl ?? getFrontendBaseUrl()),
   })
   if (!result.sent) {
     console.warn('[events-worker] E-mail de notificação não enviado:', result.reason, '→', to)

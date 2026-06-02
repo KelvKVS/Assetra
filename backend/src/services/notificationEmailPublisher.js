@@ -1,8 +1,5 @@
 import { publishDomainEventSafely } from '../lib/eventBus.js'
-
-function getFrontendBaseUrl() {
-  return String(process.env.FRONTEND_URL ?? 'http://localhost:5173').replace(/\/+$/, '')
-}
+import { getFrontendBaseUrl } from '../utils/frontendUrl.js'
 
 export function isNotificationEmailEnabled() {
   return String(process.env.NOTIFICATION_EMAILS_ENABLED ?? 'true').toLowerCase() !== 'false'

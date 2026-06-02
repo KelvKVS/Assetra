@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken'
 import { AppError } from '../utils/AppError.js'
+import { getFrontendBaseUrl } from '../utils/frontendUrl.js'
 import {
   isEmailConfigured,
   sendRegistrationDisputeNoticeEmail,
@@ -12,10 +13,6 @@ function getJwtSecret() {
   const secret = String(process.env.JWT_SECRET ?? '').trim()
   if (!secret) throw new AppError(500, 'JWT_SECRET não configurado.')
   return secret
-}
-
-function getFrontendBaseUrl() {
-  return String(process.env.FRONTEND_URL ?? 'http://localhost:5173').replace(/\/+$/, '')
 }
 
 export function signRegistrationInviteToken({ userId, tenantId, email }) {

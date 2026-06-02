@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { OAuth2Client } from 'google-auth-library'
 import jwt from 'jsonwebtoken'
 import { AppError } from '../utils/AppError.js'
+import { getFrontendBaseUrl } from '../utils/frontendUrl.js'
 
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET
@@ -12,8 +13,7 @@ function getJwtSecret() {
 }
 
 export function getFrontendUrl() {
-  const url = String(process.env.FRONTEND_URL || 'http://localhost:5173').trim().replace(/\/+$/, '')
-  return url
+  return getFrontendBaseUrl()
 }
 
 export function getGoogleRedirectUri() {

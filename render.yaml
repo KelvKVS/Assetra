@@ -30,7 +30,7 @@ services:
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: FRONTEND_URL
-        sync: false
+        value: "https://assetra-seven.vercel.app"
       - key: EMAIL_FROM
         sync: false
       - key: EMAIL_DEV_ETHEREAL
@@ -75,7 +75,7 @@ services:
       - key: RABBITMQ_URL
         sync: false
       - key: FRONTEND_URL
-        sync: false
+        value: "https://assetra-seven.vercel.app"
       - key: EMAIL_FROM
         sync: false
       - key: EMAIL_DEV_ETHEREAL
