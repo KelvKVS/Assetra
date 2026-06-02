@@ -25,7 +25,7 @@ const router = createRouter({
       meta: { guestOnly: true },
     },
     { path: '/dashboard', name: 'dashboard', component: DashboardView, meta: { requiresAuth: true } },
-    { path: '/ativos', name: 'assets', component: AssetsView, meta: { requiresAuth: true, roles: ['ADM', 'GESTOR'] } },
+    { path: '/ativos', name: 'assets', component: AssetsView, meta: { requiresAuth: true, roles: ['ADM', 'GESTOR', 'TECNICO'] } },
     { path: '/meus-ativos', name: 'my-assets', component: MyAssetsView, meta: { requiresAuth: true, roles: ['GESTOR', 'TECNICO', 'FUNCIONARIO'] } },
     { path: '/movimentacoes', name: 'movements', component: MovementsView, meta: { requiresAuth: true, roles: ['ADM', 'GESTOR', 'TECNICO'] } },
     { path: '/manutencoes', name: 'maintenances', component: MaintenancesView, meta: { requiresAuth: true, roles: ['ADM', 'GESTOR', 'TECNICO'] } },

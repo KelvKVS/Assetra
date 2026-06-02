@@ -7,7 +7,9 @@
         <h2>Ativos de TI</h2>
         <p class="muted">
           Cadastro e acompanhamento de equipamentos
-          <template v-if="!canManageAssets"> · Apenas gestores e administradores podem criar, editar ou excluir.</template>
+          <template v-if="authStore.user?.role === 'TECNICO'">
+            · Consulta de todos os ativos (sem criar ou editar)
+          </template>
         </p>
       </div>
       <div class="hero-actions">
@@ -34,6 +36,11 @@
           <div class="form-group field">
             <label>Tag</label>
             <input v-model.trim="newAsset.tag" type="text" placeholder="Ex: AST-200" required />
+          </div>
+          <div class="form-group field">
+            <label>Código breve</label>
+            <input v-model.trim="newAsset.shortCode" type="text" placeholder="Ex: NB01 (opcional)" maxlength="24" />
+            <small class="field-hint">Facilita a pesquisa em solicitações e pela equipa técnica.</small>
           </div>
           <div class="form-group field">
             <label>Descrição</label>
@@ -81,15 +88,15 @@
             </div>
           </div>
           <div class="form-group field field-wide">
-            <label>Fotos do ativo</label>
+            <label>Anexos do ativo (fotos e documentos)</label>
             <div class="upload-shell">
               <label class="btn-secondary upload-btn">
                 <Paperclip :size="16" />
-                Subir fotos
+                Adicionar anexos
                 <input
                   type="file"
                   multiple
-                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  :accept="uploadAcceptAttr"
                   class="file-hidden"
                   @change="onCreateFilesPick"
                 />
@@ -157,7 +164,7 @@
     </div>
 
     <p v-if="assignedFilter" class="assigned-filter-banner">
-      A mostrar ativos do responsável <strong>{{ route.query.assigned }}</strong>
+      A mostrar ativos de <strong>{{ assigneeLabel(String(route.query.assigned ?? '')) }}</strong>
       <RouterLink :to="{ name: 'assets' }" class="assigned-filter-clear">Ver todos</RouterLink>
     </p>
 
@@ -231,14 +238,29 @@
             <div v-if="!coverPhoto(asset)" class="asset-icon">
               <Monitor :size="24" :stroke-width="2" />
             </div>
-            <div class="asset-status">
+            <div class="asset-badges">
               <span :class="['status-badge', `status-${asset.status.toLowerCase().replace(' ', '-')}`]">
                 {{ asset.status }}
+              </span>
+              <span
+                v-if="showAssigneeHighlight"
+                :class="['owner-badge', !asset.assignedTo?.trim() && 'owner-badge--unassigned']"
+              >
+                <User :size="12" :stroke-width="2.5" />
+                <span class="owner-badge-text">
+                  <span class="owner-name">{{ assigneeInfo(asset.assignedTo).name }}</span>
+                  <span v-if="assigneeInfo(asset.assignedTo).email" class="owner-email">
+                    {{ assigneeInfo(asset.assignedTo).email }}
+                  </span>
+                </span>
               </span>
             </div>
           </div>
         <div class="asset-info">
-          <h3 class="asset-tag">{{ asset.tag }}</h3>
+          <h3 class="asset-tag">
+            {{ asset.tag }}
+            <span v-if="asset.shortCode" class="asset-short-code">{{ asset.shortCode }}</span>
+          </h3>
           <p class="asset-description">{{ asset.description }}</p>
           <div class="asset-details">
             <div class="detail-item">
@@ -251,7 +273,7 @@
             </div>
             <div v-if="asset.attachments?.length" class="detail-item">
               <Paperclip :size="14" :stroke-width="2.5" />
-              <span>{{ asset.attachments.length }} foto(s)</span>
+              <span>{{ asset.attachments.length }} anexo(s)</span>
             </div>
           </div>
           <div v-if="imageAttachments(asset.attachments).length > 1" class="asset-gallery">
@@ -291,10 +313,25 @@
             <Monitor :size="22" :stroke-width="2" />
           </div>
           <div class="compact-body">
-            <div class="compact-title-row">
-              <h3 class="asset-tag">{{ asset.tag }}</h3>
+            <h3 class="asset-tag compact-tag">
+              {{ asset.tag }}
+              <span v-if="asset.shortCode" class="asset-short-code">{{ asset.shortCode }}</span>
+            </h3>
+            <div class="compact-badges-row">
               <span :class="['status-badge', `status-${asset.status.toLowerCase().replace(' ', '-')}`]">
                 {{ asset.status }}
+              </span>
+              <span
+                v-if="showAssigneeHighlight"
+                :class="['owner-badge', 'owner-badge--compact', !asset.assignedTo?.trim() && 'owner-badge--unassigned']"
+              >
+                <User :size="11" :stroke-width="2.5" />
+                <span class="owner-badge-text">
+                  <span class="owner-name">{{ assigneeInfo(asset.assignedTo).name }}</span>
+                  <span v-if="assigneeInfo(asset.assignedTo).email" class="owner-email">
+                    {{ assigneeInfo(asset.assignedTo).email }}
+                  </span>
+                </span>
               </span>
             </div>
             <p class="asset-description">{{ asset.description }}</p>
@@ -325,6 +362,10 @@
           <div class="form-group">
             <label>Tag</label>
             <input v-model.trim="editAsset.tag" type="text" required />
+          </div>
+          <div class="form-group">
+            <label>Código breve</label>
+            <input v-model.trim="editAsset.shortCode" type="text" placeholder="Ex: NB01" maxlength="24" />
           </div>
           <div class="form-group">
             <label>Descrição</label>
@@ -366,11 +407,11 @@
             </div>
           </div>
           <div class="form-group">
-            <label>Fotos do ativo</label>
+            <label>Anexos do ativo</label>
             <div v-if="editAttachments.length" class="edit-attachments">
               <div v-for="(att, idx) in editAttachments" :key="`edit-att-${att.filename}-${idx}`" class="edit-att-item">
                 <img
-                  v-if="!att.mimetype || att.mimetype.startsWith('image/')"
+                  v-if="isImageAttachment(att.mimetype, att.filename ?? att.originalName)"
                   :src="att.url"
                   :alt="att.originalName ?? att.filename"
                   class="clickable-thumb"
@@ -382,11 +423,11 @@
             <div class="upload-shell">
               <label class="btn-secondary upload-btn">
                 <Paperclip :size="16" />
-                Adicionar fotos
+                Adicionar anexos
                 <input
                   type="file"
                   multiple
-                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  :accept="uploadAcceptAttr"
                   class="file-hidden"
                   @change="onEditFilesPick"
                 />
@@ -423,11 +464,28 @@ import { useConfirmAction } from '../composables/useConfirmAction'
 import AssetImage from '../components/AssetImage.vue'
 import { imageAttachments, useImageLightbox } from '../composables/useImageLightbox'
 import { prepareAttachmentsForApi } from '../utils/attachmentPayload'
+import { UPLOAD_ACCEPT_ATTR, UPLOAD_TYPES_SHORT_LABEL, isImageAttachment } from '../constants/attachmentTypes'
 import { UPLOAD_LIMITS_HINT, mergeUploadFiles } from '../utils/uploadLimits'
 import { RouterLink } from 'vue-router'
-import { Plus, Search, Monitor, CheckCircle, Package, Wrench, MapPin, Edit, Trash2, X, Paperclip, LayoutGrid, LayoutList } from 'lucide-vue-next'
+import {
+  Plus,
+  Search,
+  Monitor,
+  CheckCircle,
+  Package,
+  Wrench,
+  MapPin,
+  Edit,
+  Trash2,
+  X,
+  Paperclip,
+  LayoutGrid,
+  LayoutList,
+  User,
+} from 'lucide-vue-next'
 
-const uploadLimitsHint = UPLOAD_LIMITS_HINT
+const uploadLimitsHint = `${UPLOAD_LIMITS_HINT} · ${UPLOAD_TYPES_SHORT_LABEL}`
+const uploadAcceptAttr = UPLOAD_ACCEPT_ATTR
 
 const confirm = useConfirmAction()
 const imageLightbox = useImageLightbox()
@@ -437,6 +495,29 @@ const route = useRoute()
 const authStore = useAuthStore()
 const assignedFilter = computed(() => String(route.query.assigned ?? '').trim().toLowerCase())
 const canManageAssets = computed(() => ['ADM', 'GESTOR'].includes(authStore.user?.role ?? ''))
+
+const showAssigneeHighlight = computed(() => {
+  const role = authStore.user?.role ?? ''
+  return role === 'ADM' || role === 'GESTOR' || role === 'TECNICO'
+})
+
+function assigneeInfo(email?: string | null) {
+  const normalized = String(email ?? '').trim().toLowerCase()
+  if (!normalized) return { name: 'Sem responsável', email: '' }
+  const user = inventory.users.find((u) => u.email.trim().toLowerCase() === normalized)
+  if (user?.name?.trim()) {
+    return { name: user.name.trim(), email: normalized }
+  }
+  const localPart = normalized.split('@')[0] ?? normalized
+  const friendly = localPart.replace(/[._-]+/g, ' ').trim()
+  const name =
+    friendly.length > 0 ? friendly.charAt(0).toUpperCase() + friendly.slice(1) : normalized
+  return { name, email: normalized }
+}
+
+function assigneeLabel(email?: string | null) {
+  return assigneeInfo(email).name
+}
 
 const { pageSearch, matchesPageSearch } = useLocalPageSearch()
 const { viewMode } = useAssetViewMode()
@@ -457,6 +538,7 @@ const createPreviewUrls = ref<string[]>([])
 const coverPhoto = (asset: Asset) => imageAttachments(asset.attachments)[0]
 const editAsset = reactive<Asset>({
   tag: '',
+  shortCode: '',
   description: '',
   sector: '',
   status: 'Disponível',
@@ -467,6 +549,7 @@ const inventory = useInventoryStore()
 const assets = computed(() => inventory.assets)
 const newAsset = reactive<Asset>({
   tag: '',
+  shortCode: '',
   description: '',
   sector: '',
   status: 'Disponível',
@@ -480,7 +563,14 @@ const filteredAssets = computed(() => {
       if (email !== assignedFilter.value) return false
     }
     if (statusFilter.value !== 'all' && asset.status !== statusFilter.value) return false
-    return matchesPageSearch(asset.tag, asset.description, asset.sector, asset.status, asset.assignedTo)
+    return matchesPageSearch(
+      asset.tag,
+      asset.shortCode,
+      asset.description,
+      asset.sector,
+      asset.status,
+      asset.assignedTo,
+    )
   })
 })
 const availableUsers = computed(() => inventory.users.filter((u) => u.status === 'Ativo'))
@@ -587,7 +677,7 @@ const onEditFilesPick = (ev: Event) => {
   if (!input.files?.length) return
   const room = Math.max(0, 6 - editAttachments.value.length)
   if (!room) {
-    formError.value = 'Já existem 6 fotos neste ativo.'
+    formError.value = 'Já existem 6 anexos neste ativo.'
     input.value = ''
     return
   }
@@ -617,12 +707,13 @@ const addAsset = async () => {
     if (selectedCreateFiles.value.length) {
       attachments = await inventory.uploadAttachments(selectedCreateFiles.value)
       if (!attachments.length) {
-        formError.value = 'Não foi possível enviar as fotos. Tente novamente.'
+        formError.value = 'Não foi possível enviar os anexos. Tente novamente.'
         return
       }
     }
     await inventory.createAsset({
       tag: newAsset.tag,
+      shortCode: newAsset.shortCode?.trim() || undefined,
       description: newAsset.description,
       sector: newAsset.sector,
       status: newAsset.status,
@@ -630,6 +721,7 @@ const addAsset = async () => {
       attachments: prepareAttachmentsForApi(attachments),
     })
     newAsset.tag = ''
+    newAsset.shortCode = ''
     newAsset.description = ''
     newAsset.sector = ''
     newAsset.status = 'Disponível'
@@ -664,6 +756,7 @@ const startAssetEdit = (asset: Asset & { id?: string }) => {
   if (!asset.id) return
   editingAssetId.value = asset.id
   editAsset.tag = asset.tag
+  editAsset.shortCode = asset.shortCode ?? ''
   editAsset.description = asset.description
   editAsset.sector = asset.sector
   editAsset.status = asset.status as AssetStatus
@@ -691,13 +784,14 @@ const saveAssetEdit = async () => {
     if (selectedEditFiles.value.length) {
       const uploaded = await inventory.uploadAttachments(selectedEditFiles.value)
       if (!uploaded.length) {
-        formError.value = 'Não foi possível enviar as fotos novas. Tente novamente.'
+        formError.value = 'Não foi possível enviar os anexos novos. Tente novamente.'
         return
       }
       attachments = [...attachments, ...uploaded].slice(0, 6)
     }
     await inventory.updateAsset(editingAssetId.value, {
       tag: editAsset.tag,
+      shortCode: editAsset.shortCode?.trim() || null,
       description: editAsset.description,
       sector: editAsset.sector,
       status: editAsset.status,
@@ -1285,7 +1379,7 @@ const saveAssetEdit = async () => {
 }
 
 .assets-grid--compact {
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 }
 
 .asset-card {
@@ -1300,9 +1394,10 @@ const saveAssetEdit = async () => {
 .asset-card--compact {
   display: flex;
   flex-direction: row;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   padding: 10px 12px;
+  overflow: hidden;
 }
 
 .asset-card--compact:hover {
@@ -1340,17 +1435,21 @@ const saveAssetEdit = async () => {
   min-width: 0;
 }
 
-.compact-title-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
+.compact-tag {
+  margin: 0 0 6px;
+  font-size: 15px;
+  width: 100%;
+  min-width: 0;
 }
 
-.compact-title-row .asset-tag {
-  margin: 0;
-  font-size: 15px;
+.compact-badges-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  margin-bottom: 6px;
+  min-width: 0;
 }
 
 .compact-body .asset-description {
@@ -1378,7 +1477,7 @@ const saveAssetEdit = async () => {
   margin-bottom: 8px;
 }
 
-.asset-header--with-cover .asset-status {
+.asset-header--with-cover .asset-badges {
   margin-left: auto;
 }
 
@@ -1410,6 +1509,13 @@ const saveAssetEdit = async () => {
   color: var(--primary);
 }
 
+.asset-badges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
 .status-badge {
   padding: 4px 12px;
   border-radius: 20px;
@@ -1417,6 +1523,60 @@ const saveAssetEdit = async () => {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.owner-badge {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: rgba(139, 92, 246, 0.15);
+  color: #8b5cf6;
+  max-width: min(100%, 220px);
+  min-width: 0;
+}
+.owner-badge--compact {
+  flex: 1 1 140px;
+  max-width: 100%;
+}
+.owner-badge-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.owner-name {
+  font-weight: 700;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.owner-email {
+  font-size: 10px;
+  font-weight: 500;
+  opacity: 0.85;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.owner-badge--unassigned {
+  background: rgba(107, 114, 128, 0.15);
+  color: #6b7280;
+  font-style: italic;
+}
+.owner-badge--unassigned .owner-email {
+  display: none;
 }
 
 .status-em-uso {
@@ -1444,6 +1604,20 @@ const saveAssetEdit = async () => {
   font-weight: 700;
   color: var(--text-primary);
   overflow-wrap: anywhere;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.asset-short-code {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--primary-light);
+  color: var(--primary);
 }
 
 .asset-description {

@@ -18,6 +18,22 @@ export type MovementRow = {
   responsible: string
 }
 
+export type ExtensionRequestRow = {
+  id: string
+  requestedBy?: string
+  requestedByName?: string
+  currentDueAt?: string
+  currentDueDisplay?: string
+  proposedDueAt?: string
+  proposedDueDisplay?: string
+  reason?: string
+  status: string
+  decidedByName?: string
+  decidedAt?: string
+  notes?: string
+  createdAt?: string
+}
+
 export type MaintenanceRow = {
   id: string
   assetTag: string
@@ -27,6 +43,13 @@ export type MaintenanceRow = {
   status: string
   assignedTechnicianEmail?: string
   assignedTechnicianName?: string
+  validationDueAt?: string
+  validationDueDisplay?: string
+  lastReturnNotes?: string
+  lastReturnedAt?: string
+  lastReturnedByName?: string
+  extensionRequests?: ExtensionRequestRow[]
+  pendingExtension?: ExtensionRequestRow | null
   attachments?: AttachmentRef[]
   openingDate: string
 }
@@ -43,6 +66,15 @@ export type ApprovalRow = {
   id: string
   type: string
   maintenanceId?: string
+  approvalPhase?: 'abertura' | 'validacao' | 'movimentacao' | string
+  phaseLabel?: string
+  requestCode?: string
+  osCode?: string
+  maintenanceStatus?: string
+  maintenanceType?: string
+  parentApprovalId?: string
+  parentRequestCode?: string
+  workflowStep?: number | null
   assetTag: string
   description: string
   feedback?: string
@@ -67,6 +99,18 @@ export type TaskRow = {
   status: string
   assignedTechnicianEmail?: string
   assignedTechnicianName?: string
+  validationDueAt?: string
+  validationDueDisplay?: string
+  dueUrgency?: 'none' | 'ok' | 'soon' | 'overdue'
+  hasPendingExtension?: boolean
+  pendingExtension?: {
+    id: string
+    proposedDueDisplay?: string
+    reason?: string
+  } | null
+  lastReturnNotes?: string
+  lastReturnedAt?: string
+  lastReturnedByName?: string
 }
 
 export type DirectoryUser = {
@@ -298,6 +342,7 @@ export const useInventoryStore = defineStore('inventory', {
       decision: 'APPROVED' | 'REJECTED',
       notes?: string,
       assignedTechnicianEmail?: string,
+      validationDueAt?: string,
     ) {
       await api.post(`/approvals/${id}/respond`, {
         decision,
@@ -305,6 +350,7 @@ export const useInventoryStore = defineStore('inventory', {
         ...(assignedTechnicianEmail?.trim()
           ? { assignedTechnicianEmail: assignedTechnicianEmail.trim().toLowerCase() }
           : {}),
+        ...(validationDueAt?.trim() ? { validationDueAt: validationDueAt.trim() } : {}),
       })
       await Promise.all([
         this.fetchApprovals(),
@@ -327,6 +373,29 @@ export const useInventoryStore = defineStore('inventory', {
       await this.fetchTasks()
       await this.fetchMaintenances()
       await this.fetchAssets()
+    },
+    async setMaintenanceValidationDue(id: string, validationDueAt: string) {
+      await api.patch(`/maintenances/${id}/validation-due`, { validationDueAt })
+      await Promise.all([this.fetchMaintenances(), this.fetchTasksSafe()])
+    },
+    async requestMaintenanceExtension(
+      id: string,
+      payload: { proposedDueAt: string; reason: string },
+    ) {
+      await api.post(`/maintenances/${id}/extension-requests`, payload)
+      await Promise.all([this.fetchMaintenances(), this.fetchTasksSafe()])
+    },
+    async decideMaintenanceExtension(
+      maintenanceId: string,
+      requestId: string,
+      decision: 'APPROVED' | 'REJECTED',
+      notes?: string,
+    ) {
+      await api.patch(`/maintenances/${maintenanceId}/extension-requests/${requestId}`, {
+        decision,
+        ...(notes?.trim() ? { notes: notes.trim() } : {}),
+      })
+      await Promise.all([this.fetchMaintenances(), this.fetchTasksSafe()])
     },
     async checkUserEmail(email: string) {
       const { data } = await api.get<{

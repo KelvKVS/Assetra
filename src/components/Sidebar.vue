@@ -31,7 +31,7 @@
           <LayoutDashboard :size="20" :stroke-width="2" />
           <span>Dashboard</span>
         </RouterLink>
-        <RouterLink v-if="isAdmin || isManager" to="/ativos" class="nav-item">
+        <RouterLink v-if="isAdmin || isManager || isTechnician" to="/ativos" class="nav-item">
           <Monitor :size="20" :stroke-width="2" />
           <span>Ativos</span>
         </RouterLink>

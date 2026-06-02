@@ -1,3 +1,5 @@
+import { isAllowedUploadFile } from '../constants/attachmentTypes'
+
 /** Espelha backend/src/config/uploadLimits.js (800 MB por ficheiro, até 6). */
 export const MAX_UPLOAD_FILE_BYTES = 800 * 1024 * 1024
 export const MAX_UPLOAD_FILES = 6
@@ -11,7 +13,7 @@ export function formatUploadBytes(bytes: number): string {
   return Number.isInteger(mb) ? `${mb} MB` : `${mb.toFixed(1)} MB`
 }
 
-export const UPLOAD_LIMITS_HINT = `Até ${MAX_UPLOAD_FILES} ficheiros · ${formatUploadBytes(MAX_UPLOAD_FILE_BYTES)} cada`
+export const UPLOAD_LIMITS_HINT = `Até ${MAX_UPLOAD_FILES} anexos · ${formatUploadBytes(MAX_UPLOAD_FILE_BYTES)} cada`
 
 export function validateUploadFiles(
   files: File[],
@@ -22,6 +24,12 @@ export function validateUploadFiles(
   }
   const limit = formatUploadBytes(MAX_UPLOAD_FILE_BYTES)
   for (const file of files) {
+    if (!isAllowedUploadFile(file)) {
+      return {
+        ok: false,
+        message: `"${file.name}" não é um tipo permitido (imagens, PDF, Word, Excel ou CSV).`,
+      }
+    }
     if (file.size > MAX_UPLOAD_FILE_BYTES) {
       return { ok: false, message: `"${file.name}" excede o limite de ${limit}.` }
     }

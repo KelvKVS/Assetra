@@ -4,6 +4,7 @@ import { AppError } from '../utils/AppError.js'
 import { enrichAttachmentUrls } from '../utils/enrichAttachments.js'
 import { sanitizeAttachmentsForDb } from '../utils/sanitizeAttachments.js'
 import { logAudit } from './auditService.js'
+import { buildAssetListFilter } from '../utils/assetAccess.js'
 
 function toDto(doc, req = null) {
   if (!doc) return null
@@ -11,6 +12,7 @@ function toDto(doc, req = null) {
   return {
     id: String(o._id),
     tag: o.tag,
+    shortCode: o.shortCode ?? '',
     description: o.description,
     sector: o.sector,
     status: o.status,
@@ -41,9 +43,10 @@ async function assertAssignedEmailExists(tenantId, email) {
   }
 }
 
-export async function listAssetsByTenant(tenantId, req = null) {
-  const rows = await Asset.find({ tenantId }).sort({ updatedAt: -1 })
-  return rows.map((row) => toDto(row, req))
+export async function listAssetsByTenant(tenantId, user = null) {
+  const filter = buildAssetListFilter(tenantId, user)
+  const rows = await Asset.find(filter).sort({ updatedAt: -1 })
+  return rows.map((row) => toDto(row, user))
 }
 
 export async function createAssetForTenant(tenantId, userId, dto) {
@@ -52,6 +55,7 @@ export async function createAssetForTenant(tenantId, userId, dto) {
   try {
     const asset = new Asset({
       tag: dto.tag.trim(),
+      shortCode: String(dto.shortCode ?? '').trim(),
       description: dto.description.trim(),
       sector: dto.sector.trim(),
       status: dto.status ?? 'Disponível',
@@ -95,6 +99,9 @@ export async function updateAssetForTenant(tenantId, userId, assetId, dto) {
     asset.tag = dto.tag.trim()
   }
   if (dto.description != null) asset.description = dto.description.trim()
+  if (dto.shortCode !== undefined) {
+    asset.shortCode = dto.shortCode == null ? '' : String(dto.shortCode).trim()
+  }
   if (dto.sector != null) asset.sector = dto.sector.trim()
   if (dto.status != null) asset.status = dto.status
   if (dto.assignedTo !== undefined) {

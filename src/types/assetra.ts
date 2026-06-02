@@ -18,6 +18,8 @@ export type AttachmentRef = {
 export type Asset = {
   id?: string
   tag: string
+  /** Código curto para pesquisa (ex.: NB01). */
+  shortCode?: string
   description: string
   sector: string
   status: AssetStatus

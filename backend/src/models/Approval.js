@@ -16,6 +16,10 @@ const approvalSchema = new mongoose.Schema(
     tenantId: { type: String, required: true, index: true },
     type: { type: String, enum: ['Movimentação', 'Manutenção'], required: true },
     maintenanceId: { type: String, default: '' },
+    /** abertura | validacao | movimentacao — etapa do fluxo corporativo */
+    approvalPhase: { type: String, default: '' },
+    /** Solicitação de abertura ligada à validação de conclusão */
+    parentApprovalId: { type: String, default: '' },
     assetTag: { type: String, required: true },
     description: { type: String, required: true },
     /** Setor de destino (solicitações de movimentação). */
@@ -38,5 +42,6 @@ const approvalSchema = new mongoose.Schema(
 )
 
 approvalSchema.index({ tenantId: 1, status: 1, createdAt: -1 })
+approvalSchema.index({ tenantId: 1, maintenanceId: 1, createdAt: 1 })
 
 export default mongoose.model('Approval', approvalSchema)

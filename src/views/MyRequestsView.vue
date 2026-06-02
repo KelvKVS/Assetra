@@ -8,7 +8,7 @@
         <p>
           Envie uma solicitação de <strong>manutenção</strong> de um ativo ou de
           <strong>movimentação entre setores</strong>. Pode anexar
-          <strong>fotos / prints</strong> e a sua justificativa — o aprovador é
+          <strong>anexos</strong> (fotos, PDF, relatórios) e a sua justificativa — o aprovador é
           definido automaticamente pela hierarquia abaixo.
         </p>
         <div class="approval-flow" aria-label="Fluxo de aprovação">
@@ -75,7 +75,7 @@
             <span>1</span> Detalhes
           </li>
           <li :class="{ active: step === 2, done: step > 2 }">
-            <span>2</span> Fotos & feedback
+            <span>2</span> Anexos e feedback
           </li>
           <li :class="{ active: step === 3 }">
             <span>3</span> Revisão
@@ -89,12 +89,12 @@
           <div class="field">
             <label>
               <Tag :size="14" />
-              Tag do ativo
+              Ativo (tag ou código breve)
             </label>
             <input
               v-model.trim="form.assetTag"
               type="text"
-              placeholder="ex.: AST-001"
+              :placeholder="assetSearchPlaceholder"
               required
               @focus="isAssetTagFocused = true"
               @blur="hideAssetTagSuggestions"
@@ -105,14 +105,22 @@
                 :key="`req-asset-${a.id}`"
                 type="button"
                 class="suggestion-item"
-                @mousedown.prevent="pickAssetTag(a.tag)"
+                @mousedown.prevent="pickAsset(a)"
               >
                 <strong>{{ a.tag }}</strong>
+                <span v-if="a.shortCode" class="suggestion-code">{{ a.shortCode }}</span>
                 <span>{{ a.description }}</span>
               </button>
             </div>
+            <p v-if="isEmployee" class="field-hint">
+              Só aparecem ativos atribuídos ao seu utilizador.
+            </p>
+            <p v-else-if="isTechnician" class="field-hint">
+              Pode pesquisar qualquer ativo da organização por tag, código breve ou descrição.
+            </p>
             <p v-if="selectedAsset" class="field-hint">
-              {{ selectedAsset.description }} · setor atual: <strong>{{ selectedAsset.sector }}</strong>
+              {{ selectedAsset.description }} · setor: <strong>{{ selectedAsset.sector }}</strong>
+              <span v-if="selectedAsset.shortCode"> · código <strong>{{ selectedAsset.shortCode }}</strong></span>
             </p>
           </div>
 
@@ -196,7 +204,7 @@
         <div class="field">
           <label>
             <ImageIcon :size="14" />
-            Fotos / prints
+            Anexos (fotos e documentos)
             <span class="field-hint inline">{{ uploadLimitsHint }}</span>
           </label>
 
@@ -215,13 +223,13 @@
               Arraste e largue os ficheiros aqui, ou
               <span class="dropzone-link">clique para escolher</span>
             </p>
-            <small>PNG · JPG · WEBP · GIF · PDF</small>
+            <small>{{ uploadTypesLabel }}</small>
           </div>
           <input
             ref="fileInput"
             type="file"
             multiple
-            accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"
+            :accept="uploadAcceptAttr"
             class="hidden"
             @change="onFilePick"
           />
@@ -375,7 +383,16 @@
           <div class="timeline-content">
             <div class="timeline-top">
               <div>
-                <h4>{{ item.assetTag }} · {{ item.description }}</h4>
+                <div v-if="item.requestCode || item.osCode" class="timeline-codes">
+                  <span v-if="item.requestCode" class="code-pill">{{ item.requestCode }}</span>
+                  <span v-if="item.osCode" class="code-pill code-pill--os">{{ item.osCode }}</span>
+                </div>
+                <h4>{{ item.assetTag }}</h4>
+                <p class="timeline-phase">{{ item.phaseLabel || item.type }}</p>
+                <p class="timeline-summary">{{ summarizeDescription(item) }}</p>
+                <p v-if="item.parentRequestCode" class="timeline-parent">
+                  Ligada a {{ item.parentRequestCode }}
+                </p>
                 <p class="timeline-meta">
                   <Calendar :size="12" /> {{ formatDate(item.createdAt) }}
                 </p>
@@ -397,7 +414,11 @@
                 class="att-tile"
                 @click.stop="openAttachment(item, att)"
               >
-                <img v-if="isImage(att.mimetype)" :src="att.url" :alt="att.originalName ?? att.filename" />
+                <img
+                  v-if="isImageAttachment(att.mimetype, att.filename ?? att.originalName)"
+                  :src="att.url"
+                  :alt="att.originalName ?? att.filename"
+                />
                 <FileText v-else :size="20" />
               </button>
             </div>
@@ -430,7 +451,11 @@ import { useInventoryStore, type AttachmentRef } from '../stores/inventory'
 import { useConfirmAction } from '../composables/useConfirmAction'
 import { useImageLightbox } from '../composables/useImageLightbox'
 import { useLocalPageSearch } from '../composables/useLocalPageSearch'
+import { UPLOAD_ACCEPT_ATTR, UPLOAD_TYPES_SHORT_LABEL, isImageAttachment } from '../constants/attachmentTypes'
 import { UPLOAD_LIMITS_HINT, mergeUploadFiles } from '../utils/uploadLimits'
+import { assetsEligibleForRequests } from '../utils/userScope'
+import { matchAssetSearch } from '../utils/assetSearch'
+import type { AssetWithId } from '../stores/inventory'
 import {
   Wrench,
   ArrowRightLeft,
@@ -471,6 +496,8 @@ const inventory = useInventoryStore()
 const confirm = useConfirmAction()
 const { pageSearch, matchesPageSearch } = useLocalPageSearch()
 const uploadLimitsHint = UPLOAD_LIMITS_HINT
+const uploadAcceptAttr = UPLOAD_ACCEPT_ATTR
+const uploadTypesLabel = UPLOAD_TYPES_SHORT_LABEL
 
 const firstName = computed(() => authStore.user?.name?.split(' ')[0] ?? 'utilizador')
 
@@ -500,15 +527,46 @@ const form = reactive({
 const files = ref<File[]>([])
 const previews = ref<Preview[]>([])
 
-const selectedAsset = computed(() =>
-  inventory.assets.find((a) => a.tag.toLowerCase() === form.assetTag.toLowerCase()),
+const isEmployee = computed(() => authStore.user?.role === 'FUNCIONARIO')
+const isTechnician = computed(() => authStore.user?.role === 'TECNICO')
+
+const eligibleAssets = computed(() =>
+  assetsEligibleForRequests(inventory.assets, authStore.user),
 )
+
+const assetSearchPlaceholder = computed(() =>
+  isEmployee.value
+    ? 'ex.: AST-001 ou código breve do seu ativo'
+    : 'ex.: AST-001, NB01 ou parte da descrição',
+)
+
+function resolveAssetFromInput(input: string): AssetWithId | null {
+  const q = input.trim().toLowerCase()
+  if (!q) return null
+  const exact =
+    eligibleAssets.value.find(
+      (a) =>
+        a.tag.toLowerCase() === q ||
+        String(a.shortCode ?? '')
+          .trim()
+          .toLowerCase() === q,
+    ) ?? null
+  if (exact) return exact
+  const matches = eligibleAssets.value.filter((a) => matchAssetSearch(a, q))
+  return matches.length === 1 ? matches[0] : null
+}
+
+const selectedAsset = computed(() => resolveAssetFromInput(form.assetTag))
+
 const filteredAssetTagSuggestions = computed(() => {
-  const q = form.assetTag.trim().toLowerCase()
-  if (!q) return inventory.assets.slice(0, 8)
-  return inventory.assets.filter((a) => `${a.tag} ${a.description}`.toLowerCase().includes(q)).slice(0, 6)
+  const q = form.assetTag.trim()
+  const pool = eligibleAssets.value
+  if (!q) return pool.slice(0, 8)
+  return pool.filter((a) => matchAssetSearch(a, q)).slice(0, 8)
 })
-const showAssetTagSuggestions = computed(() => isAssetTagFocused.value && filteredAssetTagSuggestions.value.length > 0)
+const showAssetTagSuggestions = computed(
+  () => isAssetTagFocused.value && filteredAssetTagSuggestions.value.length > 0,
+)
 
 const severityLabel = computed(() => severities.find((s) => s.value === form.severity)?.label ?? '—')
 
@@ -602,8 +660,8 @@ const openForm = (type: RequestType) => {
   formError.value = ''
   isFormOpen.value = true
 }
-const pickAssetTag = (tag: string) => {
-  form.assetTag = tag
+const pickAsset = (asset: AssetWithId) => {
+  form.assetTag = asset.tag
   isAssetTagFocused.value = false
 }
 const hideAssetTagSuggestions = () => {
@@ -617,6 +675,16 @@ const closeForm = () => {
 }
 
 const goToStep = (n: number) => {
+  if (n === 2 && step.value === 1) {
+    const asset = resolveAssetFromInput(form.assetTag)
+    if (!asset) {
+      formError.value = isEmployee.value
+        ? 'Selecione um dos seus ativos na lista (tag ou código breve).'
+        : 'Ativo não encontrado. Escolha na lista ou indique tag/código breve válido.'
+      return
+    }
+    form.assetTag = asset.tag
+  }
   step.value = n
   formError.value = ''
 }
@@ -632,7 +700,7 @@ const acceptFiles = (incoming: FileList | File[]) => {
   formError.value = ''
   files.value = merged
   previews.value = merged.map((file) => {
-    const isImg = file.type.startsWith('image/')
+    const isImg = isImageAttachment(file.type, file.name)
     return {
       name: file.name,
       src: isImg ? URL.createObjectURL(file) : '',
@@ -669,13 +737,14 @@ watch(isFormOpen, (val) => {
 
 const truncate = (s: string, n = 22) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
 
-const isImage = (mime?: string) => Boolean(mime && mime.startsWith('image/'))
 
 const imageLightbox = useImageLightbox()
 
 const openAttachment = (item: { assetTag: string; attachments?: AttachmentRef[] }, att: AttachmentRef) => {
-  if (isImage(att.mimetype)) {
-    const images = (item.attachments ?? []).filter((a) => isImage(a.mimetype))
+  if (isImageAttachment(att.mimetype, att.filename ?? att.originalName)) {
+    const images = (item.attachments ?? []).filter((a) =>
+      isImageAttachment(a.mimetype, a.filename ?? a.originalName),
+    )
     const imageIndex = images.findIndex((a) => a.url === att.url || a.filename === att.filename)
     imageLightbox.openGallery(item.attachments ?? [], {
       title: `Solicitação · ${item.assetTag}`,
@@ -692,6 +761,14 @@ const formatDate = (iso?: string | null) => {
   return d.toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' })
 }
 
+function summarizeDescription(item: { description?: string; approvalPhase?: string }) {
+  const raw = String(item.description ?? '')
+  if (String(item.approvalPhase) === 'validacao') {
+    return raw.replace(/^Validação de execução técnica\s*-\s*/i, '').trim() || raw
+  }
+  return raw
+}
+
 const statusClass = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(' ', '-')
 
@@ -704,6 +781,14 @@ const onSubmit = async () => {
     'Confirmar envio',
   )
   if (!ok) return
+
+  const asset = resolveAssetFromInput(form.assetTag)
+  if (!asset) {
+    formError.value = isEmployee.value
+      ? 'Só pode solicitar para ativos atribuídos a si.'
+      : 'Ativo inválido. Verifique a tag ou o código breve.'
+    return
+  }
 
   submitting.value = true
   try {
@@ -724,7 +809,7 @@ const onSubmit = async () => {
 
     await inventory.createApproval({
       type: form.type,
-      assetTag: form.assetTag,
+      assetTag: asset.tag,
       description,
       destinationSector: form.type === 'Movimentação' ? form.destinationSector.trim() : undefined,
       feedback,
@@ -898,6 +983,10 @@ const onSubmit = async () => {
 }
 .suggestion-item + .suggestion-item { border-top: 1px solid var(--border-light); }
 .suggestion-item span { font-size: 12px; color: var(--text-muted); }
+.suggestion-code {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px; background: var(--primary-light); color: var(--primary);
+}
 .suggestion-item:hover { background: var(--bg-hover); }
 .field input:focus, .field textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
 .field textarea { resize: vertical; min-height: 90px; }
@@ -1047,6 +1136,19 @@ const onSubmit = async () => {
 .timeline-content { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .timeline-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .timeline-top h4 { margin: 0; font-size: 14px; font-weight: 700; color: var(--text-primary); }
+.timeline-codes { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.timeline-codes .code-pill {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 999px; background: var(--bg-primary);
+  border: 1px solid var(--border-light); color: var(--text-secondary);
+}
+.timeline-codes .code-pill--os {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border-light));
+  color: var(--primary); background: var(--primary-light);
+}
+.timeline-phase { margin: 0; font-size: 12px; font-weight: 700; color: var(--primary); }
+.timeline-summary { margin: 4px 0 0; font-size: 13px; color: var(--text-secondary); line-height: 1.4; }
+.timeline-parent { margin: 4px 0 0; font-size: 11px; color: var(--text-muted); font-style: italic; }
 .timeline-meta { display: inline-flex; align-items: center; gap: 4px; margin: 4px 0 0; font-size: 12px; color: var(--text-muted); }
 
 .status-badge { padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }

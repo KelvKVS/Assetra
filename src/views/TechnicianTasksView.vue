@@ -68,6 +68,25 @@
             <span>{{ item.assetTag }}</span>
           </div>
           <h3 class="task-title">{{ item.task }}</h3>
+          <p v-if="item.validationDueDisplay" :class="['due-chip', `due-${item.dueUrgency || 'ok'}`]">
+            <CalendarClock :size="14" />
+            Entregar até {{ item.validationDueDisplay }}
+          </p>
+          <p v-else-if="item.status === 'Em andamento'" class="due-chip due-none">
+            Sem prazo definido pelo gestor
+          </p>
+          <p v-if="item.hasPendingExtension" class="ext-chip">Pedido de adiamento em análise</p>
+          <div
+            v-if="item.lastReturnNotes && item.status === 'Em andamento' && !hasPendingValidation(item)"
+            class="return-feedback"
+          >
+            <MessageSquare :size="14" />
+            <div>
+              <strong>Devolvido pelo gestor</strong>
+              <span v-if="item.lastReturnedByName"> · {{ item.lastReturnedByName }}</span>
+              <p>{{ item.lastReturnNotes }}</p>
+            </div>
+          </div>
         </div>
         <div class="task-footer">
           <div v-if="item.status !== 'Concluída'" class="task-progress">
@@ -85,14 +104,21 @@
           <div v-if="hasPendingValidation(item)" class="pending-chip">
             Aguardando validação do gestor
           </div>
-          <button
-            v-else-if="item.status !== 'Concluída'"
-            class="btn-advance"
-            @click="onTaskAction(item)"
-          >
-            <ArrowRight :size="16" :stroke-width="2.5" />
-            {{ item.status === 'Aberta' ? 'Iniciar' : 'Enviar para validação' }}
-          </button>
+          <div v-else-if="item.status !== 'Concluída'" class="task-actions">
+            <button
+              v-if="item.status === 'Em andamento' && !item.hasPendingExtension"
+              type="button"
+              class="btn-ghost"
+              @click="openExtensionModal(item)"
+            >
+              <CalendarPlus :size="15" />
+              Pedir adiamento
+            </button>
+            <button class="btn-advance" @click="onTaskAction(item)">
+              <ArrowRight :size="16" :stroke-width="2.5" />
+              {{ item.status === 'Aberta' ? 'Iniciar' : 'Enviar validação' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -104,53 +130,122 @@
       <p>Não há ordens de serviço no momento</p>
     </div>
 
-    <div v-if="reportModal.open" class="modal-overlay" @click="closeReportModal">
-      <div class="modal" @click.stop>
-        <div class="modal-header">
-          <h3>Relatório de execução técnica</h3>
-          <button class="btn-close" @click="closeReportModal">×</button>
-        </div>
-
-        <p class="modal-subtitle">
-          Envie descrição e evidências visuais para o gestor validar a conclusão da ordem
-          <strong>{{ reportModal.task?.assetTag }}</strong>.
-        </p>
-
-        <div class="form-group">
-          <label>Descrição da execução</label>
-          <textarea
-            v-model.trim="reportForm.description"
-            rows="4"
-            placeholder="Explique o que foi feito, testes realizados e resultado final."
-          ></textarea>
-        </div>
-
-        <div class="form-group">
-          <label>Anexos (fotos/prints)</label>
-          <input
-            ref="reportFileInput"
-            type="file"
-            multiple
-            accept="image/png,image/jpeg,image/webp,image/gif"
-            @change="onReportFilesPicked"
-          />
-          <ul v-if="reportFiles.length" class="picked-list">
-            <li v-for="(file, index) in reportFiles" :key="index">
-              <span>{{ file.name }}</span>
-              <button type="button" class="picked-remove" @click="removeReportFile(index)">remover</button>
-            </li>
-          </ul>
-        </div>
-
-        <p v-if="reportError" class="report-error">{{ reportError }}</p>
-
-        <div class="modal-actions">
-          <button class="btn-primary" :disabled="sendingReport" @click="sendReportForValidation">
-            {{ sendingReport ? 'Enviando...' : 'Enviar para validação' }}
+    <!-- Modal: relatório de validação -->
+    <div v-if="reportModal.open" class="sheet-overlay" @click="closeReportModal">
+      <section class="sheet" @click.stop>
+        <header class="sheet-header">
+          <button type="button" class="sheet-close" aria-label="Fechar" @click="closeReportModal">
+            <X :size="20" />
           </button>
-          <button class="btn-secondary" :disabled="sendingReport" @click="closeReportModal">Cancelar</button>
+          <span class="sheet-eyebrow">Validação técnica</span>
+          <h3>Relatório de conclusão</h3>
+          <p>
+            Ativo <strong>{{ reportModal.task?.assetTag }}</strong>
+            <span v-if="reportModal.task?.validationDueDisplay">
+              · prazo {{ reportModal.task.validationDueDisplay }}
+            </span>
+          </p>
+        </header>
+
+        <div class="sheet-body">
+          <div class="field">
+            <label><FileText :size="14" /> O que foi executado</label>
+            <textarea
+              v-model.trim="reportForm.description"
+              rows="5"
+              placeholder="Descreva intervenção, testes, peças trocadas e resultado final."
+            />
+          </div>
+
+          <div class="field">
+            <label><UploadCloud :size="14" /> Evidências</label>
+            <div
+              class="dropzone"
+              :class="{ active: isDragging }"
+              @dragover.prevent="isDragging = true"
+              @dragleave.prevent="isDragging = false"
+              @drop.prevent="onReportDrop"
+              @click="triggerReportFilePicker"
+            >
+              <UploadCloud :size="32" :stroke-width="1.8" />
+              <p>Arraste ficheiros ou <span class="dropzone-link">clique para escolher</span></p>
+              <small>{{ uploadLimitsHint }}</small>
+            </div>
+            <input
+              ref="reportFileInput"
+              type="file"
+              multiple
+              class="hidden"
+              :accept="uploadAcceptAttr"
+              @change="onReportFilesPicked"
+            />
+            <ul v-if="reportFiles.length" class="file-list">
+              <li v-for="(file, index) in reportFiles" :key="`${file.name}-${index}`">
+                <Paperclip :size="14" />
+                <span>{{ file.name }}</span>
+                <button type="button" class="file-remove" @click="removeReportFile(index)">
+                  <X :size="14" />
+                </button>
+              </li>
+            </ul>
+          </div>
+
+          <p v-if="reportError" class="form-error">{{ reportError }}</p>
         </div>
-      </div>
+
+        <footer class="sheet-footer">
+          <button type="button" class="btn-ghost" :disabled="sendingReport" @click="closeReportModal">
+            Cancelar
+          </button>
+          <button type="button" class="btn-primary" :disabled="sendingReport" @click="sendReportForValidation">
+            <Send :size="16" />
+            {{ sendingReport ? 'A enviar...' : 'Enviar para validação' }}
+          </button>
+        </footer>
+      </section>
+    </div>
+
+    <!-- Modal: pedido de adiamento -->
+    <div v-if="extensionModal.open" class="sheet-overlay" @click="closeExtensionModal">
+      <section class="sheet sheet--compact" @click.stop>
+        <header class="sheet-header">
+          <button type="button" class="sheet-close" aria-label="Fechar" @click="closeExtensionModal">
+            <X :size="20" />
+          </button>
+          <span class="sheet-eyebrow">Prazo</span>
+          <h3>Solicitar adiamento</h3>
+          <p v-if="extensionModal.task">
+            Ordem do ativo <strong>{{ extensionModal.task.assetTag }}</strong>
+            <span v-if="extensionModal.task.validationDueDisplay">
+              · prazo atual {{ extensionModal.task.validationDueDisplay }}
+            </span>
+          </p>
+        </header>
+        <div class="sheet-body">
+          <div class="field">
+            <label><CalendarClock :size="14" /> Nova data proposta</label>
+            <input v-model="extensionForm.proposedDueAt" type="datetime-local" required />
+          </div>
+          <div class="field">
+            <label><MessageSquare :size="14" /> Justificativa</label>
+            <textarea
+              v-model.trim="extensionForm.reason"
+              rows="4"
+              placeholder="Explique o motivo (peças em falta, dependência externa, etc.)."
+            />
+          </div>
+          <p v-if="extensionError" class="form-error">{{ extensionError }}</p>
+        </div>
+        <footer class="sheet-footer">
+          <button type="button" class="btn-ghost" :disabled="sendingExtension" @click="closeExtensionModal">
+            Cancelar
+          </button>
+          <button type="button" class="btn-primary" :disabled="sendingExtension" @click="submitExtensionRequest">
+            <CalendarPlus :size="16" />
+            {{ sendingExtension ? 'A enviar...' : 'Enviar pedido' }}
+          </button>
+        </footer>
+      </section>
     </div>
   </div>
 </template>
@@ -169,7 +264,20 @@ import {
   Wrench,
   Monitor,
   ArrowRight,
+  CalendarClock,
+  CalendarPlus,
+  UploadCloud,
+  FileText,
+  Paperclip,
+  X,
+  Send,
+  MessageSquare,
 } from 'lucide-vue-next'
+import { UPLOAD_ACCEPT_ATTR, UPLOAD_TYPES_SHORT_LABEL } from '../constants/attachmentTypes'
+import { UPLOAD_LIMITS_HINT, mergeUploadFiles } from '../utils/uploadLimits'
+
+const uploadAcceptAttr = UPLOAD_ACCEPT_ATTR
+const uploadLimitsHint = `${UPLOAD_LIMITS_HINT} · ${UPLOAD_TYPES_SHORT_LABEL}`
 
 const confirm = useConfirmAction()
 
@@ -183,15 +291,26 @@ onMounted(() => {
 
 const search = ref('')
 const sendingReport = ref(false)
+const sendingExtension = ref(false)
 const reportError = ref('')
+const extensionError = ref('')
+const isDragging = ref(false)
 const reportFileInput = ref<HTMLInputElement | null>(null)
 const reportFiles = ref<File[]>([])
 const reportModal = reactive<{ open: boolean; task: TaskRow | null }>({
   open: false,
   task: null,
 })
+const extensionModal = reactive<{ open: boolean; task: TaskRow | null }>({
+  open: false,
+  task: null,
+})
 const reportForm = reactive({
   description: '',
+})
+const extensionForm = reactive({
+  proposedDueAt: '',
+  reason: '',
 })
 
 const tasks = computed(() => inventory.tasks)
@@ -247,12 +366,87 @@ const closeReportModal = () => {
 
 const onReportFilesPicked = (event: Event) => {
   const input = event.target as HTMLInputElement
-  if (!input.files) return
-  reportFiles.value = Array.from(input.files).slice(0, 6)
+  if (!input.files?.length) return
+  const { files, error } = mergeUploadFiles(reportFiles.value, input.files)
+  if (error) {
+    reportError.value = error
+    return
+  }
+  reportError.value = ''
+  reportFiles.value = files
+  input.value = ''
 }
 
 const removeReportFile = (index: number) => {
   reportFiles.value.splice(index, 1)
+}
+
+const triggerReportFilePicker = () => reportFileInput.value?.click()
+
+const onReportDrop = (event: DragEvent) => {
+  isDragging.value = false
+  if (!event.dataTransfer?.files?.length) return
+  const { files, error } = mergeUploadFiles(reportFiles.value, event.dataTransfer.files)
+  if (error) {
+    reportError.value = error
+    return
+  }
+  reportError.value = ''
+  reportFiles.value = files
+}
+
+function defaultExtensionProposal(task: TaskRow) {
+  const base = task.validationDueAt ? new Date(task.validationDueAt) : new Date()
+  if (Number.isNaN(base.getTime())) {
+    base.setTime(Date.now())
+  }
+  base.setDate(base.getDate() + 2)
+  base.setHours(17, 0, 0, 0)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${base.getFullYear()}-${pad(base.getMonth() + 1)}-${pad(base.getDate())}T${pad(base.getHours())}:${pad(base.getMinutes())}`
+}
+
+const openExtensionModal = (task: TaskRow) => {
+  extensionError.value = ''
+  extensionForm.reason = ''
+  extensionForm.proposedDueAt = defaultExtensionProposal(task)
+  extensionModal.open = true
+  extensionModal.task = task
+}
+
+const closeExtensionModal = () => {
+  if (sendingExtension.value) return
+  extensionModal.open = false
+  extensionModal.task = null
+}
+
+const submitExtensionRequest = async () => {
+  if (!extensionModal.task) return
+  extensionError.value = ''
+  if (!extensionForm.proposedDueAt) {
+    extensionError.value = 'Indique a nova data proposta.'
+    return
+  }
+  if (extensionForm.reason.trim().length < 3) {
+    extensionError.value = 'Descreva o motivo do adiamento.'
+    return
+  }
+  const ok = await confirm.ask('Confirme com a sua senha para enviar o pedido de adiamento.')
+  if (!ok) return
+  sendingExtension.value = true
+  try {
+    await inventory.requestMaintenanceExtension(extensionModal.task.id, {
+      proposedDueAt: new Date(extensionForm.proposedDueAt).toISOString(),
+      reason: extensionForm.reason.trim(),
+    })
+    extensionModal.open = false
+    extensionModal.task = null
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: { message?: string } } }
+    extensionError.value = ax?.response?.data?.message ?? 'Não foi possível enviar o pedido.'
+  } finally {
+    sendingExtension.value = false
+  }
 }
 
 const onTaskAction = async (task: TaskRow) => {
@@ -271,7 +465,7 @@ const sendReportForValidation = async () => {
     return
   }
   if (!reportFiles.value.length) {
-    reportError.value = 'Anexe pelo menos uma foto/print como evidência.'
+    reportError.value = 'Anexe pelo menos um ficheiro como evidência (foto, PDF ou relatório).'
     return
   }
 
@@ -293,8 +487,15 @@ const sendReportForValidation = async () => {
       feedback: reportForm.description.trim(),
       attachments,
     })
-    await inventory.fetchMyApprovalsSafe()
-    closeReportModal()
+    await Promise.allSettled([
+      inventory.fetchMyApprovalsSafe(),
+      inventory.fetchTasksSafe(),
+    ])
+    reportModal.open = false
+    reportModal.task = null
+    reportForm.description = ''
+    reportFiles.value = []
+    if (reportFileInput.value) reportFileInput.value.value = ''
   } catch (e: unknown) {
     const ax = e as { response?: { data?: { message?: string } } }
     reportError.value = ax?.response?.data?.message ?? 'Não foi possível enviar o relatório.'
@@ -354,121 +555,113 @@ const statusClass = (status: string) => {
   font-size: 13px;
 }
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.65);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1200;
+.due-chip {
+  display: inline-flex; align-items: center; gap: 6px; margin: 8px 0 0;
+  font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px;
 }
+.due-ok { background: rgba(59, 130, 246, 0.12); color: #3b82f6; }
+.due-soon { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.due-overdue { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.due-none { background: var(--bg-hover); color: var(--text-muted); font-weight: 500; }
+.ext-chip {
+  margin: 6px 0 0; font-size: 11px; font-weight: 700; color: #a855f7;
+}
+.return-feedback {
+  display: flex; gap: 10px; margin-top: 10px; padding: 10px 12px; border-radius: 10px;
+  background: color-mix(in srgb, #ef4444 10%, var(--bg-primary));
+  border: 1px solid color-mix(in srgb, #ef4444 28%, var(--border-light));
+  font-size: 12px; color: var(--text-secondary);
+}
+.return-feedback strong { display: block; font-size: 11px; text-transform: uppercase; color: #ef4444; margin-bottom: 4px; }
+.return-feedback p { margin: 4px 0 0; line-height: 1.45; color: var(--text-primary); font-size: 13px; }
+.task-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto; }
+.btn-ghost {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px;
+  border: 1px solid var(--border-light); background: transparent; color: var(--text-secondary);
+  border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.btn-ghost:hover { border-color: var(--primary); color: var(--primary); }
 
-.modal {
-  width: min(640px, 92vw);
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
-  border-radius: 14px;
-  padding: 18px;
-  box-shadow: var(--shadow-lg);
+.sheet-overlay {
+  position: fixed; inset: 0; z-index: 1200;
+  background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(4px);
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 16px;
 }
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
+@media (min-width: 640px) {
+  .sheet-overlay { align-items: center; }
 }
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 18px;
+.sheet {
+  width: min(560px, 100%); max-height: 92vh; overflow: auto;
+  background: var(--bg-card); border: 1px solid var(--border-light);
+  border-radius: 16px 16px 0 0; box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column;
 }
-
-.btn-close {
-  border: 1px solid var(--border-light);
-  background: var(--bg-hover);
-  color: var(--text-secondary);
-  border-radius: 8px;
-  width: 32px;
-  height: 32px;
-  cursor: pointer;
+@media (min-width: 640px) {
+  .sheet { border-radius: 16px; }
 }
-
-.modal-subtitle {
-  margin: 0 0 14px;
-  color: var(--text-secondary);
-  font-size: 13px;
+.sheet--compact { width: min(480px, 100%); }
+.sheet-header {
+  position: relative; padding: 20px 20px 12px;
+  border-bottom: 1px solid var(--border-light);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 8%, var(--bg-card)), var(--bg-card));
 }
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 12px;
+.sheet-eyebrow {
+  display: block; font-size: 11px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--primary); margin-bottom: 4px;
 }
-
-.form-group label {
-  font-size: 13px;
-  color: var(--text-secondary);
-  font-weight: 600;
+.sheet-header h3 { margin: 0 0 6px; font-size: 20px; font-weight: 700; }
+.sheet-header p { margin: 0; font-size: 13px; color: var(--text-secondary); }
+.sheet-close {
+  position: absolute; top: 14px; right: 14px; width: 36px; height: 36px;
+  border: none; border-radius: 10px; background: var(--bg-hover); color: var(--text-secondary); cursor: pointer;
+  display: grid; place-items: center;
 }
-
-.form-group textarea,
-.form-group input {
-  border: 1px solid var(--border-light);
-  background: var(--bg-primary);
-  border-radius: 8px;
-  padding: 10px 12px;
-  color: var(--text-primary);
+.sheet-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+.sheet-footer {
+  padding: 12px 20px 20px; border-top: 1px solid var(--border-light);
+  display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap;
 }
-
-.picked-list {
-  list-style: none;
-  margin: 6px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.field { display: flex; flex-direction: column; gap: 8px; }
+.field label {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em;
 }
-
-.picked-list li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 12px;
+.field textarea, .field input[type='datetime-local'] {
+  border: 1px solid var(--border-light); background: var(--bg-primary);
+  border-radius: 10px; padding: 12px; color: var(--text-primary); font-size: 14px; font-family: inherit;
 }
-
-.picked-remove {
-  border: none;
-  background: transparent;
-  color: var(--danger);
-  cursor: pointer;
+.field textarea { resize: vertical; min-height: 100px; }
+.hidden { display: none; }
+.dropzone {
+  border: 2px dashed var(--border-light); border-radius: 12px; padding: 24px 16px;
+  text-align: center; color: var(--text-secondary); cursor: pointer; transition: all 0.2s ease;
 }
-
-.report-error {
-  margin: 0 0 10px;
-  font-size: 12px;
-  color: var(--danger);
+.dropzone:hover, .dropzone.active {
+  border-color: var(--primary); background: var(--primary-light); color: var(--text-primary);
 }
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+.dropzone p { margin: 8px 0 4px; font-size: 14px; }
+.dropzone small { font-size: 12px; color: var(--text-muted); }
+.dropzone-link { color: var(--primary); font-weight: 700; }
+.file-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.file-list li {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center;
+  padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-light); font-size: 13px;
 }
-
-.btn-secondary {
-  border: 1px solid var(--border-light);
-  background: var(--bg-hover);
-  color: var(--text-primary);
-  border-radius: 8px;
-  padding: 8px 14px;
-  cursor: pointer;
+.file-remove {
+  border: none; background: transparent; color: var(--text-muted); cursor: pointer; padding: 4px;
 }
+.file-remove:hover { color: var(--danger); }
+.form-error {
+  margin: 0; padding: 10px 12px; border-radius: 8px; font-size: 13px;
+  background: var(--danger-light); color: var(--danger); border-left: 3px solid var(--danger);
+}
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px;
+  background: var(--primary); color: white; border: none; border-radius: 10px;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .search-bar:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
 .search-bar svg { color: var(--text-secondary); flex-shrink: 0; }

@@ -60,6 +60,7 @@ router.post(
       parsed.data.decision,
       parsed.data.notes,
       parsed.data.assignedTechnicianEmail,
+      parsed.data.validationDueAt,
     )
     res.json(row)
   }),

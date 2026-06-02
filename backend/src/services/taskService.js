@@ -8,9 +8,26 @@ function uiStatusFromMaintenance(status) {
   return 'Concluída'
 }
 
+function formatDue(d) {
+  if (!d) return ''
+  const dt = d instanceof Date ? d : new Date(d)
+  if (Number.isNaN(dt.getTime())) return ''
+  return dt.toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+function dueUrgency(dueAt, status) {
+  if (!dueAt || status === 'Concluída') return 'none'
+  const due = new Date(dueAt).getTime()
+  const now = Date.now()
+  if (due < now) return 'overdue'
+  if (due - now < 24 * 60 * 60 * 1000) return 'soon'
+  return 'ok'
+}
+
 function toTaskDto(m) {
   const o = m.toObject ? m.toObject() : m
   const desc = o.description?.trim() || `${o.type} — ${o.assetTag}`
+  const pendingExt = (o.extensionRequests ?? []).find((r) => r.status === 'Pendente')
   return {
     id: String(o._id),
     assetTag: o.assetTag,
@@ -19,6 +36,20 @@ function toTaskDto(m) {
     status: uiStatusFromMaintenance(o.status),
     assignedTechnicianEmail: o.assignedTechnicianEmail ?? '',
     assignedTechnicianName: o.assignedTechnicianName ?? '',
+    validationDueAt: o.validationDueAt ? new Date(o.validationDueAt).toISOString() : '',
+    validationDueDisplay: formatDue(o.validationDueAt),
+    dueUrgency: dueUrgency(o.validationDueAt, o.status),
+    lastReturnNotes: o.lastReturnNotes ?? '',
+    lastReturnedAt: o.lastReturnedAt ? new Date(o.lastReturnedAt).toISOString() : '',
+    lastReturnedByName: o.lastReturnedByName ?? '',
+    hasPendingExtension: Boolean(pendingExt),
+    pendingExtension: pendingExt
+      ? {
+          id: String(pendingExt._id),
+          proposedDueDisplay: formatDue(pendingExt.proposedDueAt),
+          reason: pendingExt.reason ?? '',
+        }
+      : null,
   }
 }
 

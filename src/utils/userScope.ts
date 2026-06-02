@@ -1,5 +1,18 @@
 /** Filtros alinhados aos dados da API (sem mapeamento fixo por e-mail). */
 
+export function assetsEligibleForRequests<
+  T extends { assignedTo?: string | null },
+>(
+  assets: T[],
+  user: { role?: string | null; email?: string | null } | null | undefined,
+): T[] {
+  const role = String(user?.role ?? '').trim().toUpperCase()
+  if (role === 'FUNCIONARIO') {
+    return assetsAssignedToEmail(assets, user?.email)
+  }
+  return assets
+}
+
 export function assetsAssignedToEmail<T extends { assignedTo?: string | null }>(
   assets: T[],
   email: string | undefined | null,

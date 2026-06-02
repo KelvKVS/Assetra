@@ -11,6 +11,7 @@ import {
   MAX_UPLOAD_FILES,
   formatUploadLimitLabel,
 } from '../config/uploadLimits.js'
+import { allowedUploadTypesLabel, isAllowedUploadFile } from '../config/allowedUploadTypes.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.resolve(__dirname, '../../uploads')
@@ -18,15 +19,6 @@ const uploadsDir = path.resolve(__dirname, '../../uploads')
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true })
 }
-
-const allowedMimes = new Set([
-  'image/png',
-  'image/jpeg',
-  'image/jpg',
-  'image/webp',
-  'image/gif',
-  'application/pdf',
-])
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadsDir),
@@ -38,10 +30,14 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 8 * 1024 * 1024, files: 6 },
+  limits: { fileSize: MAX_UPLOAD_FILE_BYTES, files: MAX_UPLOAD_FILES },
   fileFilter: (_req, file, cb) => {
-    if (allowedMimes.has(file.mimetype)) return cb(null, true)
-    cb(new Error('Tipo de ficheiro não permitido. Use imagens (PNG/JPG/WEBP/GIF) ou PDF.'))
+    if (isAllowedUploadFile(file)) return cb(null, true)
+    cb(
+      new Error(
+        `Tipo de ficheiro não permitido. Utilize: ${allowedUploadTypesLabel()}.`,
+      ),
+    )
   },
 })
 
@@ -65,7 +61,7 @@ router.post('/', authMiddleware, (req, res, next) => {
     const tenantId = String(req.user?.tenantId ?? '').trim()
     const uploaded = req.files ?? []
     if (!uploaded.length) {
-      return res.status(400).json({ message: 'Nenhum ficheiro recebido. Selecione imagens e tente novamente.' })
+      return res.status(400).json({ message: 'Nenhum ficheiro recebido. Selecione anexos e tente novamente.' })
     }
     const files = uploaded.map((f) => {
       const fileToken = tenantId ? signUploadFileToken(f.filename, tenantId) : ''

@@ -34,6 +34,14 @@
       </div>
     </header>
 
+    <div v-if="pendingExtensionItems.length && canManageMaintenances" class="extensions-banner">
+      <CalendarClock :size="20" />
+      <div>
+        <strong>{{ pendingExtensionItems.length }} pedido(s) de adiamento</strong>
+        <p>Técnicos solicitaram novo prazo — revise abaixo nos chamados indicados.</p>
+      </div>
+    </div>
+
     <div v-if="showBulkAssign && canManageMaintenances" class="form-card">
       <h3>Atribuir chamados em lote</h3>
       <p class="muted">
@@ -153,15 +161,15 @@
           </div>
         </div>
         <div class="form-group field field-wide">
-          <label>Fotos da manutenção</label>
+          <label>Anexos (fotos, PDF, relatórios)</label>
           <div class="upload-shell">
             <label class="btn-secondary upload-btn">
               <Paperclip :size="16" />
-              Subir fotos
+              Adicionar anexos
               <input
                 type="file"
                 multiple
-                accept="image/png,image/jpeg,image/webp,image/gif"
+                :accept="uploadAcceptAttr"
                 class="file-hidden"
                 @change="onCreateFilesPick"
               />
@@ -233,12 +241,39 @@
                 Técnico: <strong>{{ maintenance.assignedTechnicianName || maintenance.assignedTechnicianEmail }}</strong>
               </span>
             </div>
+            <div class="info-item" v-if="maintenance.validationDueDisplay">
+              <CalendarClock :size="14" :stroke-width="2" />
+              <span>Prazo validação: <strong>{{ maintenance.validationDueDisplay }}</strong></span>
+            </div>
             <div class="info-item" v-if="maintenance.attachments?.length">
               <Paperclip :size="14" :stroke-width="2" />
-              <span>{{ maintenance.attachments.length }} foto(s) anexada(s)</span>
+              <span>{{ maintenance.attachments.length }} anexo(s)</span>
             </div>
           </div>
           <p class="maintenance-description">{{ maintenance.description }}</p>
+          <div v-if="maintenance.pendingExtension && canManageMaintenances" class="extension-review">
+            <p>
+              <strong>{{ maintenance.pendingExtension.requestedByName || 'Técnico' }}</strong>
+              pediu adiamento para <strong>{{ maintenance.pendingExtension.proposedDueDisplay }}</strong>
+            </p>
+            <p class="extension-reason">{{ maintenance.pendingExtension.reason }}</p>
+            <div class="extension-actions">
+              <button
+                type="button"
+                class="btn-primary btn-sm"
+                @click="decideExtension(maintenance, 'APPROVED')"
+              >
+                Aprovar adiamento
+              </button>
+              <button
+                type="button"
+                class="btn-secondary btn-sm"
+                @click="decideExtension(maintenance, 'REJECTED')"
+              >
+                Recusar
+              </button>
+            </div>
+          </div>
         </div>
         <div class="maintenance-footer">
           <div v-if="canManageMaintenances" class="maintenance-actions">
@@ -289,6 +324,11 @@
             <small class="field-hint">Use uma descrição clara para facilitar o diagnóstico.</small>
           </div>
           <div class="form-group">
+            <label>Prazo para validação (conclusão técnica)</label>
+            <input v-model="editMaintenance.validationDueAtLocal" type="datetime-local" />
+            <small class="field-hint">O técnico vê este prazo na execução e pode pedir adiamento.</small>
+          </div>
+          <div class="form-group">
             <label>Status</label>
             <select v-model="editMaintenance.status" required>
               <option>Aberta</option>
@@ -320,15 +360,15 @@
             </div>
           </div>
           <div class="form-group">
-            <label>Fotos da manutenção</label>
+            <label>Anexos da manutenção</label>
             <div class="upload-shell">
               <label class="btn-secondary upload-btn">
                 <Paperclip :size="16" />
-                Subir fotos
+                Adicionar anexos
                 <input
                   type="file"
                   multiple
-                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  :accept="uploadAcceptAttr"
                   class="file-hidden"
                   @change="onEditFilesPick"
                 />
@@ -356,6 +396,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useLocalPageSearch } from '../composables/useLocalPageSearch'
 import { type AttachmentRef, type MaintenanceRow, useInventoryStore } from '../stores/inventory'
 import { useConfirmAction } from '../composables/useConfirmAction'
+import { UPLOAD_ACCEPT_ATTR, UPLOAD_TYPES_SHORT_LABEL } from '../constants/attachmentTypes'
 import { UPLOAD_LIMITS_HINT, mergeUploadFiles } from '../utils/uploadLimits'
 import { useAuthStore } from '../stores/auth'
 import { maintenancesInvolvingUserByAssets } from '../utils/userScope'
@@ -365,16 +406,18 @@ import {
   Wrench,
   Monitor,
   Calendar,
+  CalendarClock,
   User,
   Clock3,
   Activity,
   Paperclip,
   Edit,
   Trash2,
-  X
+  X,
 } from 'lucide-vue-next'
 
-const uploadLimitsHint = UPLOAD_LIMITS_HINT
+const uploadLimitsHint = `${UPLOAD_LIMITS_HINT} · ${UPLOAD_TYPES_SHORT_LABEL}`
+const uploadAcceptAttr = UPLOAD_ACCEPT_ATTR
 
 const confirm = useConfirmAction()
 const authStore = useAuthStore()
@@ -413,6 +456,7 @@ const editMaintenance = reactive({
   assignedTechnicianEmail: '',
   openingDate: '',
   priority: 'Média' as const,
+  validationDueAtLocal: '',
 })
 
 const inventory = useInventoryStore()
@@ -430,6 +474,18 @@ const scopedMaintenances = computed(() =>
     ? maintenancesInvolvingUserByAssets(inventory.maintenances, inventory.assets, authStore.user?.email)
     : inventory.maintenances,
 )
+
+const pendingExtensionItems = computed(() =>
+  inventory.maintenances.filter((m) => m.pendingExtension?.id),
+)
+
+function toDatetimeLocalValue(iso?: string) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
 
 const pageSubtitle = computed(() =>
   isTechnician.value
@@ -568,7 +624,26 @@ const startMaintenanceEdit = (maintenance: MaintenanceRow) => {
   editMaintenance.assignedTechnicianEmail = maintenance.assignedTechnicianEmail ?? ''
   editMaintenance.openingDate = maintenance.openingDate
   editMaintenance.priority = maintenance.priority as typeof editMaintenance.priority
+  editMaintenance.validationDueAtLocal = toDatetimeLocalValue(maintenance.validationDueAt)
   selectedEditFiles.value = []
+}
+
+const decideExtension = async (maintenance: MaintenanceRow, decision: 'APPROVED' | 'REJECTED') => {
+  const ext = maintenance.pendingExtension
+  if (!ext?.id) return
+  let notes: string | undefined
+  if (decision === 'REJECTED') {
+    const reason = window.prompt('Motivo da recusa do adiamento (obrigatório):', '')?.trim() ?? ''
+    if (reason.length < 3) return
+    notes = reason
+  }
+  const label = decision === 'APPROVED' ? 'aprovar' : 'recusar'
+  const ok = await confirm.ask(
+    `Confirme com a sua senha para ${label} o adiamento até ${ext.proposedDueDisplay ?? 'nova data'}.`,
+    'Decidir adiamento',
+  )
+  if (!ok) return
+  await inventory.decideMaintenanceExtension(maintenance.id, ext.id, decision, notes)
 }
 
 const cancelMaintenanceEdit = () => {
@@ -579,7 +654,11 @@ const saveMaintenanceEdit = async () => {
   if (!editingId.value) return
   const ok = await confirm.ask('Confirme com a sua senha para guardar as alterações.')
   if (!ok) return
-  const payload: Partial<Omit<MaintenanceRow, 'id'>> = { ...editMaintenance }
+  const { validationDueAtLocal, ...rest } = editMaintenance
+  const payload: Partial<Omit<MaintenanceRow, 'id'>> = { ...rest }
+  if (validationDueAtLocal) {
+    payload.validationDueAt = new Date(validationDueAtLocal).toISOString()
+  }
   if (selectedEditFiles.value.length) {
     payload.attachments = await inventory.uploadAttachments(selectedEditFiles.value)
   }
@@ -890,6 +969,23 @@ const statusClass = (status: string) => {
 .form-actions { display: flex; gap: 12px; align-items: flex-end; }
 
 .maintenance-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+.extensions-banner {
+  display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; padding: 14px 16px;
+  border-radius: 12px; border: 1px solid color-mix(in srgb, #f59e0b 40%, var(--border-light));
+  background: color-mix(in srgb, #f59e0b 10%, var(--bg-card)); color: var(--text-secondary);
+}
+.extensions-banner strong { display: block; color: var(--text-primary); margin-bottom: 4px; }
+.extensions-banner p { margin: 0; font-size: 13px; }
+.extension-review {
+  margin-top: 12px; padding: 12px; border-radius: 10px;
+  border: 1px dashed color-mix(in srgb, #f59e0b 45%, var(--border-light));
+  background: color-mix(in srgb, #f59e0b 8%, var(--bg-primary));
+}
+.extension-review p { margin: 0 0 6px; font-size: 13px; color: var(--text-secondary); }
+.extension-reason { font-style: italic; }
+.extension-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+
 .maintenance-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 12px; overflow: hidden; transition: all 0.2s ease; }
 .maintenance-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); border-color: var(--primary); }
 .maintenance-card.tone-aberta { border-left: 4px solid #3b82f6; }

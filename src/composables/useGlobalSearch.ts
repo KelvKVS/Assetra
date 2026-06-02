@@ -114,7 +114,11 @@ export function useGlobalSearch() {
     }
 
     for (const asset of inventory.assets) {
-      if (!matchesTerm(term, asset.tag, asset.description, asset.sector, asset.status, asset.assignedTo)) continue
+      if (
+        !matchesTerm(term, asset.tag, asset.shortCode, asset.description, asset.sector, asset.status, asset.assignedTo)
+      ) {
+        continue
+      }
       pushItem(items, counts, {
         id: `asset-${asset.id ?? asset.tag}`,
         kind: 'asset',

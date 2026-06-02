@@ -79,6 +79,7 @@ const attachmentRefSchema = z.object({
 
 export const assetCreateSchema = z.object({
   tag: z.string().min(1).max(40),
+  shortCode: z.string().trim().max(24).optional(),
   description: z.string().min(1).max(200),
   sector: z.string().min(1).max(120),
   status: assetStatusEnum.optional(),
@@ -89,6 +90,7 @@ export const assetCreateSchema = z.object({
 
 export const assetUpdateSchema = z.object({
   tag: z.string().min(1).max(40).optional(),
+  shortCode: z.string().trim().max(24).optional().nullable(),
   description: z.string().min(1).max(200).optional(),
   sector: z.string().min(1).max(120).optional(),
   status: assetStatusEnum.optional(),
@@ -121,6 +123,7 @@ export const maintenanceCreateSchema = z.object({
   assignedTechnicianEmail: z.string().email().max(120).optional(),
   attachments: z.array(attachmentRefSchema).max(6).optional(),
   openingDate: z.string().optional(),
+  validationDueAt: z.string().max(40).optional(),
 })
 
 export const maintenanceUpdateSchema = z.object({
@@ -132,6 +135,21 @@ export const maintenanceUpdateSchema = z.object({
   assignedTechnicianEmail: z.string().email().max(120).optional().nullable(),
   attachments: z.array(attachmentRefSchema).max(6).optional(),
   openingDate: z.string().optional(),
+  validationDueAt: z.string().max(40).optional().nullable(),
+})
+
+export const validationDueSchema = z.object({
+  validationDueAt: z.string().min(1).max(40),
+})
+
+export const extensionRequestCreateSchema = z.object({
+  proposedDueAt: z.string().min(1).max(40),
+  reason: z.string().min(3).max(1000),
+})
+
+export const extensionRequestDecideSchema = z.object({
+  decision: z.enum(['APPROVED', 'REJECTED']),
+  notes: z.string().max(500).optional(),
 })
 
 export const approvalCreateSchema = z.object({
@@ -149,6 +167,8 @@ export const approvalRespondSchema = z.object({
   notes: z.string().max(500).optional(),
   /** Ao aprovar nova solicitação de manutenção, define o técnico executor. */
   assignedTechnicianEmail: z.string().email().max(120).optional(),
+  /** Prazo para conclusão / envio da validação técnica. */
+  validationDueAt: z.string().max(40).optional(),
 })
 
 export const passwordVerifySchema = z.object({

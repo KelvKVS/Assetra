@@ -2,13 +2,24 @@ import Approval from '../models/Approval.js'
 import Maintenance from '../models/Maintenance.js'
 import prisma from '../lib/prisma.js'
 import { AppError } from '../utils/AppError.js'
-import { createMaintenance, refreshAssetStatusForTag } from './maintenanceService.js'
+import {
+  createMaintenance,
+  parseDatetimeInput,
+  refreshAssetStatusForTag,
+  setMaintenanceValidationDue,
+} from './maintenanceService.js'
+import { assertUserCanRequestAsset } from '../utils/assetAccess.js'
 import { findAssetByTag } from './assetService.js'
 import { parseDestinationFromDescription, registerMovementFromApproval } from './movementService.js'
 import { logAudit } from './auditService.js'
 import { publishDomainEventSafely } from '../lib/eventBus.js'
 import { enrichAttachmentUrls } from '../utils/enrichAttachments.js'
 import { sanitizeAttachmentsForDb } from '../utils/sanitizeAttachments.js'
+import {
+  enrichApprovalsList,
+  findOpeningApprovalForMaintenance,
+  mergeApprovalDto,
+} from '../utils/approvalEnrichment.js'
 
 function resolveRequiredApproverRole(requestedByRole) {
   if (requestedByRole === 'FUNCIONARIO' || requestedByRole === 'TECNICO') return 'GESTOR'
@@ -75,6 +86,8 @@ async function applyMaintenanceApprovalEffects(
   approval,
   decision,
   assignedTechnicianEmail,
+  validationDueAtRaw,
+  notes,
 ) {
   if (String(approval.type) !== 'Manutenção') return
 
@@ -85,6 +98,15 @@ async function applyMaintenanceApprovalEffects(
     if (!isExecutionValidationApproval(approval, maintenance)) return
 
     maintenance.status = decision === 'APPROVED' ? 'Concluída' : 'Em andamento'
+    if (decision === 'REJECTED') {
+      maintenance.lastReturnNotes = String(notes ?? '').trim()
+      maintenance.lastReturnedAt = new Date()
+      maintenance.lastReturnedByName = String(user?.name ?? '').trim()
+    } else if (decision === 'APPROVED') {
+      maintenance.lastReturnNotes = ''
+      maintenance.lastReturnedAt = undefined
+      maintenance.lastReturnedByName = ''
+    }
     await maintenance.save()
     await refreshAssetStatusForTag(tenantId, maintenance.assetTag)
     await logAudit({
@@ -108,23 +130,30 @@ async function applyMaintenanceApprovalEffects(
     assignedTechnicianEmail,
   )
   const details = [approval.description, approval.feedback].filter(Boolean).join('\n\n')
-  const created = await createMaintenance(
-    tenantId,
-    user?.sub,
-    {
-      assetTag: approval.assetTag,
-      type: 'Corretiva',
-      description: details.slice(0, 2000),
-      priority: parsePriorityFromFeedback(approval.feedback),
-      status: 'Aberta',
-      assignedTechnicianEmail: techEmail,
-      attachments: approval.attachments ?? [],
-    },
-    user,
-  )
+  const createPayload = {
+    assetTag: approval.assetTag,
+    type: 'Corretiva',
+    description: details.slice(0, 2000),
+    priority: parsePriorityFromFeedback(approval.feedback),
+    status: 'Aberta',
+    assignedTechnicianEmail: techEmail,
+    attachments: approval.attachments ?? [],
+  }
+  if (validationDueAtRaw) {
+    createPayload.validationDueAt = validationDueAtRaw
+  }
+  const created = await createMaintenance(tenantId, user?.sub, createPayload, user)
 
   approval.maintenanceId = String(created.id)
+  approval.approvalPhase = 'abertura'
   await approval.save()
+
+  if (validationDueAtRaw && !created.validationDueAt) {
+    const due = parseDatetimeInput(validationDueAtRaw)
+    if (due) {
+      await setMaintenanceValidationDue(tenantId, String(created.id), validationDueAtRaw, user)
+    }
+  }
 }
 
 function canUserDecideApproval(requiredRole, userRole) {
@@ -160,9 +189,15 @@ function toDto(doc) {
   }
 }
 
+async function mapApprovalsWithEnrichment(rows) {
+  const bases = rows.map(toDto)
+  const enrichments = await enrichApprovalsList(rows)
+  return bases.map((base, i) => mergeApprovalDto(base, enrichments[i] ?? {}))
+}
+
 export async function listApprovalsForTenant(tenantId) {
   const rows = await Approval.find({ tenantId }).sort({ createdAt: -1 })
-  return rows.map(toDto)
+  return mapApprovalsWithEnrichment(rows)
 }
 
 export async function listApprovalsForApprover(tenantId, approverRole) {
@@ -172,12 +207,12 @@ export async function listApprovalsForApprover(tenantId, approverRole) {
       ? { tenantId, requiredApproverRole: { $in: ['ADM', 'GESTOR'] } }
       : { tenantId, requiredApproverRole: role }
   const rows = await Approval.find(filter).sort({ createdAt: -1 })
-  return rows.map(toDto)
+  return mapApprovalsWithEnrichment(rows)
 }
 
 export async function listApprovalsByRequester(tenantId, userId) {
   const rows = await Approval.find({ tenantId, requestedBy: userId }).sort({ createdAt: -1 })
-  return rows.map(toDto)
+  return mapApprovalsWithEnrichment(rows)
 }
 
 export async function createApproval(tenantId, user, dto) {
@@ -201,7 +236,7 @@ export async function createApproval(tenantId, user, dto) {
       : {
           tenantId,
           type: 'Manutenção',
-          assetTag: String(dto.assetTag ?? '').trim(),
+          assetTag: resolvedAssetTag,
           requestedBy: user?.sub,
           status: 'Pendente',
         }
@@ -211,11 +246,23 @@ export async function createApproval(tenantId, user, dto) {
     }
   }
 
+  let approvalPhase = 'abertura'
+  let parentApprovalId = ''
+  if (normalizedType === 'Movimentação') {
+    approvalPhase = 'movimentacao'
+  } else if (normalizedMaintenanceId) {
+    approvalPhase = 'validacao'
+    const opening = await findOpeningApprovalForMaintenance(tenantId, normalizedMaintenanceId)
+    if (opening) parentApprovalId = String(opening._id)
+  }
+
   const a = new Approval({
     tenantId,
     type: normalizedType,
     maintenanceId: normalizedMaintenanceId,
-    assetTag: dto.assetTag.trim(),
+    approvalPhase,
+    parentApprovalId,
+    assetTag: resolvedAssetTag,
     description: dto.description.trim(),
     feedback: dto.feedback?.trim() || undefined,
     destinationSector:
@@ -228,6 +275,17 @@ export async function createApproval(tenantId, user, dto) {
     status: 'Pendente',
   })
   await a.save()
+
+  if (normalizedMaintenanceId && approvalPhase === 'validacao') {
+    const maintenance = await Maintenance.findOne({ _id: normalizedMaintenanceId, tenantId })
+    if (maintenance) {
+      maintenance.lastReturnNotes = ''
+      maintenance.lastReturnedAt = undefined
+      maintenance.lastReturnedByName = ''
+      await maintenance.save()
+    }
+  }
+
   await logAudit({
     tenantId,
     actor: user,
@@ -244,7 +302,8 @@ export async function createApproval(tenantId, user, dto) {
     status: a.status,
     requiredApproverRole: a.requiredApproverRole,
   }, { service: 'approvalService', action: 'createApproval' })
-  return toDto(a)
+  const [enriched] = await mapApprovalsWithEnrichment([a])
+  return enriched
 }
 
 export async function respondToApproval(
@@ -254,6 +313,7 @@ export async function respondToApproval(
   decision,
   notes,
   assignedTechnicianEmail,
+  validationDueAt,
 ) {
   const a = await Approval.findOne({ _id: approvalId, tenantId })
   if (!a) {
@@ -261,6 +321,9 @@ export async function respondToApproval(
   }
   if (a.status !== 'Pendente') {
     throw new AppError(400, 'Esta solicitação já foi respondida.')
+  }
+  if (decision === 'REJECTED' && String(notes ?? '').trim().length < 3) {
+    throw new AppError(400, 'Informe o motivo da devolução ou reprovação (mínimo 3 caracteres).')
   }
   if (String(a.requestedBy ?? '') === String(user?.sub ?? '')) {
     throw new AppError(403, 'Não é permitido aprovar a própria solicitação.')
@@ -297,12 +360,29 @@ export async function respondToApproval(
     })
   }
 
+  if (
+    decision === 'APPROVED' &&
+    String(a.type) === 'Manutenção' &&
+    !String(a.maintenanceId ?? '').trim() &&
+    validationDueAt
+  ) {
+    const due = parseDatetimeInput(validationDueAt)
+    if (!due) {
+      throw new AppError(400, 'Prazo de entrega inválido.')
+    }
+    if (due.getTime() <= Date.now()) {
+      throw new AppError(400, 'O prazo de entrega deve ser uma data futura.')
+    }
+  }
+
   await applyMaintenanceApprovalEffects(
     tenantId,
     user,
     a,
     decision,
     assignedTechnicianEmail,
+    validationDueAt,
+    notes,
   )
   await logAudit({
     tenantId,
@@ -321,5 +401,6 @@ export async function respondToApproval(
     status: a.status,
     maintenanceId: a.maintenanceId ?? '',
   }, { service: 'approvalService', action: 'respondToApproval' })
-  return toDto(a)
+  const [enriched] = await mapApprovalsWithEnrichment([a])
+  return enriched
 }

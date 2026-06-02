@@ -27,8 +27,45 @@ function formatOpening(d) {
   return dt.toLocaleDateString('pt-BR')
 }
 
+export function parseDatetimeInput(s) {
+  if (!s || typeof s !== 'string') return null
+  const t = s.trim()
+  const ms = Date.parse(t)
+  if (Number.isNaN(ms)) return null
+  const d = new Date(ms)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+function formatDatetimeDisplay(d) {
+  if (!d) return ''
+  const dt = d instanceof Date ? d : new Date(d)
+  if (Number.isNaN(dt.getTime())) return ''
+  return dt.toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+function mapExtensionRequest(r) {
+  const o = r.toObject ? r.toObject() : r
+  return {
+    id: String(o._id),
+    requestedBy: o.requestedBy ?? '',
+    requestedByName: o.requestedByName ?? '',
+    currentDueAt: o.currentDueAt ? new Date(o.currentDueAt).toISOString() : '',
+    currentDueDisplay: formatDatetimeDisplay(o.currentDueAt),
+    proposedDueAt: o.proposedDueAt ? new Date(o.proposedDueAt).toISOString() : '',
+    proposedDueDisplay: formatDatetimeDisplay(o.proposedDueAt),
+    reason: o.reason ?? '',
+    status: o.status ?? 'Pendente',
+    decidedByName: o.decidedByName ?? '',
+    decidedAt: o.decidedAt ? new Date(o.decidedAt).toISOString() : '',
+    notes: o.notes ?? '',
+    createdAt: o.createdAt ? new Date(o.createdAt).toISOString() : '',
+  }
+}
+
 function toDto(doc) {
   const o = doc.toObject ? doc.toObject() : doc
+  const extensions = (o.extensionRequests ?? []).map(mapExtensionRequest)
+  const pendingExtension = extensions.find((e) => e.status === 'Pendente') ?? null
   return {
     id: String(o._id),
     assetTag: o.assetTag,
@@ -38,6 +75,13 @@ function toDto(doc) {
     status: o.status,
     assignedTechnicianEmail: o.assignedTechnicianEmail ?? '',
     assignedTechnicianName: o.assignedTechnicianName ?? '',
+    validationDueAt: o.validationDueAt ? new Date(o.validationDueAt).toISOString() : '',
+    validationDueDisplay: formatDatetimeDisplay(o.validationDueAt),
+    lastReturnNotes: o.lastReturnNotes ?? '',
+    lastReturnedAt: o.lastReturnedAt ? new Date(o.lastReturnedAt).toISOString() : '',
+    lastReturnedByName: o.lastReturnedByName ?? '',
+    extensionRequests: extensions,
+    pendingExtension,
     attachments: enrichAttachmentUrls(null, o.attachments, o.tenantId),
     openingDate: formatOpening(o.openingDate),
   }
@@ -103,6 +147,11 @@ export async function createMaintenance(tenantId, userId, dto, actor = null) {
     const dt = parseOpeningInput(dto.openingDate)
     if (dt) openingDate = dt
   }
+  let validationDueAt
+  if (dto.validationDueAt) {
+    const due = parseDatetimeInput(dto.validationDueAt)
+    if (due) validationDueAt = due
+  }
   const m = new Maintenance({
     tenantId,
     assetTag: dto.assetTag.trim(),
@@ -112,6 +161,7 @@ export async function createMaintenance(tenantId, userId, dto, actor = null) {
     status: dto.status,
     assignedTechnicianEmail: assignedTechnician.email,
     assignedTechnicianName: assignedTechnician.name,
+    validationDueAt,
     attachments: sanitizeAttachmentsForDb(dto.attachments),
     openingDate,
   })
@@ -159,6 +209,17 @@ export async function updateMaintenance(tenantId, maintenanceId, dto, actor = nu
     const dt = parseOpeningInput(dto.openingDate)
     if (dt) m.openingDate = dt
   }
+  if (dto.validationDueAt !== undefined) {
+    if (dto.validationDueAt === null || dto.validationDueAt === '') {
+      m.validationDueAt = undefined
+    } else {
+      const due = parseDatetimeInput(dto.validationDueAt)
+      if (!due) {
+        throw new AppError(400, 'Data de entrega inválida.')
+      }
+      m.validationDueAt = due
+    }
+  }
   await m.save()
   await refreshAssetStatusForTag(tenantId, m.assetTag)
   if (prevTag !== m.assetTag) {
@@ -180,6 +241,108 @@ export async function updateMaintenance(tenantId, maintenanceId, dto, actor = nu
     assetTag: m.assetTag,
     status: m.status,
   }, { service: 'maintenanceService', action: 'updateMaintenance' })
+  return toDto(m)
+}
+
+export async function setMaintenanceValidationDue(tenantId, maintenanceId, validationDueAtRaw, actor) {
+  const m = await Maintenance.findOne({ _id: maintenanceId, tenantId })
+  if (!m) {
+    throw new AppError(404, 'Manutenção não encontrada.')
+  }
+  const due = parseDatetimeInput(validationDueAtRaw)
+  if (!due) {
+    throw new AppError(400, 'Informe uma data e hora válidas para entrega.')
+  }
+  if (due.getTime() <= Date.now()) {
+    throw new AppError(400, 'O prazo deve ser uma data futura.')
+  }
+  const before = toDto(m)
+  m.validationDueAt = due
+  await m.save()
+  const after = toDto(m)
+  await logAudit({
+    tenantId,
+    actor,
+    entityType: 'Maintenance',
+    entityId: String(m._id),
+    action: 'SET_VALIDATION_DUE',
+    before,
+    after,
+  })
+  return after
+}
+
+export async function requestMaintenanceExtension(tenantId, user, maintenanceId, dto) {
+  const m = await Maintenance.findOne({ _id: maintenanceId, tenantId })
+  if (!m) {
+    throw new AppError(404, 'Ordem não encontrada.')
+  }
+  if (m.status === 'Concluída') {
+    throw new AppError(400, 'Esta ordem já está concluída.')
+  }
+  const techEmail = String(m.assignedTechnicianEmail ?? '').trim().toLowerCase()
+  const userEmail = String(user?.email ?? '').trim().toLowerCase()
+  if (String(user?.role) === 'TECNICO' && techEmail !== userEmail) {
+    throw new AppError(403, 'Esta ordem está atribuída a outro técnico.')
+  }
+  const hasPending = (m.extensionRequests ?? []).some((r) => r.status === 'Pendente')
+  if (hasPending) {
+    throw new AppError(400, 'Já existe um pedido de adiamento pendente para esta ordem.')
+  }
+  const proposed = parseDatetimeInput(dto.proposedDueAt)
+  if (!proposed) {
+    throw new AppError(400, 'Informe a nova data proposta.')
+  }
+  if (proposed.getTime() <= Date.now()) {
+    throw new AppError(400, 'A nova data deve ser futura.')
+  }
+  if (m.validationDueAt && proposed.getTime() <= new Date(m.validationDueAt).getTime()) {
+    throw new AppError(400, 'O adiamento deve ser posterior ao prazo atual.')
+  }
+  m.extensionRequests.push({
+    requestedBy: user?.sub ?? '',
+    requestedByName: user?.name ?? '',
+    currentDueAt: m.validationDueAt ?? undefined,
+    proposedDueAt: proposed,
+    reason: String(dto.reason ?? '').trim(),
+    status: 'Pendente',
+  })
+  await m.save()
+  return toDto(m)
+}
+
+export async function decideMaintenanceExtension(
+  tenantId,
+  user,
+  maintenanceId,
+  requestId,
+  decision,
+  notes,
+) {
+  const role = String(user?.role ?? '').toUpperCase()
+  if (role !== 'ADM' && role !== 'GESTOR') {
+    throw new AppError(403, 'Apenas gestor ou administrador pode decidir adiamentos.')
+  }
+  const m = await Maintenance.findOne({ _id: maintenanceId, tenantId })
+  if (!m) {
+    throw new AppError(404, 'Manutenção não encontrada.')
+  }
+  const req = (m.extensionRequests ?? []).find((r) => String(r._id) === String(requestId))
+  if (!req) {
+    throw new AppError(404, 'Pedido de adiamento não encontrado.')
+  }
+  if (req.status !== 'Pendente') {
+    throw new AppError(400, 'Este pedido de adiamento já foi decidido.')
+  }
+  req.status = decision === 'APPROVED' ? 'Aprovada' : 'Reprovada'
+  req.decidedBy = user?.sub ?? ''
+  req.decidedByName = user?.name ?? ''
+  req.decidedAt = new Date()
+  req.notes = String(notes ?? '').trim()
+  if (decision === 'APPROVED') {
+    m.validationDueAt = req.proposedDueAt
+  }
+  await m.save()
   return toDto(m)
 }
 

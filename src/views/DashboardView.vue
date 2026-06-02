@@ -330,7 +330,7 @@
         </header>
         <p class="muted">
           Precisa de movimentar um equipamento ou abrir uma manutenção que dependa do gestor?
-          Use o assistente passo-a-passo com upload de fotos.
+          Use o assistente passo-a-passo com anexos (fotos e documentos).
         </p>
         <RouterLink to="/solicitacoes" class="btn-primary self-start">
           <Plus :size="16" /> Nova solicitação

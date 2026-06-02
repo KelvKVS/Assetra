@@ -11,6 +11,26 @@ const attachmentSchema = new mongoose.Schema(
   { _id: false },
 )
 
+const extensionRequestSchema = new mongoose.Schema(
+  {
+    requestedBy: { type: String, default: '' },
+    requestedByName: { type: String, default: '' },
+    currentDueAt: { type: Date },
+    proposedDueAt: { type: Date, required: true },
+    reason: { type: String, default: '', maxlength: 1000 },
+    status: {
+      type: String,
+      enum: ['Pendente', 'Aprovada', 'Reprovada'],
+      default: 'Pendente',
+    },
+    decidedBy: { type: String, default: '' },
+    decidedByName: { type: String, default: '' },
+    decidedAt: { type: Date },
+    notes: { type: String, default: '', maxlength: 500 },
+  },
+  { timestamps: true },
+)
+
 const maintenanceSchema = new mongoose.Schema(
   {
     tenantId: { type: String, required: true, index: true },
@@ -25,6 +45,13 @@ const maintenanceSchema = new mongoose.Schema(
     },
     assignedTechnicianEmail: { type: String, default: '' },
     assignedTechnicianName: { type: String, default: '' },
+    /** Prazo para o técnico concluir e enviar validação ao gestor. */
+    validationDueAt: { type: Date },
+    /** Último motivo de devolução/reprovação da validação pelo gestor. */
+    lastReturnNotes: { type: String, default: '' },
+    lastReturnedAt: { type: Date },
+    lastReturnedByName: { type: String, default: '' },
+    extensionRequests: { type: [extensionRequestSchema], default: [] },
     attachments: { type: [attachmentSchema], default: [] },
     openingDate: { type: Date, default: Date.now },
   },

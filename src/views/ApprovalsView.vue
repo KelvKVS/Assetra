@@ -3,154 +3,129 @@
     <div class="page-header">
       <div>
         <h2>Aprovações</h2>
-        <p class="muted">Revise solicitações pendentes e tome decisão. Toda decisão exige confirmação por senha.</p>
+        <p class="header-sub">
+          <span class="header-stat header-stat--warn">{{ pending.length }} pendente{{ pending.length === 1 ? '' : 's' }}</span>
+          <span class="header-stat">{{ approvedCount }} aprovada{{ approvedCount === 1 ? '' : 's' }}</span>
+          <span class="header-stat">{{ rejectedCount }} reprovada{{ rejectedCount === 1 ? '' : 's' }}</span>
+        </p>
       </div>
     </div>
 
-    <!-- Stats Cards -->
-    <div class="stats-grid">
-      <div class="stat-card stat-warning">
-        <Clock :size="24" :stroke-width="2.5" class="stat-icon" />
-        <div class="stat-content">
-          <span class="stat-label">Pendentes</span>
-          <span class="stat-value">{{ pending.length }}</span>
-        </div>
+    <div class="toolbar">
+      <div class="search-bar">
+        <Search :size="18" :stroke-width="2" />
+        <input
+          v-model.trim="pageSearch"
+          type="search"
+          placeholder="Buscar ativo, REQ, OS ou solicitante..."
+        />
       </div>
-      <div class="stat-card stat-success">
-        <CheckCircle :size="24" :stroke-width="2.5" class="stat-icon" />
-        <div class="stat-content">
-          <span class="stat-label">Aprovadas</span>
-          <span class="stat-value">{{ approvedCount }}</span>
-        </div>
-      </div>
-      <div class="stat-card stat-danger">
-        <XCircle :size="24" :stroke-width="2.5" class="stat-icon" />
-        <div class="stat-content">
-          <span class="stat-label">Reprovadas</span>
-          <span class="stat-value">{{ rejectedCount }}</span>
-        </div>
+      <div class="filter-tabs">
+        <button :class="['tab-btn', { active: filter === 'Pendente' }]" @click="filter = 'Pendente'">
+          Pendentes
+        </button>
+        <button :class="['tab-btn', { active: filter === 'all' }]" @click="filter = 'all'">Todas</button>
+        <button :class="['tab-btn', { active: filter === 'Aprovada' }]" @click="filter = 'Aprovada'">Aprovadas</button>
+        <button :class="['tab-btn', { active: filter === 'Reprovada' }]" @click="filter = 'Reprovada'">Reprovadas</button>
+        <span class="filter-sep" aria-hidden="true" />
+        <button :class="['tab-btn tab-btn--sm', { active: phaseFilter === 'all' }]" @click="phaseFilter = 'all'">Todas etapas</button>
+        <button :class="['tab-btn tab-btn--sm', { active: phaseFilter === 'abertura' }]" @click="phaseFilter = 'abertura'">Abertura</button>
+        <button :class="['tab-btn tab-btn--sm', { active: phaseFilter === 'validacao' }]" @click="phaseFilter = 'validacao'">Validação</button>
+        <button :class="['tab-btn tab-btn--sm', { active: phaseFilter === 'movimentacao' }]" @click="phaseFilter = 'movimentacao'">Movimentação</button>
       </div>
     </div>
 
-    <div class="search-bar">
-      <Search :size="18" :stroke-width="2" />
-      <input
-        v-model.trim="pageSearch"
-        type="search"
-        placeholder="Buscar por tipo, ativo, descrição ou solicitante..."
-      />
-    </div>
-
-    <div class="filter-tabs">
-      <button :class="['tab-btn', { active: filter === 'all' }]" @click="filter = 'all'">Todas</button>
-      <button :class="['tab-btn', { active: filter === 'Pendente' }]" @click="filter = 'Pendente'">Pendentes</button>
-      <button :class="['tab-btn', { active: filter === 'Aprovada' }]" @click="filter = 'Aprovada'">Aprovadas</button>
-      <button :class="['tab-btn', { active: filter === 'Reprovada' }]" @click="filter = 'Reprovada'">Reprovadas</button>
-    </div>
-
-    <div class="approvals-grid">
-      <div v-for="item in filteredApprovals" :key="item.id" class="approval-card">
-        <div class="approval-header">
-          <span :class="['type-badge', `type-${typeClass(item.type)}`]">
-            <component :is="typeIcon(item.type)" :size="16" :stroke-width="2.5" />
-            {{ item.type }}
-          </span>
-          <span v-if="flowKind(item) === 'validation'" class="flow-badge flow-badge--validation">
-            Validação técnica
-          </span>
-          <span v-else-if="flowKind(item) === 'opening'" class="flow-badge flow-badge--opening">
-            Nova OS
-          </span>
-          <span :class="['status-badge', `status-${statusClass(item.status)}`]">
-            {{ item.status }}
-          </span>
+    <div class="approvals-list">
+      <article
+        v-for="item in filteredApprovals"
+        :key="item.id"
+        :class="['approval-card', `tone-${statusClass(item.status)}`]"
+      >
+        <div class="card-top">
+          <span :class="['phase-chip', `phase-${flowKind(item)}`]">{{ phaseShortLabel(item) }}</span>
+          <span :class="['status-badge', `status-${statusClass(item.status)}`]">{{ item.status }}</span>
         </div>
 
-        <div class="approval-body">
-          <div class="approval-asset">
-            <Package :size="18" :stroke-width="2" />
-            <div>
-              <h4>{{ item.assetTag }}</h4>
-              <p>{{ item.description }}</p>
-            </div>
-          </div>
+        <h3 class="card-summary">{{ approvalSummary(item) }}</h3>
 
-          <div v-if="item.feedback" class="approval-feedback">
-            <MessageSquare :size="14" :stroke-width="2" />
-            <p>{{ item.feedback }}</p>
-          </div>
+        <p class="card-meta">
+          <span v-if="item.osCode" class="meta-os">{{ item.osCode }}</span>
+          <span v-if="item.requestCode">{{ item.requestCode }}</span>
+          <span>Ativo {{ item.assetTag }}</span>
+          <span v-if="maintenanceDueLabel(item)" class="meta-due">{{ maintenanceDueLabel(item) }}</span>
+          <span v-if="item.createdAt">{{ formatWhen(item.createdAt) }}</span>
+        </p>
 
-          <div v-if="item.attachments && item.attachments.length" class="approval-attachments">
-            <span class="att-title"><Paperclip :size="13" /> Anexos</span>
-            <div class="att-grid">
-              <button
-                v-for="(att, idx) in item.attachments"
-                :key="idx"
-                type="button"
-                class="att-item"
-                @click.stop="openAttachment(item, att)"
-              >
-                <img v-if="isImage(att.mimetype)" :src="att.url" :alt="att.originalName ?? att.filename" />
-                <FileText v-else :size="22" />
-                <span class="att-name">{{ att.originalName ?? att.filename }}</span>
-              </button>
-            </div>
-          </div>
-
-          <div class="approval-meta">
-            <span v-if="item.requestedByName"><User :size="12" /> {{ item.requestedByName }}</span>
-            <span v-if="item.requiredApproverRole">
-              <ShieldCheck :size="12" />
-              Aprovação: {{ formatApproverRole(item.requiredApproverRole) }}
-            </span>
-            <span v-if="item.decidedByName">
-              <ShieldCheck :size="12" />
-              {{ item.status }} por {{ item.decidedByName }}
-            </span>
-          </div>
-        </div>
-
-        <div v-if="canApprove && item.status === 'Pendente'" class="approval-footer">
-          <p v-if="flowKind(item) === 'opening'" class="flow-hint">
-            Ao aprovar, o sistema abre uma ordem de serviço na <strong>Execução Técnica</strong> do técnico escolhido.
+        <div v-if="canApprove && item.status === 'Pendente'" class="card-pending-actions">
+          <p v-if="flowKind(item) === 'opening'" class="action-hint">
+            Aprovar cria a ordem de serviço para o técnico executar.
           </p>
-          <p v-else-if="flowKind(item) === 'validation'" class="flow-hint">
-            Relatório enviado pelo técnico. Aprove para concluir a ordem ou reprove para nova execução.
+          <p v-else-if="flowKind(item) === 'validation'" class="action-hint">
+            O técnico enviou relatório e evidências — valide ou peça correção.
           </p>
 
           <div v-if="needsTechnicianPick(item)" class="assign-block">
-            <label>
-              <UserCog :size="14" />
-              Técnico para execução
-            </label>
+            <label><UserCog :size="14" /> Técnico para execução</label>
             <select v-model="technicianPickByApprovalId[item.id]" required>
-              <option value="">Selecione o técnico responsável</option>
+              <option value="">Selecione o técnico</option>
               <option v-for="tech in technicianUsers" :key="`pick-${tech.id}`" :value="tech.email">
                 {{ tech.name }} · {{ tech.email }}
               </option>
             </select>
+            <label class="due-label"><CalendarClock :size="14" /> Prazo para conclusão e validação</label>
+            <input
+              v-model="validationDueByApprovalId[item.id]"
+              type="datetime-local"
+              class="due-input"
+              required
+            />
+            <p class="action-hint">O técnico vê este prazo na fila de execução e pode pedir adiamento se necessário.</p>
+          </div>
+
+          <div
+            v-else-if="canSetDueOnMaintenance(item)"
+            class="assign-block"
+          >
+            <label><CalendarClock :size="14" /> Ajustar prazo da ordem</label>
+            <input
+              v-model="validationDueByMaintenanceId[item.maintenanceId!]"
+              type="datetime-local"
+              class="due-input"
+            />
+            <button
+              type="button"
+              class="action-btn action-btn--outline"
+              :disabled="!validationDueByMaintenanceId[item.maintenanceId!]"
+              @click="saveMaintenanceDue(item)"
+            >
+              Guardar prazo
+            </button>
           </div>
 
           <div class="approval-actions">
             <button
               class="action-btn action-btn--approve"
               :disabled="approveDisabled(item)"
-              @click="setStatus(item, 'APPROVED')"
+              @click="executeDecision(item, 'APPROVED', '')"
             >
               <CheckCircle :size="17" :stroke-width="2.5" />
               {{ approveLabel(item) }}
             </button>
-            <button class="action-btn action-btn--reject" @click="setStatus(item, 'REJECTED')">
+            <button class="action-btn action-btn--reject" @click="openDecisionModal(item, 'REJECTED')">
               <XCircle :size="17" :stroke-width="2.5" />
               {{ rejectLabel(item) }}
             </button>
           </div>
 
           <div v-if="canReassignValidation(item)" class="reassign-block">
-            <label>
-              <RotateCcw :size="14" />
-              Devolver para outro técnico
-            </label>
+            <label><RotateCcw :size="14" /> Devolver para outro técnico</label>
+            <label class="due-label"><MessageSquare :size="14" /> Motivo da devolução</label>
+            <textarea
+              v-model="returnReasonByApprovalId[item.id]"
+              rows="3"
+              class="return-reason-input"
+              placeholder="Explique o que o técnico deve corrigir ou complementar."
+            />
             <div class="reassign-row">
               <select v-model="reassignmentTargetByApprovalId[item.id]">
                 <option value="">Selecione o técnico</option>
@@ -167,9 +142,77 @@
                 Devolver à fila
               </button>
             </div>
+            <p v-if="reassignErrorByApprovalId[item.id]" class="form-error inline-error">
+              {{ reassignErrorByApprovalId[item.id] }}
+            </p>
           </div>
         </div>
-      </div>
+
+        <div class="card-toggle-row">
+          <button type="button" class="link-btn" @click="toggleDetails(item.id)">
+            <ChevronDown :size="16" :class="{ rotated: expandedDetails[item.id] }" />
+            {{ expandedDetails[item.id] ? 'Ocultar detalhes' : 'Ver detalhes' }}
+          </button>
+          <button
+            v-if="relatedSteps(item).length"
+            type="button"
+            class="link-btn"
+            @click="toggleHistory(item.id)"
+          >
+            <History :size="16" />
+            {{ expandedHistory[item.id] ? 'Ocultar etapas' : `Etapas anteriores (${relatedSteps(item).length})` }}
+          </button>
+        </div>
+
+        <div v-if="expandedDetails[item.id]" class="card-details">
+          <p v-if="displayDescription(item)" class="detail-block">
+            <strong>Pedido</strong>
+            {{ displayDescription(item) }}
+          </p>
+          <p v-if="item.feedback" class="detail-block">
+            <strong>Relatório / observações</strong>
+            {{ item.feedback }}
+          </p>
+          <AttachmentGrid
+            v-if="item.attachments?.length"
+            :attachments="item.attachments"
+            :gallery-title="`${item.assetTag} · anexos`"
+            class="approval-attachments"
+          />
+          <div v-if="item.status === 'Reprovada' && item.notes" class="detail-return">
+            <MessageSquare :size="14" />
+            <div>
+              <strong>Motivo da devolução</strong>
+              <p>{{ item.notes }}</p>
+            </div>
+          </div>
+          <div class="detail-meta">
+            <span v-if="item.requestedByName"><User :size="12" /> {{ item.requestedByName }}</span>
+            <span v-if="item.decidedByName">
+              <ShieldCheck :size="12" /> {{ item.status }} por {{ item.decidedByName }}
+            </span>
+          </div>
+        </div>
+
+        <div v-if="expandedHistory[item.id]" class="history-panel">
+          <p class="history-title">Histórico desta ordem</p>
+          <div v-for="step in relatedSteps(item)" :key="step.id" class="history-step">
+            <div class="history-step-top">
+              <span :class="['phase-chip', 'phase-chip--sm', `phase-${flowKind(step)}`]">
+                {{ phaseShortLabel(step) }}
+              </span>
+              <span :class="['status-badge', 'status-badge--sm', `status-${statusClass(step.status)}`]">
+                {{ step.status }}
+              </span>
+            </div>
+            <p class="history-step-summary">{{ approvalSummary(step) }}</p>
+            <p class="history-step-meta">
+              <span v-if="step.requestCode">{{ step.requestCode }}</span>
+              <span v-if="step.createdAt">{{ formatWhen(step.createdAt) }}</span>
+            </p>
+          </div>
+        </div>
+      </article>
     </div>
 
     <div v-if="filteredApprovals.length === 0" class="empty-state">
@@ -177,33 +220,62 @@
       <h3>{{ listEmptyState.title }}</h3>
       <p>{{ listEmptyState.description }}</p>
     </div>
+
+    <div v-if="decisionModal.open" class="sheet-overlay" @click="closeDecisionModal">
+      <section class="sheet sheet--compact" @click.stop>
+        <header class="sheet-header">
+          <button type="button" class="sheet-close" aria-label="Fechar" @click="closeDecisionModal">
+            <X :size="20" />
+          </button>
+          <span class="sheet-eyebrow">Decisão</span>
+          <h3>{{ decisionModalTitle }}</h3>
+          <p v-if="decisionModal.item">
+            Ativo <strong>{{ decisionModal.item.assetTag }}</strong>
+          </p>
+        </header>
+        <div class="sheet-body">
+          <div class="field">
+            <label><MessageSquare :size="14" /> Motivo (obrigatório)</label>
+            <textarea
+              v-model.trim="decisionModal.notes"
+              rows="4"
+              :placeholder="decisionModalPlaceholder"
+            />
+          </div>
+          <p v-if="decisionModalError" class="form-error">{{ decisionModalError }}</p>
+        </div>
+        <footer class="sheet-footer">
+          <button type="button" class="btn-ghost" @click="closeDecisionModal">Cancelar</button>
+          <button type="button" class="btn-primary" @click="confirmDecision">
+            Continuar
+          </button>
+        </footer>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch, type Component } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useInventoryStore, type ApprovalRow } from '../stores/inventory'
 import { useConfirmAction } from '../composables/useConfirmAction'
 import { useLocalPageSearch } from '../composables/useLocalPageSearch'
-import { useImageLightbox } from '../composables/useImageLightbox'
-import type { AttachmentRef } from '../types/assetra'
+import AttachmentGrid from '../components/AttachmentGrid.vue'
 import {
   Search,
-  Clock,
   CheckCircle,
   XCircle,
-  Package,
   ClipboardCheck,
-  ArrowRightLeft,
-  Wrench,
-  Paperclip,
-  MessageSquare,
-  FileText,
   User,
   ShieldCheck,
   UserCog,
   RotateCcw,
+  ChevronDown,
+  History,
+  CalendarClock,
+  MessageSquare,
+  X,
 } from 'lucide-vue-next'
 
 type ApprovalStatus = 'Pendente' | 'Aprovada' | 'Reprovada'
@@ -225,9 +297,43 @@ onMounted(async () => {
 })
 
 const { pageSearch, matchesPageSearch } = useLocalPageSearch()
-const filter = ref<'all' | ApprovalStatus>('all')
+const filter = ref<'all' | ApprovalStatus>('Pendente')
+const phaseFilter = ref<'all' | 'abertura' | 'validacao' | 'movimentacao'>('all')
 const reassignmentTargetByApprovalId = reactive<Record<string, string>>({})
 const technicianPickByApprovalId = reactive<Record<string, string>>({})
+const validationDueByApprovalId = reactive<Record<string, string>>({})
+const validationDueByMaintenanceId = reactive<Record<string, string>>({})
+const returnReasonByApprovalId = reactive<Record<string, string>>({})
+const reassignErrorByApprovalId = reactive<Record<string, string>>({})
+const expandedDetails = reactive<Record<string, boolean>>({})
+const expandedHistory = reactive<Record<string, boolean>>({})
+const decisionModal = reactive<{
+  open: boolean
+  item: ApprovalRow | null
+  decision: 'APPROVED' | 'REJECTED'
+  notes: string
+}>({
+  open: false,
+  item: null,
+  decision: 'REJECTED',
+  notes: '',
+})
+const decisionModalError = ref('')
+
+function toDatetimeLocalValue(iso?: string) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function defaultDueLocalValue() {
+  const d = new Date()
+  d.setDate(d.getDate() + 3)
+  d.setHours(17, 0, 0, 0)
+  return toDatetimeLocalValue(d.toISOString())
+}
 
 const approvals = computed(() => inventory.approvals)
 const technicianUsers = computed(() => inventory.users.filter((u) => u.role === 'TECNICO' && u.status === 'Ativo'))
@@ -240,9 +346,29 @@ const filteredApprovals = computed(() => {
   if (filter.value !== 'all') {
     items = items.filter((item) => item.status === filter.value)
   }
-  return items.filter((item) =>
-    matchesPageSearch(item.type, item.assetTag, item.description, item.status, item.requestedByName, item.feedback),
-  )
+  if (phaseFilter.value !== 'all') {
+    items = items.filter((item) => resolvePhase(item) === phaseFilter.value)
+  }
+  return items
+    .filter((item) =>
+      matchesPageSearch(
+        item.type,
+        item.assetTag,
+        item.description,
+        item.status,
+        item.requestedByName,
+        item.feedback,
+        item.requestCode,
+        item.osCode,
+        item.phaseLabel,
+        approvalSummary(item),
+      ),
+    )
+    .sort((a, b) => {
+      const da = new Date(a.createdAt ?? 0).getTime()
+      const db = new Date(b.createdAt ?? 0).getTime()
+      return db - da
+    })
 })
 
 const hasPageSearch = computed(() => pageSearch.value.trim().length > 0)
@@ -251,29 +377,26 @@ const listEmptyState = computed(() => {
   if (hasPageSearch.value) {
     return {
       title: 'Nenhum resultado na pesquisa',
-      description: `Não encontrámos aprovações para «${pageSearch.value.trim()}». Experimente outro termo ou limpe a pesquisa.`,
+      description: `Não encontrámos aprovações para «${pageSearch.value.trim()}».`,
     }
   }
 
-  const byFilter: Record<
-    'all' | ApprovalStatus,
-    { title: string; description: string }
-  > = {
+  const byFilter: Record<'all' | ApprovalStatus, { title: string; description: string }> = {
     all: {
-      title: 'Nenhuma solicitação registada',
-      description: 'Quando alguém enviar uma solicitação, ela aparecerá aqui para revisão.',
+      title: 'Nenhuma solicitação',
+      description: 'Quando alguém enviar uma solicitação, ela aparecerá aqui.',
     },
     Pendente: {
-      title: 'Nenhuma aprovação pendente',
-      description: 'Não há solicitações à espera de decisão neste momento.',
+      title: 'Nada pendente',
+      description: 'Não há decisões à espera neste momento.',
     },
     Aprovada: {
-      title: 'Nenhuma aprovação aprovada',
-      description: 'Ainda não existem solicitações com estado aprovado para consultar.',
+      title: 'Nenhuma aprovada',
+      description: 'Ainda não existem solicitações aprovadas para consultar.',
     },
     Reprovada: {
-      title: 'Nenhuma aprovação reprovada',
-      description: 'Não existem solicitações reprovadas para consultar.',
+      title: 'Nenhuma reprovada',
+      description: 'Não existem solicitações reprovadas.',
     },
   }
 
@@ -282,19 +405,101 @@ const listEmptyState = computed(() => {
 
 type ApprovalFlowKind = 'opening' | 'validation' | 'movement' | 'other'
 
-const isExecutionValidation = (item: ApprovalRow) =>
-  Boolean(item.maintenanceId) &&
-  /validação de execução técnica/i.test(String(item.description ?? ''))
+const resolvePhase = (item: ApprovalRow) => {
+  const phase = String(item.approvalPhase ?? '').toLowerCase()
+  if (phase) return phase
+  if (item.type === 'Movimentação') return 'movimentacao'
+  if (/validação de execução técnica/i.test(String(item.description ?? ''))) return 'validacao'
+  return 'abertura'
+}
 
 const flowKind = (item: ApprovalRow): ApprovalFlowKind => {
-  if (item.type === 'Movimentação') return 'movement'
-  if (item.type === 'Manutenção' && isExecutionValidation(item)) return 'validation'
-  if (item.type === 'Manutenção') return 'opening'
+  const phase = resolvePhase(item)
+  if (phase === 'movimentacao') return 'movement'
+  if (phase === 'validacao') return 'validation'
+  if (phase === 'abertura') return 'opening'
   return 'other'
+}
+
+function phaseShortLabel(item: ApprovalRow) {
+  const k = flowKind(item)
+  if (k === 'opening') return 'Abertura'
+  if (k === 'validation') return 'Validação'
+  if (k === 'movement') return 'Movimentação'
+  return item.type
+}
+
+function approvalSummary(item: ApprovalRow): string {
+  const who = item.requestedByName?.trim() || 'Solicitante'
+  const asset = item.assetTag
+  const phase = flowKind(item)
+  const st = item.status
+
+  if (phase === 'movement') {
+    if (st === 'Pendente') return `${who} pediu movimentação do ativo ${asset}`
+    if (st === 'Aprovada') return `Movimentação do ativo ${asset} foi aprovada`
+    return `Movimentação do ativo ${asset} foi reprovada`
+  }
+  if (phase === 'opening') {
+    if (st === 'Pendente') return `${who} pediu abrir manutenção no ativo ${asset}`
+    if (st === 'Aprovada') return `Abertura aprovada — ordem de serviço criada no ativo ${asset}`
+    return `Abertura reprovada no ativo ${asset}`
+  }
+  if (phase === 'validation') {
+    if (st === 'Pendente') return `${who} concluiu o serviço e aguarda a sua validação no ativo ${asset}`
+    if (st === 'Aprovada') return `Serviço validado — manutenção concluída no ativo ${asset}`
+    return `Validação reprovada — ativo ${asset} volta para execução técnica`
+  }
+  if (st === 'Pendente') return `${who} enviou solicitação sobre o ativo ${asset}`
+  if (st === 'Aprovada') return `Solicitação sobre ${asset} foi aprovada`
+  return `Solicitação sobre ${asset} foi reprovada`
+}
+
+function displayDescription(item: ApprovalRow) {
+  const raw = String(item.description ?? '')
+  if (flowKind(item) === 'validation') {
+    return raw.replace(/^Validação de execução técnica\s*-\s*/i, '').trim() || raw
+  }
+  return raw
+}
+
+function relatedSteps(item: ApprovalRow): ApprovalRow[] {
+  const mid = String(item.maintenanceId ?? '').trim()
+  if (!mid) return []
+  return approvals.value
+    .filter((a) => String(a.maintenanceId ?? '') === mid && a.id !== item.id)
+    .sort((a, b) => new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime())
+}
+
+function formatWhen(iso?: string) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return d.toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+function toggleDetails(id: string) {
+  expandedDetails[id] = !expandedDetails[id]
+}
+
+function toggleHistory(id: string) {
+  expandedHistory[id] = !expandedHistory[id]
 }
 
 const needsTechnicianPick = (item: ApprovalRow) =>
   canApprove.value && item.status === 'Pendente' && flowKind(item) === 'opening'
+
+const canSetDueOnMaintenance = (item: ApprovalRow) =>
+  canApprove.value &&
+  item.status === 'Pendente' &&
+  Boolean(item.maintenanceId) &&
+  (flowKind(item) === 'validation' || item.maintenanceStatus === 'Em andamento')
+
+function maintenanceDueLabel(item: ApprovalRow) {
+  if (!item.maintenanceId) return ''
+  const m = inventory.maintenances.find((row) => row.id === item.maintenanceId)
+  if (!m?.validationDueDisplay) return ''
+  return `Prazo: ${m.validationDueDisplay}`
+}
 
 const approveLabel = (item: ApprovalRow) => {
   if (flowKind(item) === 'validation') return 'Validar conclusão'
@@ -307,13 +512,25 @@ const rejectLabel = (item: ApprovalRow) => {
   return 'Reprovar'
 }
 
-const approveDisabled = (item: ApprovalRow) =>
-  needsTechnicianPick(item) && !String(technicianPickByApprovalId[item.id] ?? '').trim()
+const approveDisabled = (item: ApprovalRow) => {
+  if (!needsTechnicianPick(item)) return false
+  if (!String(technicianPickByApprovalId[item.id] ?? '').trim()) return true
+  return !String(validationDueByApprovalId[item.id] ?? '').trim()
+}
 
 watch(
-  () => [approvals.value, technicianUsers.value] as const,
+  () => [approvals.value, technicianUsers.value, inventory.maintenances] as const,
   () => {
     for (const item of approvals.value) {
+      if (needsTechnicianPick(item) && !validationDueByApprovalId[item.id]) {
+        validationDueByApprovalId[item.id] = defaultDueLocalValue()
+      }
+      if (item.maintenanceId) {
+        const m = inventory.maintenances.find((row) => row.id === item.maintenanceId)
+        if (m?.validationDueAt && !validationDueByMaintenanceId[item.maintenanceId]) {
+          validationDueByMaintenanceId[item.maintenanceId] = toDatetimeLocalValue(m.validationDueAt)
+        }
+      }
       if (!needsTechnicianPick(item)) continue
       if (technicianPickByApprovalId[item.id]) continue
       const requesterEmail = inventory.users
@@ -328,13 +545,64 @@ watch(
   { immediate: true },
 )
 
-const setStatus = async (item: ApprovalRow, decision: 'APPROVED' | 'REJECTED') => {
+const decisionModalTitle = computed(() => {
+  if (!decisionModal.item) return 'Motivo da decisão'
+  return decisionModal.decision === 'REJECTED'
+    ? rejectLabel(decisionModal.item)
+    : approveLabel(decisionModal.item)
+})
+
+const decisionModalPlaceholder = computed(() => {
+  if (!decisionModal.item) return 'Descreva o motivo...'
+  if (flowKind(decisionModal.item) === 'validation') {
+    return 'Ex.: evidências insuficientes, teste não documentado, peça substituída sem foto...'
+  }
+  return 'Explique por que a solicitação não pode ser aprovada neste momento.'
+})
+
+function openDecisionModal(item: ApprovalRow, decision: 'APPROVED' | 'REJECTED') {
+  if (decision === 'APPROVED') {
+    void executeDecision(item, decision, '')
+    return
+  }
+  decisionModalError.value = ''
+  decisionModal.item = item
+  decisionModal.decision = decision
+  decisionModal.notes = returnReasonByApprovalId[item.id] ?? ''
+  decisionModal.open = true
+}
+
+function closeDecisionModal() {
+  decisionModal.open = false
+  decisionModal.item = null
+  decisionModal.notes = ''
+  decisionModalError.value = ''
+}
+
+async function confirmDecision() {
+  if (!decisionModal.item) return
+  if (decisionModal.notes.trim().length < 3) {
+    decisionModalError.value = 'Descreva o motivo com pelo menos 3 caracteres.'
+    return
+  }
+  const item = decisionModal.item
+  const decision = decisionModal.decision
+  const notes = decisionModal.notes.trim()
+  closeDecisionModal()
+  await executeDecision(item, decision, notes)
+}
+
+async function executeDecision(
+  item: ApprovalRow,
+  decision: 'APPROVED' | 'REJECTED',
+  notes: string,
+) {
   if (decision === 'APPROVED' && needsTechnicianPick(item) && approveDisabled(item)) return
 
   const action = decision === 'APPROVED' ? approveLabel(item).toLowerCase() : rejectLabel(item).toLowerCase()
   const ok = await confirm.ask(
     `Confirme com a sua senha para ${action} a solicitação ${item.assetTag}.`,
-    `Confirmar decisão`,
+    'Confirmar decisão',
   )
   if (!ok) return
 
@@ -343,8 +611,26 @@ const setStatus = async (item: ApprovalRow, decision: 'APPROVED' | 'REJECTED') =
       ? String(technicianPickByApprovalId[item.id] ?? '').trim()
       : undefined
 
-  await inventory.respondApproval(item.id, decision, undefined, techEmail)
-  if (decision === 'APPROVED') technicianPickByApprovalId[item.id] = ''
+  const dueRaw = needsTechnicianPick(item)
+    ? validationDueByApprovalId[item.id]
+    : undefined
+
+  await inventory.respondApproval(item.id, decision, notes || undefined, techEmail, dueRaw)
+  if (decision === 'APPROVED') {
+    technicianPickByApprovalId[item.id] = ''
+    validationDueByApprovalId[item.id] = ''
+  } else {
+    returnReasonByApprovalId[item.id] = ''
+  }
+}
+
+const saveMaintenanceDue = async (item: ApprovalRow) => {
+  if (!item.maintenanceId) return
+  const raw = validationDueByMaintenanceId[item.maintenanceId]
+  if (!raw) return
+  const ok = await confirm.ask('Confirme com a sua senha para atualizar o prazo desta ordem.', 'Atualizar prazo')
+  if (!ok) return
+  await inventory.setMaintenanceValidationDue(item.maintenanceId, new Date(raw).toISOString())
 }
 
 const canReassignValidation = (item: ApprovalRow) =>
@@ -356,348 +642,209 @@ const reassignMaintenance = async (item: ApprovalRow) => {
     .trim()
     .toLowerCase()
   if (!targetEmail) return
+  const reason = String(returnReasonByApprovalId[item.id] ?? '').trim()
+  if (reason.length < 3) {
+    reassignErrorByApprovalId[item.id] = 'Informe o motivo da devolução (mínimo 3 caracteres).'
+    return
+  }
+  reassignErrorByApprovalId[item.id] = ''
   const selectedTech = technicianUsers.value.find((tech) => tech.email.trim().toLowerCase() === targetEmail)
   const ok = await confirm.ask(
     `A solicitação será devolvida para execução técnica com ${selectedTech?.name ?? targetEmail}. Confirme com a sua senha.`,
     'Encaminhar para técnico',
   )
   if (!ok) return
-  await inventory.respondApproval(
-    item.id,
-    'REJECTED',
-    `Devolvida para execução técnica com ${selectedTech?.name ?? targetEmail} (${targetEmail}).`,
-  )
+  const notes = `${reason}\n\nEncaminhada para ${selectedTech?.name ?? targetEmail} (${targetEmail}).`
+  await inventory.respondApproval(item.id, 'REJECTED', notes)
   await inventory.updateMaintenance(item.maintenanceId, {
     assignedTechnicianEmail: targetEmail,
     status: 'Aberta',
   })
   reassignmentTargetByApprovalId[item.id] = ''
+  returnReasonByApprovalId[item.id] = ''
 }
-
-const typeClass = (type: string) =>
-  type.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(' ', '-')
 
 const statusClass = (status: string) =>
   status.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(' ', '-')
-
-function formatApproverRole(role?: string) {
-  const normalized = String(role ?? '').trim().toUpperCase()
-  if (normalized === 'GESTOR') return 'Gestor / ADM'
-  if (normalized === 'ADM') return 'Administrador (ADM)'
-  return role ?? ''
-}
-
-const typeIcon = (type: string): Component => (type.includes('Moviment') ? ArrowRightLeft : Wrench)
-
-const isImage = (mime?: string) => Boolean(mime && mime.startsWith('image/'))
-
-const imageLightbox = useImageLightbox()
-
-const openAttachment = (item: ApprovalRow, att: AttachmentRef) => {
-  if (isImage(att.mimetype)) {
-    const images = (item.attachments ?? []).filter((a) => isImage(a.mimetype))
-    const imageIndex = images.findIndex((a) => a.url === att.url || a.filename === att.filename)
-    imageLightbox.openGallery(item.attachments ?? [], {
-      title: `${item.type} · ${item.assetTag}`,
-      startIndex: imageIndex >= 0 ? imageIndex : 0,
-    })
-    return
-  }
-  if (att.url) window.open(att.url, '_blank', 'noopener,noreferrer')
-}
 </script>
 
 <style scoped>
-.approvals-page { animation: fade-up 0.5s ease; }
+.approvals-page { animation: fade-up 0.5s ease; max-width: 920px; }
 
-.page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
-.page-header h2 { margin: 0 0 4px; font-size: 28px; font-weight: 700; color: var(--text-primary); }
-.page-header p { margin: 0; font-size: 14px; color: var(--text-secondary); max-width: 720px; }
+.page-header { margin-bottom: 20px; }
+.page-header h2 { margin: 0 0 8px; font-size: 28px; font-weight: 700; color: var(--text-primary); }
+.header-sub { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; font-size: 13px; }
+.header-stat { color: var(--text-secondary); }
+.header-stat--warn { color: #f59e0b; font-weight: 700; }
 
-.btn-primary {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 10px 18px; background: var(--primary); color: white;
-  border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
-  transition: all 0.2s ease;
+.toolbar { margin-bottom: 20px; display: flex; flex-direction: column; gap: 12px; }
+
+.search-bar {
+  display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+  background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 10px;
 }
-.btn-primary:hover { background: var(--primary-hover); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(59,130,246,0.3); }
-.btn-primary:disabled { opacity: 0.65; cursor: not-allowed; transform: none; box-shadow: none; }
-
-.btn-secondary {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 10px 18px; background: var(--bg-hover); color: var(--text-primary);
-  border: 1px solid var(--border-light); border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
-}
-
-.form-card {
-  background: var(--bg-card); border: 1px solid var(--border-light);
-  border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: var(--shadow-md);
-}
-.form-card h3 { margin: 0 0 16px; font-size: 18px; font-weight: 700; color: var(--text-primary); }
-.approval-form { display: flex; flex-direction: column; gap: 16px; }
-.form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-
-.form-group { display: flex; flex-direction: column; gap: 6px; }
-.form-group label { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; display: flex; gap: 8px; align-items: center; }
-.form-group .hint { font-weight: 500; color: var(--text-muted); text-transform: none; letter-spacing: 0; }
-.form-group input, .form-group select, .form-group textarea {
-  padding: 10px 12px; background: var(--bg-primary); border: 1px solid var(--border-light);
-  border-radius: 8px; color: var(--text-primary); font-size: 14px; font-family: inherit;
-}
-.form-group textarea { resize: vertical; min-height: 70px; }
-
-.picked-list { list-style: none; padding: 0; margin: 4px 0 0; display: flex; flex-direction: column; gap: 6px; }
-.picked-list li {
-  display: grid; grid-template-columns: 16px 1fr auto auto; gap: 8px; align-items: center;
-  padding: 8px 10px; background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: 8px;
-  font-size: 13px; color: var(--text-secondary);
-}
-.picked-name { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.picked-remove { background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; border-radius: 6px; }
-.picked-remove:hover { color: var(--danger); background: var(--danger-light); }
-
-.form-error {
-  margin: 0; padding: 8px 12px; background: var(--danger-light); color: var(--danger);
-  border-left: 3px solid var(--danger); border-radius: 8px; font-size: 13px; font-weight: 500;
-}
-
-.form-actions { display: flex; gap: 12px; }
-
-.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
-.stat-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 16px; transition: all 0.2s ease; }
-.stat-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
-.stat-icon { color: var(--primary); }
-.stat-card.stat-success .stat-icon { color: var(--success); }
-.stat-card.stat-warning .stat-icon { color: var(--warning); }
-.stat-card.stat-danger .stat-icon { color: var(--danger); }
-.stat-content { display: flex; flex-direction: column; gap: 4px; }
-.stat-label { font-size: 13px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
-.stat-value { font-size: 28px; font-weight: 800; color: var(--text-primary); }
-
-.search-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 10px; margin-bottom: 16px; transition: all 0.2s ease; }
 .search-bar:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
 .search-bar svg { color: var(--text-secondary); flex-shrink: 0; }
 .search-bar input { flex: 1; border: none; background: transparent; font-size: 14px; color: var(--text-primary); outline: none; }
 
-.filter-tabs { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+.filter-tabs { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.filter-sep { width: 1px; height: 20px; background: var(--border-light); margin: 0 4px; }
 .tab-btn {
-  padding: 8px 16px; background: var(--bg-hover); border: 1px solid var(--border-light);
-  border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer; transition: all 0.2s ease;
+  padding: 8px 14px; background: var(--bg-hover); border: 1px solid var(--border-light);
+  border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer;
 }
-.tab-btn:hover { background: var(--bg-card); border-color: var(--primary); }
+.tab-btn--sm { padding: 6px 10px; font-size: 12px; }
+.tab-btn:hover { border-color: var(--primary); }
 .tab-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
 
-.approvals-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+.approvals-list { display: flex; flex-direction: column; gap: 12px; }
 
 .approval-card {
   background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 12px;
-  padding: 20px; transition: all 0.2s ease; display: flex; flex-direction: column; gap: 14px;
+  padding: 16px 18px; border-left: 4px solid var(--border-light);
 }
-.approval-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); border-color: var(--primary); }
+.approval-card.tone-pendente { border-left-color: #f59e0b; }
+.approval-card.tone-aprovada { border-left-color: #22c55e; }
+.approval-card.tone-reprovada { border-left-color: #ef4444; }
 
-.approval-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.card-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
 
-.type-badge {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.5px;
+.phase-chip {
+  font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+  padding: 4px 10px; border-radius: 999px;
 }
-.type-movimentacao { background: rgba(6, 182, 212, 0.15); color: #06b6d4; }
-.type-manutencao { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
-.flow-badge {
-  margin-left: auto;
-  margin-right: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.phase-chip--sm { font-size: 10px; padding: 2px 8px; }
+.phase-opening { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+.phase-validation { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+.phase-movement { background: rgba(6, 182, 212, 0.15); color: #06b6d4; }
+.phase-other { background: var(--bg-hover); color: var(--text-secondary); }
+
+.status-badge {
+  padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
 }
-.flow-badge--opening {
-  background: rgba(59, 130, 246, 0.12);
-  color: #3b82f6;
-  border: 1px solid rgba(59, 130, 246, 0.28);
-}
-.flow-badge--validation {
-  background: rgba(168, 85, 247, 0.12);
-  color: #a855f7;
-  border: 1px solid rgba(168, 85, 247, 0.28);
+.status-badge--sm { font-size: 10px; padding: 2px 8px; }
+.status-pendente { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.status-aprovada { background: rgba(34,197,94,0.15); color: #22c55e; }
+.status-reprovada { background: rgba(239,68,68,0.15); color: #ef4444; }
+
+.card-summary {
+  margin: 0 0 8px; font-size: 16px; font-weight: 700; line-height: 1.35; color: var(--text-primary);
 }
 
-.status-badge { padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-.status-pendente { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
-.status-aprovada { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
-.status-reprovada { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-
-.approval-body { display: flex; flex-direction: column; gap: 12px; }
-
-.approval-asset { display: flex; align-items: center; gap: 12px; }
-.approval-asset svg { color: var(--primary); flex-shrink: 0; }
-.approval-asset h4 { margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary); }
-.approval-asset p { margin: 2px 0 0; font-size: 13px; color: var(--text-secondary); }
-
-.approval-feedback {
-  display: grid; grid-template-columns: 16px 1fr; gap: 8px;
-  padding: 10px 12px; background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: 8px;
-  color: var(--text-secondary); font-size: 13px; line-height: 1.4;
+.card-meta {
+  display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 0; font-size: 12px; color: var(--text-muted);
 }
-.approval-feedback svg { margin-top: 2px; color: var(--text-muted); }
-.approval-feedback p { margin: 0; }
-
-.approval-attachments { display: flex; flex-direction: column; gap: 8px; }
-.att-title { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
-.att-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
-.att-item {
-  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  padding: 6px; background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: 8px;
-  color: var(--text-muted); font-size: 11px; min-height: 80px;
-  transition: all 0.2s ease; cursor: pointer; width: 100%;
-}
-.att-item:hover { border-color: var(--primary); color: var(--text-primary); transform: translateY(-2px); }
-.att-item img { width: 100%; height: 60px; object-fit: cover; border-radius: 4px; }
-.att-name { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
-
-.approval-meta { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--text-muted); }
-.approval-meta span { display: inline-flex; gap: 6px; align-items: center; }
-
-.approval-footer {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border-light);
+.meta-os { font-weight: 800; color: var(--primary); letter-spacing: 0.04em; }
+.meta-due { font-weight: 600; color: #f59e0b; }
+.due-label { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 12px; font-weight: 700; color: var(--text-secondary); }
+.due-input {
+  width: 100%; margin-top: 4px; padding: 8px 10px; border-radius: 8px;
+  border: 1px solid var(--border-light); background: var(--bg-primary); color: var(--text-primary); font-size: 13px;
 }
 
-.flow-hint {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--text-secondary);
-  padding: 10px 12px;
-  background: var(--bg-primary);
-  border-radius: 8px;
-  border: 1px solid var(--border-light);
+.card-pending-actions {
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-light);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.action-hint { margin: 0; font-size: 12px; color: var(--text-secondary); }
+
+.assign-block label, .reassign-block label {
+  display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700;
+  color: var(--text-secondary); margin-bottom: 6px;
+}
+.assign-block select, .reassign-row select {
+  width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-light);
+  background: var(--bg-primary); color: var(--text-primary); font-size: 13px;
 }
 
-.assign-block,
-.reassign-block {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.assign-block label,
-.reassign-block label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-secondary);
-}
-
-.assign-block select,
-.reassign-row select {
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--border-light);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: 14px;
-  font-family: inherit;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.assign-block select:focus,
-.reassign-row select:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-light);
-}
-
-.approval-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.reassign-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px;
-  align-items: stretch;
-}
-
+.approval-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .action-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 0 16px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 700;
-  font-family: inherit;
-  cursor: pointer;
-  border: none;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px;
+  border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none;
 }
-
-.action-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
-.action-btn--approve {
-  background: linear-gradient(135deg, #22c55e, #16a34a);
-  color: #fff;
-  box-shadow: 0 4px 14px rgba(34, 197, 94, 0.28);
-}
-
-.action-btn--approve:not(:disabled):hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(34, 197, 94, 0.35);
-}
-
-.action-btn--reject {
-  background: var(--bg-primary);
-  color: var(--danger);
-  border: 1px solid rgba(239, 68, 68, 0.35);
-}
-
-.action-btn--reject:hover {
-  background: var(--danger-light);
-  transform: translateY(-1px);
-}
-
+.action-btn--approve { background: var(--success); color: white; }
+.action-btn--approve:disabled { opacity: 0.55; cursor: not-allowed; }
+.action-btn--reject { background: var(--danger-light); color: var(--danger); border: 1px solid var(--danger); }
 .action-btn--outline {
-  white-space: nowrap;
-  background: var(--bg-card);
-  color: var(--text-primary);
-  border: 1px solid var(--border-light);
-  min-height: 42px;
+  background: transparent; color: var(--text-primary); border: 1px solid var(--border-light);
 }
+.reassign-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.reassign-row select { flex: 1; min-width: 180px; }
 
-.action-btn--outline:not(:disabled):hover {
-  border-color: var(--primary);
-  color: var(--primary);
-  transform: translateY(-1px);
+.card-toggle-row { display: flex; flex-wrap: wrap; gap: 12px 16px; margin-top: 12px; }
+.link-btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 0; border: none; background: none;
+  font-size: 13px; font-weight: 600; color: var(--primary); cursor: pointer;
 }
+.link-btn svg { transition: transform 0.2s ease; }
+.link-btn svg.rotated { transform: rotate(180deg); }
 
-.empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
-.empty-icon { margin-bottom: 16px; opacity: 0.3; }
-.empty-state h3 { margin: 0 0 8px; font-size: 20px; font-weight: 600; color: var(--text-secondary); }
-.empty-state p { margin: 0; font-size: 14px; }
+.card-details {
+  margin-top: 12px; padding: 12px; border-radius: 10px;
+  background: var(--bg-primary); border: 1px solid var(--border-light);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.detail-block { margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.45; }
+.detail-block strong { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 4px; }
+.detail-meta { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--text-muted); }
+.detail-meta span { display: inline-flex; align-items: center; gap: 4px; }
 
-.spinner { animation: spin 0.9s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.history-panel {
+  margin-top: 12px; padding: 12px; border-radius: 10px;
+  border: 1px dashed var(--border-light); background: color-mix(in srgb, var(--primary) 5%, var(--bg-card));
+}
+.history-title { margin: 0 0 10px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.history-step { padding: 10px 0; border-top: 1px solid var(--border-light); }
+.history-step:first-of-type { border-top: none; padding-top: 0; }
+.history-step-top { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+.history-step-summary { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.history-step-meta { margin: 4px 0 0; font-size: 11px; color: var(--text-muted); display: flex; gap: 10px; }
 
-@keyframes fade-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+.empty-state {
+  text-align: center; padding: 48px 24px; color: var(--text-secondary);
+}
+.empty-icon { color: var(--text-muted); margin-bottom: 12px; }
+.empty-state h3 { margin: 0 0 8px; color: var(--text-primary); }
+
+.return-reason-input {
+  width: 100%; margin-bottom: 8px; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid var(--border-light); background: var(--bg-primary);
+  color: var(--text-primary); font-size: 13px; font-family: inherit; resize: vertical;
+}
+.detail-return {
+  display: flex; gap: 10px; padding: 10px 12px; border-radius: 8px;
+  background: color-mix(in srgb, #ef4444 10%, var(--bg-primary));
+  border: 1px solid color-mix(in srgb, #ef4444 25%, var(--border-light));
+  font-size: 13px; color: var(--text-secondary);
+}
+.detail-return strong { display: block; font-size: 11px; text-transform: uppercase; color: var(--danger); margin-bottom: 4px; }
+.detail-return p { margin: 0; line-height: 1.45; color: var(--text-primary); }
+
+.sheet-overlay {
+  position: fixed; inset: 0; z-index: 1200; background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.sheet {
+  width: min(480px, 100%); background: var(--bg-card); border: 1px solid var(--border-light);
+  border-radius: 16px; box-shadow: var(--shadow-lg); display: flex; flex-direction: column;
+}
+.sheet-header {
+  position: relative; padding: 20px 20px 12px; border-bottom: 1px solid var(--border-light);
+}
+.sheet-eyebrow { font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--primary); }
+.sheet-header h3 { margin: 4px 0 6px; font-size: 18px; }
+.sheet-header p { margin: 0; font-size: 13px; color: var(--text-secondary); }
+.sheet-close {
+  position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; border: none;
+  border-radius: 10px; background: var(--bg-hover); cursor: pointer; display: grid; place-items: center;
+}
+.sheet-body { padding: 16px 20px; }
+.sheet-footer { padding: 12px 20px 20px; display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border-light); }
+.field label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px; }
+.field textarea { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border-light); background: var(--bg-primary); font-family: inherit; }
+.form-error { margin: 8px 0 0; padding: 8px 12px; font-size: 13px; color: var(--danger); background: var(--danger-light); border-radius: 8px; }
+.inline-error { margin-top: 8px; }
+.btn-ghost { padding: 10px 16px; border: 1px solid var(--border-light); background: transparent; border-radius: 10px; cursor: pointer; }
+.btn-primary { padding: 10px 16px; border: none; background: var(--primary); color: #fff; border-radius: 10px; font-weight: 600; cursor: pointer; }
 </style>
