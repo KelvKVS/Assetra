@@ -1,42 +1,73 @@
 <template>
   <div class="invite-page">
-    <div class="invite-card">
-      <div v-if="state === 'loading'" class="invite-status">
-        <Loader2 :size="40" class="spin" />
-        <p>Processando…</p>
+    <div class="invite-shell">
+      <header class="invite-brand">
+        <div class="invite-logo">
+          <Box :size="36" stroke-width="1.5" />
+        </div>
+        <span class="invite-brand-name">Assetra</span>
+      </header>
+
+      <div class="invite-card">
+        <div v-if="state === 'loading'" class="invite-body invite-body--center">
+          <div class="invite-icon invite-icon--loading">
+            <Loader2 :size="36" class="spin" />
+          </div>
+          <h1 class="invite-title">A processar o seu pedido</h1>
+          <p class="invite-text">Aguarde um momento…</p>
+        </div>
+
+        <div v-else-if="state === 'confirm-ok'" class="invite-body invite-body--center">
+          <div class="invite-icon invite-icon--success">
+            <CheckCircle :size="40" stroke-width="1.75" />
+          </div>
+          <h1 class="invite-title">Cadastro confirmado</h1>
+          <p class="invite-text">
+            Obrigado<strong v-if="resultUserName">, {{ resultUserName }}</strong>.
+            O seu acesso à organização
+            <strong v-if="resultTenantName"> {{ resultTenantName }}</strong>
+            está confirmado.
+          </p>
+          <p v-if="alreadyDone" class="invite-note">Este link já tinha sido utilizado anteriormente.</p>
+          <p class="invite-hint">
+            No primeiro acesso, utilize <strong>Entrar com Google</strong> com o mesmo e-mail do convite.
+          </p>
+          <RouterLink to="/login" class="invite-btn invite-btn--primary">
+            <LogIn :size="20" />
+            Ir para o login
+          </RouterLink>
+        </div>
+
+        <div v-else-if="state === 'dispute-ok'" class="invite-body invite-body--center">
+          <div class="invite-icon invite-icon--warn">
+            <AlertTriangle :size="40" stroke-width="1.75" />
+          </div>
+          <h1 class="invite-title">Cadastro contestado</h1>
+          <p class="invite-text">
+            Registámos que não reconhece o cadastro
+            <strong v-if="resultTenantName"> em {{ resultTenantName }}</strong>.
+            O administrador foi notificado.
+          </p>
+          <p v-if="alreadyDone" class="invite-note">Esta contestação já tinha sido registada.</p>
+          <RouterLink to="/login" class="invite-btn invite-btn--secondary">
+            Voltar ao login
+          </RouterLink>
+        </div>
+
+        <div v-else class="invite-body invite-body--center">
+          <div class="invite-icon invite-icon--error">
+            <XCircle :size="40" stroke-width="1.75" />
+          </div>
+          <h1 class="invite-title">Não foi possível concluir</h1>
+          <p class="invite-text">{{ errorMessage }}</p>
+          <RouterLink to="/login" class="invite-btn invite-btn--primary">
+            <LogIn :size="20" />
+            Ir para o login
+          </RouterLink>
+        </div>
       </div>
 
-      <div v-else-if="state === 'confirm-ok'" class="invite-status success">
-        <CheckCircle :size="48" />
-        <h1>Cadastro confirmado</h1>
-        <p>
-          Obrigado, <strong>{{ resultUserName }}</strong>. Seu cadastro em
-          <strong>{{ resultTenantName }}</strong> foi confirmado.
-        </p>
-        <p v-if="alreadyDone" class="muted">Este link já havia sido utilizado.</p>
-        <a v-if="loginUrl" :href="loginUrl" class="btn-primary">Ir para o login</a>
-      </div>
-
-      <div v-else-if="state === 'dispute-ok'" class="invite-status warn">
-        <AlertTriangle :size="48" />
-        <h1>Cadastro contestado</h1>
-        <p>
-          Registramos que você não reconhece o cadastro em
-          <strong>{{ resultTenantName }}</strong>.
-        </p>
-        <p class="muted">
-          O administrador responsável foi notificado por e-mail, quando possível. Se precisar de
-          ajuda imediata, entre em contato com quem realizou o cadastro.
-        </p>
-        <p v-if="alreadyDone" class="muted">Esta contestação já havia sido registrada.</p>
-      </div>
-
-      <div v-else class="invite-status error">
-        <XCircle :size="48" />
-        <h1>Não foi possível concluir</h1>
-        <p>{{ errorMessage }}</p>
-        <router-link to="/login" class="btn-secondary">Voltar ao login</router-link>
-      </div>
+      <p class="invite-footer">Gestão de ativos de tecnologia</p>
     </div>
   </div>
 </template>
@@ -44,7 +75,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { AlertTriangle, CheckCircle, Loader2, XCircle } from 'lucide-vue-next'
+import { AlertTriangle, Box, CheckCircle, Loader2, LogIn, XCircle } from 'lucide-vue-next'
 import api from '../services/api'
 
 const route = useRoute()
@@ -53,7 +84,6 @@ const state = ref<'loading' | 'confirm-ok' | 'dispute-ok' | 'error'>('loading')
 const errorMessage = ref('')
 const resultUserName = ref('')
 const resultTenantName = ref('')
-const loginUrl = ref('')
 const alreadyDone = ref(false)
 
 onMounted(async () => {
@@ -62,7 +92,7 @@ onMounted(async () => {
 
   if (!token || token.length < 10) {
     state.value = 'error'
-    errorMessage.value = 'Link inválido ou incompleto.'
+    errorMessage.value = 'Link inválido ou incompleto. Peça um novo convite ao administrador.'
     return
   }
 
@@ -78,20 +108,14 @@ onMounted(async () => {
       alreadyDisputed?: boolean
       userName?: string
       tenantName?: string
-      loginUrl?: string
       message?: string
     }>(endpoint, { token })
 
     resultUserName.value = data.userName ?? ''
     resultTenantName.value = data.tenantName ?? ''
-    loginUrl.value = data.loginUrl ?? ''
     alreadyDone.value = Boolean(data.alreadyConfirmed || data.alreadyDisputed)
 
-    if (acao === 'contestar') {
-      state.value = 'dispute-ok'
-    } else {
-      state.value = 'confirm-ok'
-    }
+    state.value = acao === 'contestar' ? 'dispute-ok' : 'confirm-ok'
   } catch (e: unknown) {
     const ax = e as { response?: { data?: { message?: string } } }
     state.value = 'error'
@@ -102,63 +126,186 @@ onMounted(async () => {
 
 <style scoped>
 .invite-page {
+  flex: 1;
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
-  background: linear-gradient(160deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+  padding: clamp(20px, 5vw, 40px);
+  box-sizing: border-box;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(59, 130, 246, 0.35), transparent),
+    radial-gradient(ellipse 60% 50% at 100% 100%, rgba(139, 92, 246, 0.2), transparent),
+    linear-gradient(165deg, #0b1220 0%, #0f172a 42%, #1e293b 100%);
+}
+
+.invite-shell {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.invite-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.invite-logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(139, 92, 246, 0.2));
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #60a5fa;
+}
+
+.invite-brand-name {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #f8fafc;
 }
 
 .invite-card {
   width: 100%;
-  max-width: 440px;
-  background: #fff;
-  border-radius: 16px;
-  padding: 40px 32px;
-  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.35);
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 20px;
+  padding: clamp(28px, 6vw, 40px) clamp(24px, 5vw, 36px);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 25px 50px -12px rgba(0, 0, 0, 0.45);
 }
 
-.invite-status {
-  text-align: center;
+.invite-body {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 12px;
 }
 
-.invite-status h1 {
-  font-size: 1.35rem;
-  margin: 8px 0 0;
-  color: #0f172a;
+.invite-body--center {
+  align-items: center;
+  text-align: center;
 }
 
-.invite-status p {
-  color: #475569;
+.invite-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.invite-icon--loading {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.invite-icon--success {
+  background: var(--success-light);
+  color: var(--success);
+}
+
+.invite-icon--warn {
+  background: var(--warning-light);
+  color: var(--warning);
+}
+
+.invite-icon--error {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
+.invite-title {
   margin: 0;
-  line-height: 1.5;
+  font-size: clamp(1.25rem, 4vw, 1.5rem);
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.3;
 }
 
-.invite-status.success :deep(svg) {
-  color: #16a34a;
+.invite-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  max-width: 32ch;
 }
 
-.invite-status.warn :deep(svg) {
-  color: #d97706;
+.invite-note,
+.invite-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  max-width: 34ch;
 }
 
-.invite-status.error :deep(svg) {
-  color: #dc2626;
+.invite-hint {
+  margin-top: 4px;
 }
 
-.muted {
-  font-size: 0.9rem;
-  color: #94a3b8 !important;
+.invite-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  width: 100%;
+  max-width: 280px;
+  box-sizing: border-box;
+}
+
+.invite-btn--primary {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
+}
+
+.invite-btn--primary:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+}
+
+.invite-btn--secondary {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+}
+
+.invite-btn--secondary:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.invite-footer {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(148, 163, 184, 0.75);
+  letter-spacing: 0.02em;
 }
 
 .spin {
-  animation: spin 0.9s linear infinite;
-  color: #3b82f6;
+  animation: spin 0.85s linear infinite;
 }
 
 @keyframes spin {
@@ -167,23 +314,13 @@ onMounted(async () => {
   }
 }
 
-.btn-primary,
-.btn-secondary {
-  display: inline-block;
-  margin-top: 16px;
-  padding: 10px 20px;
-  border-radius: 8px;
-  text-decoration: none;
-  font-weight: 600;
-}
+@media (max-width: 480px) {
+  .invite-card {
+    border-radius: 16px;
+  }
 
-.btn-primary {
-  background: #2563eb;
-  color: #fff;
-}
-
-.btn-secondary {
-  background: #f1f5f9;
-  color: #334155;
+  .invite-btn {
+    max-width: none;
+  }
 }
 </style>

@@ -1,22 +1,22 @@
 <template>
   <div class="app-shell">
     <!-- Sidebar -->
-    <Sidebar 
-      v-if="authStore.isAuthenticated" 
-      :is-dark="isDark" 
-      @toggle-theme="toggleTheme" 
+    <Sidebar
+      v-if="authStore.isAuthenticated && !isLayoutlessPage"
+      :is-dark="isDark"
+      @toggle-theme="toggleTheme"
     />
 
     <!-- Main Content -->
-    <div class="main-wrapper">
+    <div class="main-wrapper" :class="{ 'main-wrapper--fullscreen': isLayoutlessPage }">
       <!-- Topbar -->
-      <Topbar 
-        v-if="authStore.isAuthenticated" 
-        :title="currentPageTitle" 
+      <Topbar
+        v-if="authStore.isAuthenticated && !isLayoutlessPage"
+        :title="currentPageTitle"
       />
 
       <!-- Content -->
-      <main class="content">
+      <main class="content" :class="{ 'content--fullscreen': isLayoutlessPage }">
         <RouterView />
       </main>
     </div>
@@ -66,6 +66,11 @@ let teardownImageZoom: (() => void) | undefined
 const authStore = useAuthStore()
 const route = useRoute()
 const isDark = ref(true)
+
+/** Login, convite e páginas públicas — sem menu lateral nem topbar. */
+const isLayoutlessPage = computed(() =>
+  Boolean(route.meta.public || route.meta.guestOnly),
+)
 
 const currentPageTitle = computed(() => {
   const path = route.path
@@ -206,6 +211,18 @@ body {
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
+}
+
+.content--fullscreen {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: transparent;
+}
+
+.main-wrapper--fullscreen {
+  min-height: 100vh;
 }
 
 @media (max-width: 1024px) {
