@@ -162,15 +162,23 @@
         </template>
         <div class="form-actions field-wide">
           <button type="button" class="btn-secondary" @click="goToUserStep(1)">Voltar</button>
-          <button type="submit" class="btn-primary">
-            {{ registrationMode === 'google' ? 'Cadastrar (login Google)' : 'Cadastrar demo' }}
+          <button type="submit" class="btn-primary" :disabled="userSubmitting">
+            {{
+              userSubmitting
+                ? 'A cadastrar…'
+                : registrationMode === 'google'
+                  ? 'Cadastrar (login Google)'
+                  : 'Cadastrar demo'
+            }}
           </button>
           <button type="button" class="btn-secondary" @click="closeUserForm">Cancelar</button>
         </div>
         </template>
       </form>
-      <p v-if="formError" class="error-message">{{ formError }}</p>
+      <p v-if="formError && showForm" class="error-message">{{ formError }}</p>
     </div>
+
+    <p v-if="formError && !showForm" class="error-message page-form-error">{{ formError }}</p>
 
     <div class="search-bar">
       <Search :size="18" :stroke-width="2" />
@@ -335,13 +343,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { type DirectoryUser, useInventoryStore } from '../stores/inventory'
 import { assetsAssignedToEmail } from '../utils/userScope'
 import { roleLabelPt } from '../utils/roleLabels'
 import { isDemoAssetraEmail } from '../utils/emailPolicy'
+import { formatApiError, isDuplicateUserError } from '../utils/formatApiError'
 import { useConfirmAction } from '../composables/useConfirmAction'
 import { useLocalPageSearch } from '../composables/useLocalPageSearch'
 import PasswordInput from '../components/PasswordInput.vue'
@@ -367,6 +376,7 @@ const confirm = useConfirmAction()
 const { pageSearch, matchesPageSearch } = useLocalPageSearch()
 
 const showForm = ref(false)
+const userSubmitting = ref(false)
 const userStep = ref(1)
 const userStepLabels = ['Dados iniciais', 'Acesso e segurança']
 const formError = ref('')
@@ -584,8 +594,18 @@ const filteredUsers = computed(() =>
   ),
 )
 
+function scrollToFeedback() {
+  void nextTick(() => {
+    document
+      .querySelector('.page-notice, .page-form-error, .error-message')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
+}
+
 const addUser = async () => {
+  if (userSubmitting.value) return
   formError.value = ''
+  pageNotice.value = null
   const email = newUser.email.trim().toLowerCase()
 
   if (registrationMode.value === 'demo') {
@@ -618,6 +638,7 @@ const addUser = async () => {
     return
   }
 
+  userSubmitting.value = true
   try {
     const created = await inventory.createUser({
       name: newUser.name,
@@ -652,9 +673,19 @@ const addUser = async () => {
     registrationMode.value = 'google'
     emailStatus.value = { message: '', available: false, formatValid: false }
     closeUserForm()
+    scrollToFeedback()
   } catch (e: unknown) {
-    const ax = e as { response?: { data?: { message?: string } } }
-    formError.value = ax?.response?.data?.message ?? 'Erro ao cadastrar usuário.'
+    const msg = formatApiError(e, 'Erro ao cadastrar usuário.')
+    if (isDuplicateUserError(msg)) {
+      await inventory.fetchUsers()
+      formError.value =
+        'Este e-mail já está cadastrado. A lista foi atualizada — verifique se o utilizador já aparece.'
+    } else {
+      formError.value = msg
+    }
+    scrollToFeedback()
+  } finally {
+    userSubmitting.value = false
   }
 }
 
@@ -677,6 +708,7 @@ const resendUserInvite = async (id: string) => {
   try {
     const data = await inventory.resendUserInvite(id)
     applyInviteResult(data, 'Convite reenviado')
+    scrollToFeedback()
   } catch (e: unknown) {
     const ax = e as { response?: { data?: { message?: string } } }
     formError.value = ax?.response?.data?.message ?? 'Erro ao reenviar convite.'
@@ -1047,6 +1079,10 @@ const saveUserEdit = async () => {
   display: flex;
   gap: 12px;
   align-items: flex-end;
+}
+
+.page-form-error {
+  margin: 0 0 16px;
 }
 
 .page-notice {

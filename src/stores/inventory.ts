@@ -425,17 +425,10 @@ export const useInventoryStore = defineStore('inventory', {
         registrationEmailSent?: boolean
         emailTestOnly?: boolean
         emailHint?: string
+        emailError?: string | null
         registrationConfirmUrl?: string
         registrationEmailPreviewUrl?: string | null
-      }>('/users', {
-        name: payload.name,
-        email: payload.email,
-        profile: payload.profile,
-        status: payload.status,
-        department: payload.department ?? undefined,
-        password: payload.password,
-        googleCredential: payload.googleCredential,
-      })
+      }>('/users', payload, { timeout: 45_000 })
       await this.fetchUsers()
       return data
     },

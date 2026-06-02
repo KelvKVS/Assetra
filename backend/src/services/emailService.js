@@ -110,6 +110,9 @@ async function getSmtpTransporter() {
       port: cfg.port,
       secure: cfg.port === 465,
       auth: cfg.user ? { user: cfg.user, pass: cfg.pass } : undefined,
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 15_000,
     })
   }
   return { transporter: smtpTransporterPromise, from: cfg.from, mode: 'smtp' }

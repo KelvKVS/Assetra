@@ -39,7 +39,7 @@ function verifyRegistrationInviteToken(token) {
   }
 }
 
-function buildInviteUrls(token) {
+export function buildInviteUrls(token) {
   const base = getFrontendBaseUrl()
   const q = encodeURIComponent(token)
   return {
@@ -49,37 +49,22 @@ function buildInviteUrls(token) {
   }
 }
 
-/**
- * @param {import('@prisma/client').PrismaClient} prisma
- * @param {{ user: object, tenant: object, inviter: { id: string, name: string, email: string } }} ctx
- */
-export async function sendRegistrationInviteAfterCreate(prisma, { user, tenant, inviter }) {
+/** Gera links de convite sem enviar e-mail (resposta rápida da API). */
+export function prepareRegistrationInviteLinks(user, tenantId) {
   const token = signRegistrationInviteToken({
     userId: user.id,
-    tenantId: tenant.id,
+    tenantId,
     email: user.email,
   })
-  const urls = buildInviteUrls(token)
+  return buildInviteUrls(token)
+}
 
-  const mailResult = await sendUserRegistrationInviteEmail({
-    to: user.email,
-    userName: user.name,
-    tenantName: tenant.name,
-    inviterName: inviter.name,
-    inviterEmail: inviter.email,
-    ...urls,
-  })
+const INVITE_EMAIL_TIMEOUT_MS = 12_000
 
-  if (!mailResult.sent) {
-    console.info('[registration-invite] Link de confirmação:', urls.confirmUrl)
-  }
-
+function buildInviteMetaFromMail(mailResult, urls) {
   const realInbox = mailResult.sent === true && mailResult.realInbox === true
-
   return {
-    /** Entregue na caixa de entrada real do destinatário (SMTP). */
     emailSent: realInbox,
-    /** Enviado só para sandbox de teste (Ethereal) — não chega ao Gmail. */
     emailTestOnly: mailResult.sent === true && !realInbox,
     emailDeliveryMode: mailResult.mode ?? 'none',
     emailConfigured: isEmailConfigured(),
@@ -97,6 +82,98 @@ export async function sendRegistrationInviteAfterCreate(prisma, { user, tenant, 
           : mailResult.emailError ||
             'E-mail não enviado. Use o link de confirmação abaixo ou corrija SMTP_PASS no backend/.env.'),
   }
+}
+
+async function sendInviteEmail({ user, tenant, inviter, urls }) {
+  return sendUserRegistrationInviteEmail({
+    to: user.email,
+    userName: user.name,
+    tenantName: tenant.name,
+    inviterName: inviter.name,
+    inviterEmail: inviter.email,
+    ...urls,
+  })
+}
+
+/**
+ * @param {import('@prisma/client').PrismaClient} prisma
+ * @param {{ user: object, tenant: object, inviter: { id: string, name: string, email: string } }} ctx
+ */
+/**
+ * Cria utilizador e envia convite em background (resposta HTTP imediata).
+ */
+export function queueRegistrationInviteEmail(prisma, { user, tenant, inviter }) {
+  const urls = prepareRegistrationInviteLinks(user, tenant.id)
+
+  void sendRegistrationInviteAfterCreate(prisma, { user, tenant, inviter }).catch((err) => {
+    console.warn('[registration-invite] Envio em background falhou:', err?.message ?? err)
+  })
+
+  return {
+    emailSent: false,
+    emailTestOnly: false,
+    emailDeliveryMode: 'pending',
+    emailConfigured: isEmailConfigured(),
+    confirmUrl: urls.confirmUrl,
+    emailPreviewUrl: null,
+    emailError: null,
+    emailHint:
+      'Utilizador criado. O e-mail de convite está a ser enviado — use o link abaixo se o colaborador não receber.',
+  }
+}
+
+/**
+ * Envia convite (reenvio — pode aguardar até 12s).
+ */
+export async function sendRegistrationInviteAfterCreate(prisma, { user, tenant, inviter }) {
+  const urls = prepareRegistrationInviteLinks(user, tenant.id)
+
+  const mailTask = sendInviteEmail({ user, tenant, inviter, urls })
+  let mailResult
+  try {
+    mailResult = await Promise.race([
+      mailTask,
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('invite_email_timeout')), INVITE_EMAIL_TIMEOUT_MS)
+      }),
+    ])
+  } catch (err) {
+    const isTimeout = String(err?.message ?? '') === 'invite_email_timeout'
+    console.warn(
+      '[registration-invite]',
+      isTimeout ? 'Envio de e-mail demorou; utilizador já criado. Link:',
+      : 'Falha ao enviar e-mail:',
+      urls.confirmUrl,
+      err?.message ?? err,
+    )
+    void mailTask
+      .then((late) => {
+        if (late?.sent) {
+          console.info('[registration-invite] E-mail enviado após demora:', user.email)
+        }
+      })
+      .catch((lateErr) => {
+        console.warn('[registration-invite] E-mail em background falhou:', lateErr?.message ?? lateErr)
+      })
+
+    return {
+      emailSent: false,
+      emailTestOnly: false,
+      emailDeliveryMode: 'pending',
+      emailConfigured: isEmailConfigured(),
+      confirmUrl: urls.confirmUrl,
+      emailPreviewUrl: null,
+      emailError: isTimeout ? null : String(err?.message ?? err),
+      emailHint:
+        'Utilizador criado. O e-mail pode demorar no servidor — use o link de confirmação abaixo ou «Reenviar convite».',
+    }
+  }
+
+  if (!mailResult.sent) {
+    console.info('[registration-invite] Link de confirmação:', urls.confirmUrl)
+  }
+
+  return buildInviteMetaFromMail(mailResult, urls)
 }
 
 /**

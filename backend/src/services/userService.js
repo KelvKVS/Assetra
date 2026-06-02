@@ -4,7 +4,7 @@ import { AppError } from '../utils/AppError.js'
 import { profileToRole } from '../utils/profileRole.js'
 import { isDemoAssetraEmail, normalizeEmail, requiresGoogleVerification } from '../utils/emailPolicy.js'
 import { DEFAULT_DEPARTMENTS } from '../constants/departments.js'
-import { sendRegistrationInviteAfterCreate } from './registrationInviteService.js'
+import { queueRegistrationInviteEmail } from './registrationInviteService.js'
 
 function normalizeDepartment(raw) {
   const value = String(raw ?? '').trim()
@@ -216,7 +216,7 @@ export async function createUserInTenant(prisma, tenantId, input, inviter = null
     if (!isDemo && inviter?.sub) {
       const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
       if (tenant) {
-        const inviteResult = await sendRegistrationInviteAfterCreate(prisma, {
+        const queued = queueRegistrationInviteEmail(prisma, {
           user,
           tenant,
           inviter: {
@@ -226,12 +226,12 @@ export async function createUserInTenant(prisma, tenantId, input, inviter = null
           },
         })
         inviteMeta = {
-          registrationEmailSent: inviteResult.emailSent,
-          emailTestOnly: inviteResult.emailTestOnly,
-          emailDeliveryMode: inviteResult.emailDeliveryMode,
-          emailHint: inviteResult.emailHint,
-          registrationConfirmUrl: inviteResult.confirmUrl,
-          registrationEmailPreviewUrl: inviteResult.emailPreviewUrl,
+          registrationEmailSent: queued.emailSent,
+          emailTestOnly: queued.emailTestOnly,
+          emailHint: queued.emailHint,
+          emailError: queued.emailError,
+          registrationConfirmUrl: queued.confirmUrl,
+          registrationEmailPreviewUrl: queued.emailPreviewUrl,
         }
       }
     }
@@ -241,8 +241,12 @@ export async function createUserInTenant(prisma, tenantId, input, inviter = null
       registrationPending: !isDemo && Boolean(inviter?.sub),
       ...inviteMeta,
     })
-  } catch {
-    throw new AppError(400, 'E-mail já existe nesta organização ou dados inválidos.')
+  } catch (err) {
+    if (err?.code === 'P2002') {
+      throw new AppError(400, 'Este e-mail já está cadastrado nesta organização.')
+    }
+    console.error('[createUserInTenant]', err?.message ?? err)
+    throw new AppError(400, 'Não foi possível criar o utilizador. Verifique os dados e tente novamente.')
   }
 }
 

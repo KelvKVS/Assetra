@@ -1,4 +1,5 @@
 import { apiBaseUrl } from '../services/api'
+import { resolveUploadApiBaseUrl } from '../services/uploadApi'
 import type { AttachmentRef } from '../types/assetra'
 import { filenameFromUploadUrl } from './attachmentPayload'
 
@@ -15,17 +16,20 @@ export function resolveMediaUrl(url?: string): string {
   const pathOnly = qIdx >= 0 ? trimmed.slice(0, qIdx) : trimmed
   const query = qIdx >= 0 ? trimmed.slice(qIdx) : ''
 
-  const base = apiBaseUrl.replace(/\/+$/, '')
   const path = pathOnly.startsWith('/') ? pathOnly : `/${pathOnly}`
+
+  if (path.startsWith('/api/uploads/')) {
+    const uploadBase = resolveUploadApiBaseUrl().replace(/\/+$/, '')
+    if (uploadBase && !uploadBase.startsWith('/api')) {
+      const suffix = path.startsWith('/api') ? path.slice(4) : path
+      return `${uploadBase}${suffix}${query}`
+    }
+  }
+
+  const base = apiBaseUrl.replace(/\/+$/, '')
 
   if (!path.startsWith('/api/')) {
     return `${path}${query}`
-  }
-
-  if (base === '/api' || base.endsWith('/api')) {
-    if (base.endsWith('/api')) {
-      return `${base}${path.slice(4)}${query}`
-    }
   }
 
   if (base.endsWith('/api')) {

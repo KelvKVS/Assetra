@@ -11,6 +11,17 @@
    - `DATABASE_URL` (recomendado: PostgreSQL do Render)
    - `MONGODB_URL` (MongoDB Atlas ou equivalente)
    - `GOOGLE_CLIENT_ID`
+   - `FRONTEND_URL` (ex.: `https://assetra-seven.vercel.app`)
+   - `API_PUBLIC_URL` (ex.: `https://assetra-44la.onrender.com`)
+   - **E-mail (convites + notificações):**
+     - `EMAIL_FROM=kelvinkv2030@gmail.com`
+     - `EMAIL_DEV_ETHEREAL=false` (obrigatório em produção)
+     - `SMTP_HOST=smtp.gmail.com`
+     - `SMTP_PORT=587`
+     - `SMTP_USER=kelvinkv2030@gmail.com`
+     - `SMTP_PASS=xxxxxxxxxxxxxxxx` (senha de aplicação Google, **16 letras sem espaços**)
+     - `SMTP_FROM="Assetra" <kelvinkv2030@gmail.com>`
+     - `NOTIFICATION_EMAILS_ENABLED=true`
    - `EVENT_BROKER_DRIVER` (`rabbitmq`)
    - `RABBITMQ_URL` (URL do broker, ex.: CloudAMQP)
    - Integrações externas (escolha 1 modo):
@@ -38,17 +49,28 @@ Opções:
 
 > O `render.yaml` já cria um worker (`assetra-events-worker`) para consumir eventos RabbitMQ.
 
+**Importante:** copie as mesmas variáveis **SMTP** e `EMAIL_FROM` também no serviço **assetra-events-worker** (notificações por e-mail passam pela fila).
+
 ## 2) Frontend na Vercel
 
 1. No Vercel, clique em **Add New > Project** e selecione o mesmo repositório.
 2. Em **Root Directory**, deixe a raiz do projeto (`assetra-app`).
 3. Build/Output já está pronto via `vercel.json`.
 4. Configure variáveis do frontend:
-   - `VITE_API_BASE_URL=https://SEU-BACKEND.onrender.com/api`
+   - `VITE_API_BASE_URL=/api` (com `vercel.json` a fazer proxy para o Render) **ou** URL completa do Render
+   - `VITE_API_UPLOAD_BASE_URL=https://SEU-BACKEND.onrender.com/api` (recomendado — leitura de anexos direto no Render)
    - `VITE_GOOGLE_CLIENT_ID=...apps.googleusercontent.com`
 5. Faça deploy e abra o domínio gerado.
 
-## 3) Google OAuth (produção)
+## 3) E-mail em produção (checklist)
+
+1. **Não** commite `SMTP_PASS` no Git — só no painel do Render (Web + Worker).
+2. `EMAIL_DEV_ETHEREAL` deve ser `false` (em produção não há Ethereal).
+3. `FRONTEND_URL` = URL da Vercel (links de confirmação de cadastro).
+4. Teste após deploy: cadastre um utilizador Google como ADM → reenviar convite → verificar caixa do colaborador.
+5. Se falhar, veja os logs do serviço `assetra-backend` no Render (mensagem `BadCredentials` = senha de aplicação errada).
+
+## 4) Google OAuth (produção)
 
 No Google Cloud Console, no Client Web OAuth:
 - **Authorized JavaScript origins**:
@@ -59,7 +81,14 @@ O mesmo `GOOGLE_CLIENT_ID` deve existir:
 - no frontend (`VITE_GOOGLE_CLIENT_ID`)
 - no backend (`GOOGLE_CLIENT_ID`)
 
-## 4) Observações importantes
+## 5) Anexos / imagens (404 em produção)
+
+- O backend guarda ficheiros em `uploads/` no disco do Render. Esse disco é **efémero**: após redeploy ou restart, ficheiros antigos deixam de existir.
+- Anexos enviados em **desenvolvimento local** ficam no seu PC — o MongoDB de produção pode ainda referenciar esses nomes, mas o ficheiro **não está** no Render → `GET /api/uploads/...` devolve **404** (normal até reenviar o anexo em produção).
+- Configure na Vercel: `VITE_API_UPLOAD_BASE_URL=https://SEU-BACKEND.onrender.com/api` e faça novo deploy do frontend.
+- Para persistência real a longo prazo, planeie storage externo (S3, Cloudinary, etc.).
+
+## 6) Observações importantes
 
 - A autenticação usa cookie `httpOnly`; em produção foi ajustada para `sameSite=none` e `secure=true` para funcionar entre Vercel e Render.
 - `CORS_ORIGIN` aceita múltiplas origens separadas por vírgula.

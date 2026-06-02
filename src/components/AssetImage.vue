@@ -43,7 +43,7 @@ watch(
 )
 
 function onError() {
-  if (retry.value < 2) {
+  if (retry.value < 1) {
     retry.value += 1
     return
   }
