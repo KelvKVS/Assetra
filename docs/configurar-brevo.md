@@ -39,6 +39,7 @@ Na Brevo existem **dois** tipos de credencial:
 ```env
 BREVO_API_KEY=xkeysib_SUA_CHAVE
 EMAIL_FROM=kelvinkv2030@gmail.com
+EMAIL_FRONTEND_URL=https://assetra-seven.vercel.app
 EMAIL_DEV_ETHEREAL=false
 ```
 

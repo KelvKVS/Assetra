@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken'
 import { AppError } from '../utils/AppError.js'
-import { getFrontendBaseUrl } from '../utils/frontendUrl.js'
+import { getEmailFrontendBaseUrl } from '../utils/frontendUrl.js'
 import {
   isEmailConfigured,
   sendRegistrationDisputeNoticeEmail,
@@ -37,7 +37,7 @@ function verifyRegistrationInviteToken(token) {
 }
 
 export function buildInviteUrls(token) {
-  const base = getFrontendBaseUrl()
+  const base = getEmailFrontendBaseUrl()
   const q = encodeURIComponent(token)
   return {
     confirmUrl: `${base}/convite?token=${q}&acao=confirmar`,
@@ -257,7 +257,7 @@ export async function confirmRegistrationInvite(prisma, token) {
     alreadyConfirmed: Boolean(user.registrationAcknowledgedAt),
     userName: user.name,
     tenantName: user.tenant.name,
-    loginUrl: `${getFrontendBaseUrl()}/login/${user.tenant.slug}`,
+    loginUrl: `${getEmailFrontendBaseUrl()}/login`,
   }
 }
 

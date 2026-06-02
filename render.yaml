@@ -31,6 +31,8 @@ services:
         sync: false
       - key: FRONTEND_URL
         value: "https://assetra-seven.vercel.app"
+      - key: EMAIL_FRONTEND_URL
+        value: "https://assetra-seven.vercel.app"
       - key: EMAIL_FROM
         sync: false
       - key: EMAIL_DEV_ETHEREAL
@@ -75,6 +77,8 @@ services:
       - key: RABBITMQ_URL
         sync: false
       - key: FRONTEND_URL
+        value: "https://assetra-seven.vercel.app"
+      - key: EMAIL_FRONTEND_URL
         value: "https://assetra-seven.vercel.app"
       - key: EMAIL_FROM
         sync: false

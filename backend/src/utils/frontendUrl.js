@@ -1,5 +1,5 @@
 /** URL pública do frontend em produção (Vercel). */
-const PROD_FRONTEND_DEFAULT = 'https://assetra-seven.vercel.app'
+export const PROD_FRONTEND_DEFAULT = 'https://assetra-seven.vercel.app'
 
 function isLocalhostHost(hostname) {
   const h = String(hostname ?? '').toLowerCase()
@@ -16,12 +16,15 @@ function isLocalhostUrl(url) {
   }
 }
 
+function normalizeBaseUrl(url) {
+  return String(url ?? '').trim().replace(/\/+$/, '')
+}
+
 /**
- * Base do frontend para links em e-mails, OAuth e notificações.
- * Em produção, ignora FRONTEND_URL se apontar para localhost (evita links errados no deploy).
+ * Base do frontend para OAuth e redirects no browser (dev = localhost).
  */
 export function getFrontendBaseUrl() {
-  const configured = String(process.env.FRONTEND_URL ?? '').trim().replace(/\/+$/, '')
+  const configured = normalizeBaseUrl(process.env.FRONTEND_URL)
   const isProd = process.env.NODE_ENV === 'production'
 
   if (configured && !(isProd && isLocalhostUrl(configured))) {
@@ -33,4 +36,22 @@ export function getFrontendBaseUrl() {
   }
 
   return configured || 'http://localhost:5173'
+}
+
+/**
+ * Base para links em e-mails e convites — sempre o site público (Vercel), nunca localhost.
+ * Defina EMAIL_FRONTEND_URL no .env se usar outro domínio.
+ */
+export function getEmailFrontendBaseUrl() {
+  const emailOnly = normalizeBaseUrl(
+    process.env.EMAIL_FRONTEND_URL || process.env.PUBLIC_FRONTEND_URL,
+  )
+  if (emailOnly) return emailOnly
+
+  const configured = normalizeBaseUrl(process.env.FRONTEND_URL)
+  if (configured && !isLocalhostUrl(configured)) {
+    return configured
+  }
+
+  return PROD_FRONTEND_DEFAULT
 }

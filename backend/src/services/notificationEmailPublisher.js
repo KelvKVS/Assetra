@@ -1,5 +1,5 @@
 import { publishDomainEventSafely } from '../lib/eventBus.js'
-import { getFrontendBaseUrl } from '../utils/frontendUrl.js'
+import { getEmailFrontendBaseUrl } from '../utils/frontendUrl.js'
 
 export function isNotificationEmailEnabled() {
   return String(process.env.NOTIFICATION_EMAILS_ENABLED ?? 'true').toLowerCase() !== 'false'
@@ -22,7 +22,7 @@ export function buildNotificationEmailPayload({
     title: String(title ?? '').trim(),
     message: String(message ?? '').trim(),
     sender: String(sender ?? 'Assetra').trim(),
-    actionUrl: path ? `${getFrontendBaseUrl()}${path}` : getFrontendBaseUrl(),
+    actionUrl: path ? `${getEmailFrontendBaseUrl()}${path}` : getEmailFrontendBaseUrl(),
   }
 }
 
