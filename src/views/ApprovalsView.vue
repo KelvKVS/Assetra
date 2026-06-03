@@ -35,6 +35,8 @@
       </div>
     </div>
 
+    <p v-if="pageError" class="error-message">{{ pageError }}</p>
+
     <div class="approvals-list">
       <article
         v-for="item in filteredApprovals"
@@ -56,7 +58,14 @@
           <span v-if="item.createdAt">{{ formatWhen(item.createdAt) }}</span>
         </p>
 
-        <div v-if="canApprove && item.status === 'Pendente'" class="card-pending-actions">
+        <p
+          v-if="canApprove && item.status === 'Pendente' && !canDecideItem(item)"
+          class="action-hint action-hint--blocked"
+        >
+          {{ decisionBlockReason(item) }}
+        </p>
+
+        <div v-if="canApprove && item.status === 'Pendente' && canDecideItem(item)" class="card-pending-actions">
           <p v-if="flowKind(item) === 'opening'" class="action-hint">
             Aprovar cria a ordem de serviço para o técnico executar.
           </p>
@@ -319,6 +328,85 @@ const decisionModal = reactive<{
   notes: '',
 })
 const decisionModalError = ref('')
+const pageError = ref('')
+
+function resolveRequiredApproverRole(requestedByRole?: string) {
+  const r = String(requestedByRole ?? '')
+    .trim()
+    .toUpperCase()
+  if (r === 'FUNCIONARIO' || r === 'TECNICO') return 'GESTOR'
+  if (r === 'GESTOR') return 'ADM'
+  return 'ADM'
+}
+
+function canUserDecideApproval(requiredRole: string, userRole: string) {
+  const req = requiredRole.trim().toUpperCase()
+  const usr = userRole.trim().toUpperCase()
+  if (!req || !usr) return false
+  if (usr === 'ADM') return req === 'ADM' || req === 'GESTOR'
+  return req === usr
+}
+
+function effectiveRequiredRole(item: ApprovalRow) {
+  const stored = String(item.requiredApproverRole ?? '').trim().toUpperCase()
+  if (stored) return stored
+  return resolveRequiredApproverRole(item.requestedByRole)
+}
+
+function canDecideItem(item: ApprovalRow) {
+  if (!canApprove.value) return false
+  if (String(item.requestedBy ?? '') === String(authStore.user?.id ?? '')) return false
+  return canUserDecideApproval(
+    effectiveRequiredRole(item),
+    String(authStore.user?.role ?? ''),
+  )
+}
+
+function decisionBlockReason(item: ApprovalRow) {
+  if (String(item.requestedBy ?? '') === String(authStore.user?.id ?? '')) {
+    return 'Não pode decidir a sua própria solicitação. Peça a outro gestor ou administrador.'
+  }
+  const required = effectiveRequiredRole(item)
+  if (required === 'ADM') {
+    return 'Esta solicitação exige decisão de um administrador.'
+  }
+  if (required === 'GESTOR') {
+    return 'Esta solicitação exige decisão de um gestor (ou administrador).'
+  }
+  return 'O seu perfil não pode decidir esta solicitação.'
+}
+
+function roleLabelPt(role?: string) {
+  const r = String(role ?? '')
+    .trim()
+    .toUpperCase()
+  const map: Record<string, string> = {
+    TECNICO: 'técnico',
+    GESTOR: 'gestor',
+    FUNCIONARIO: 'funcionário',
+    ADM: 'administrador',
+  }
+  return map[r] ?? 'utilizador'
+}
+
+function assetDisplayName(tag: string) {
+  const t = String(tag ?? '').trim()
+  const asset = inventory.assets.find((a) => a.tag === t)
+  const desc = String(asset?.description ?? '').trim()
+  if (desc) return `«${desc}»`
+  return t ? `«${t}»` : 'o ativo indicado'
+}
+
+function movementDestination(item: ApprovalRow) {
+  const destEmail = String(item.destinationUserEmail ?? '').trim().toLowerCase()
+  const destUser = destEmail
+    ? inventory.users.find((u) => u.email.toLowerCase() === destEmail)
+    : null
+  return {
+    name: destUser?.name?.trim() || destEmail || 'utilizador indicado',
+    role: destUser?.role,
+  }
+}
 
 function toDatetimeLocalValue(iso?: string) {
   if (!iso) return ''
@@ -436,14 +524,18 @@ function approvalSummary(item: ApprovalRow): string {
   const st = item.status
 
   if (phase === 'movement') {
-    const destEmail = String(item.destinationUserEmail ?? '').trim().toLowerCase()
-    const destUser = destEmail
-      ? inventory.users.find((u) => u.email.toLowerCase() === destEmail)
-      : null
-    const destLabel = destUser ? destUser.name : destEmail || 'utilizador indicado'
-    if (st === 'Pendente') return `${who} pediu transferir o ativo ${asset} para ${destLabel}`
-    if (st === 'Aprovada') return `Ativo ${asset} transferido para ${destLabel}`
-    return `Transferência do ativo ${asset} para ${destLabel} foi reprovada`
+    const requesterRole = roleLabelPt(item.requestedByRole)
+    const assetName = assetDisplayName(asset)
+    const dest = movementDestination(item)
+    const destRole = roleLabelPt(dest.role)
+    const destPart = `${destRole} ${dest.name}`
+    if (st === 'Pendente') {
+      return `O ${requesterRole} ${who} solicitou a transferência do ativo ${assetName} para o ${destPart}.`
+    }
+    if (st === 'Aprovada') {
+      return `Transferência do ativo ${assetName} para o ${destPart} foi aprovada.`
+    }
+    return `Transferência do ativo ${assetName} para o ${destPart} foi reprovada.`
   }
   if (phase === 'opening') {
     if (st === 'Pendente') return `${who} pediu abrir manutenção no ativo ${asset}`
@@ -491,10 +583,10 @@ function toggleHistory(id: string) {
 }
 
 const needsTechnicianPick = (item: ApprovalRow) =>
-  canApprove.value && item.status === 'Pendente' && flowKind(item) === 'opening'
+  canDecideItem(item) && item.status === 'Pendente' && flowKind(item) === 'opening'
 
 const canSetDueOnMaintenance = (item: ApprovalRow) =>
-  canApprove.value &&
+  canDecideItem(item) &&
   item.status === 'Pendente' &&
   Boolean(item.maintenanceId) &&
   (flowKind(item) === 'validation' || item.maintenanceStatus === 'Em andamento')
@@ -602,6 +694,11 @@ async function executeDecision(
   decision: 'APPROVED' | 'REJECTED',
   notes: string,
 ) {
+  pageError.value = ''
+  if (!canDecideItem(item)) {
+    pageError.value = decisionBlockReason(item)
+    return
+  }
   if (decision === 'APPROVED' && needsTechnicianPick(item) && approveDisabled(item)) return
 
   const action = decision === 'APPROVED' ? approveLabel(item).toLowerCase() : rejectLabel(item).toLowerCase()
@@ -620,12 +717,17 @@ async function executeDecision(
     ? validationDueByApprovalId[item.id]
     : undefined
 
-  await inventory.respondApproval(item.id, decision, notes || undefined, techEmail, dueRaw)
-  if (decision === 'APPROVED') {
-    technicianPickByApprovalId[item.id] = ''
-    validationDueByApprovalId[item.id] = ''
-  } else {
-    returnReasonByApprovalId[item.id] = ''
+  try {
+    await inventory.respondApproval(item.id, decision, notes || undefined, techEmail, dueRaw)
+    if (decision === 'APPROVED') {
+      technicianPickByApprovalId[item.id] = ''
+      validationDueByApprovalId[item.id] = ''
+    } else {
+      returnReasonByApprovalId[item.id] = ''
+    }
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: { message?: string } } }
+    pageError.value = ax?.response?.data?.message ?? 'Não foi possível registar a decisão.'
   }
 }
 
@@ -637,7 +739,7 @@ const saveMaintenanceDue = async (item: ApprovalRow) => {
 }
 
 const canReassignValidation = (item: ApprovalRow) =>
-  canApprove.value && item.status === 'Pendente' && flowKind(item) === 'validation'
+  canDecideItem(item) && item.status === 'Pendente' && flowKind(item) === 'validation'
 
 const reassignMaintenance = async (item: ApprovalRow) => {
   if (!item.maintenanceId) return
@@ -728,6 +830,27 @@ const statusClass = (status: string) =>
 
 .card-summary {
   margin: 0 0 8px; font-size: 16px; font-weight: 700; line-height: 1.35; color: var(--text-primary);
+  word-break: normal !important;
+  overflow-wrap: break-word;
+}
+
+.action-hint--blocked {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.1);
+  color: #b45309;
+  font-weight: 600;
+}
+
+.error-message {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .card-meta {

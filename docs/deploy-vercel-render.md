@@ -100,12 +100,22 @@ O mesmo `GOOGLE_CLIENT_ID` deve existir:
 - no frontend (`VITE_GOOGLE_CLIENT_ID`)
 - no backend (`GOOGLE_CLIENT_ID`)
 
-## 5) Anexos / imagens (404 em produção)
+## 5) Anexos / imagens
 
-- O backend guarda ficheiros em `uploads/` no disco do Render. Esse disco é **efémero**: após redeploy ou restart, ficheiros antigos deixam de existir.
-- Anexos enviados em **desenvolvimento local** ficam no seu PC — o MongoDB de produção pode ainda referenciar esses nomes, mas o ficheiro **não está** no Render → `GET /api/uploads/...` devolve **404** (normal até reenviar o anexo em produção).
-- Configure na Vercel: `VITE_API_UPLOAD_BASE_URL=https://SEU-BACKEND.onrender.com/api` e faça novo deploy do frontend.
-- Para persistência real a longo prazo, planeie storage externo (S3, Cloudinary, etc.).
+- **Leitura:** o frontend pede imagens via `/api/uploads/...` no domínio da Vercel (proxy → Render). Não use URL absoluta do Render em `<img>` (bloqueio `NotSameOrigin`).
+- **Upload (POST):** `VITE_API_UPLOAD_BASE_URL=https://SEU-BACKEND.onrender.com/api` na Vercel — ficheiros grandes não passam pelo proxy.
+- **Persistência:** cada upload é também guardado no **MongoDB GridFS** (Atlas). Sobrevive a redeploy no Render.
+- **Fotos antigas perdidas no redeploy:** se ainda tiver a pasta `backend/uploads/` no PC com os ficheiros originais:
+
+```bash
+cd backend
+# use a mesma MONGODB_URL de produção (Atlas)
+npm run uploads:migrate-gridfs
+```
+
+Depois faça redeploy do backend no Render.
+
+- Se não tiver cópia local dos ficheiros, é necessário **reenviar** os anexos nas solicitações/ativos.
 
 ## 6) Observações importantes
 

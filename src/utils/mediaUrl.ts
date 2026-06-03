@@ -1,30 +1,36 @@
 import { apiBaseUrl } from '../services/api'
-import { resolveUploadApiBaseUrl } from '../services/uploadApi'
 import type { AttachmentRef } from '../types/assetra'
 import { filenameFromUploadUrl } from './attachmentPayload'
 
 /**
- * Converte `/api/uploads/...` na URL que o browser deve pedir.
- * Em dev: mantém relativo (proxy Vite). Em produção: prefixa VITE_API_BASE_URL se necessário.
+ * Converte `/api/uploads/...` na URL que o browser deve pedir para **leitura** (<img>, links).
+ * Usa sempre o mesmo origin do frontend (proxy /api na Vercel ou Vite) — evita CORP/CORS no Render.
+ * O POST de upload continua em uploadApi.ts (URL direta ao Render para ficheiros grandes).
  */
 export function resolveMediaUrl(url?: string): string {
   if (!url?.trim()) return ''
-  const trimmed = url.trim()
-  if (/^https?:\/\//i.test(trimmed)) return trimmed
+  let trimmed = url.trim()
+
+  // URLs antigas absolutas do Render → proxy /api no domínio do frontend
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const u = new URL(trimmed)
+      const match = u.pathname.match(/\/(?:api\/)?uploads\/(.+)$/i)
+      if (match) {
+        trimmed = `/api/uploads/${match[1]}${u.search}`
+      } else {
+        return trimmed
+      }
+    } catch {
+      return trimmed
+    }
+  }
 
   const qIdx = trimmed.indexOf('?')
   const pathOnly = qIdx >= 0 ? trimmed.slice(0, qIdx) : trimmed
   const query = qIdx >= 0 ? trimmed.slice(qIdx) : ''
 
   const path = pathOnly.startsWith('/') ? pathOnly : `/${pathOnly}`
-
-  if (path.startsWith('/api/uploads/')) {
-    const uploadBase = resolveUploadApiBaseUrl().replace(/\/+$/, '')
-    if (uploadBase && !uploadBase.startsWith('/api')) {
-      const suffix = path.startsWith('/api') ? path.slice(4) : path
-      return `${uploadBase}${suffix}${query}`
-    }
-  }
 
   const base = apiBaseUrl.replace(/\/+$/, '')
 
@@ -36,7 +42,11 @@ export function resolveMediaUrl(url?: string): string {
     return `${base}${path.slice(4)}${query}`
   }
 
-  return `${base}${path}${query}`
+  if (base.startsWith('http')) {
+    return `${base}${path}${query}`
+  }
+
+  return `${path}${query}`
 }
 
 export function attachmentMediaKey(att: AttachmentRef): string {

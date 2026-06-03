@@ -169,6 +169,33 @@ function canUserDecideApproval(requiredRole, userRole) {
   return requiredRole === userRole
 }
 
+/** Preenche requiredApproverRole em registos antigos ou incompletos. */
+async function resolveEffectiveRequiredApproverRole(approval) {
+  let required = normalizeRole(approval.requiredApproverRole)
+  if (required) return required
+
+  let requesterRole = normalizeRole(approval.requestedByRole)
+  if (!requesterRole && approval.requestedBy) {
+    const requester = await prisma.user.findFirst({
+      where: { tenantId: approval.tenantId, id: String(approval.requestedBy) },
+      select: { role: true },
+    })
+    requesterRole = normalizeRole(requester?.role)
+    if (requesterRole) {
+      approval.requestedByRole = requesterRole
+    }
+  }
+
+  required = resolveRequiredApproverRole(requesterRole)
+  approval.requiredApproverRole = required
+  try {
+    await approval.save()
+  } catch {
+    /* não bloquear decisão se o backfill falhar */
+  }
+  return required
+}
+
 function toDto(doc) {
   const o = doc.toObject ? doc.toObject() : doc
   return {
@@ -354,10 +381,19 @@ export async function respondToApproval(
   if (String(a.requestedBy ?? '') === String(user?.sub ?? '')) {
     throw new AppError(403, 'Não é permitido aprovar a própria solicitação.')
   }
-  const requiredRole = normalizeRole(a.requiredApproverRole)
+  const requiredRole = await resolveEffectiveRequiredApproverRole(a)
   const userRole = normalizeRole(user?.role)
   if (!canUserDecideApproval(requiredRole, userRole)) {
-    throw new AppError(403, 'Esta solicitação deve ser decidida por outro perfil.')
+    const who =
+      requiredRole === 'ADM'
+        ? 'um administrador'
+        : requiredRole === 'GESTOR'
+          ? 'um gestor'
+          : 'outro perfil autorizado'
+    throw new AppError(
+      403,
+      `Esta solicitação deve ser decidida por ${who}. O seu perfil atual não pode concluir esta etapa.`,
+    )
   }
   const before = toDto(a)
   a.status = decision === 'APPROVED' ? 'Aprovada' : 'Reprovada'

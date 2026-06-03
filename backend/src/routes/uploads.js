@@ -1,6 +1,4 @@
 import path from 'node:path'
-import fs from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { Router } from 'express'
 import multer from 'multer'
 import { authMiddleware, optionalAuthMiddleware } from '../middlewares/auth.js'
@@ -12,13 +10,14 @@ import {
   formatUploadLimitLabel,
 } from '../config/uploadLimits.js'
 import { allowedUploadTypesLabel, isAllowedUploadFile } from '../config/allowedUploadTypes.js'
+import {
+  ensureUploadsDir,
+  persistUploadToGridFs,
+  sendUploadFile,
+  uploadsDir,
+} from '../services/uploadStorageService.js'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const uploadsDir = path.resolve(__dirname, '../../uploads')
-
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true })
-}
+ensureUploadsDir()
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadsDir),
@@ -44,7 +43,7 @@ const upload = multer({
 const router = Router()
 
 router.post('/', authMiddleware, (req, res, next) => {
-  upload.array('files', MAX_UPLOAD_FILES)(req, res, (err) => {
+  upload.array('files', MAX_UPLOAD_FILES)(req, res, async (err) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({
@@ -63,21 +62,31 @@ router.post('/', authMiddleware, (req, res, next) => {
     if (!uploaded.length) {
       return res.status(400).json({ message: 'Nenhum ficheiro recebido. Selecione anexos e tente novamente.' })
     }
-    const files = uploaded.map((f) => {
+    const files = []
+    for (const f of uploaded) {
+      try {
+        await persistUploadToGridFs(f.path, f.filename, {
+          mimetype: f.mimetype,
+          tenantId,
+          originalName: f.originalname,
+        })
+      } catch (err) {
+        console.warn('[uploads] GridFS persist failed:', f.filename, err?.message ?? err)
+      }
       const fileToken = tenantId ? signUploadFileToken(f.filename, tenantId) : ''
-      return {
+      files.push({
         filename: f.filename,
         originalName: f.originalname,
         mimetype: f.mimetype,
         size: f.size,
         url: buildUploadPublicUrl(f.filename, fileToken),
-      }
-    })
+      })
+    }
     res.status(201).json({ files })
   })
 })
 
-router.get('/:filename', optionalAuthMiddleware, (req, res, next) => {
+router.get('/:filename', optionalAuthMiddleware, async (req, res, next) => {
   try {
     const safe = path.basename(decodeURIComponent(req.params.filename ?? ''))
     if (!safe) {
@@ -99,11 +108,14 @@ router.get('/:filename', optionalAuthMiddleware, (req, res, next) => {
     if (!safe.includes(tenantMarker)) {
       return res.status(403).json({ message: 'Acesso negado ao ficheiro solicitado.' })
     }
-    const full = path.join(uploadsDir, safe)
-    if (!fs.existsSync(full)) {
-      return res.status(404).json({ message: 'Ficheiro não encontrado.' })
+    const sent = await sendUploadFile(safe, res)
+    if (!sent) {
+      return res.status(404).json({
+        message:
+          'Ficheiro não encontrado. Em produção, anexos antigos podem ter sido perdidos num redeploy — reenvie a imagem.',
+      })
     }
-    return res.sendFile(full)
+    return undefined
   } catch (err) {
     return next(err)
   }

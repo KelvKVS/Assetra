@@ -15,7 +15,8 @@
     "seed:safe": "node seed.js",
     "seed:if-enabled": "node scripts/seed-if-enabled.js",
     "test": "node --test",
-    "email:test": "node scripts/test-resend-email.js"
+    "email:test": "node scripts/test-resend-email.js",
+    "uploads:migrate-gridfs": "node scripts/migrate-uploads-to-gridfs.js"
   },
   "keywords": [],
   "author": "",

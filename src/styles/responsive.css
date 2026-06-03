@@ -131,6 +131,12 @@ main.content .user-info {
   min-width: 0;
 }
 
+/* Resumo de aprovações: frases legíveis sem quebra por carácter */
+main.content .approvals-page .card-summary {
+  word-break: normal !important;
+  overflow-wrap: break-word;
+}
+
 /* Cartões de utilizador: evitar quebra letra-a-letra em ecrãs largos */
 main.content .users-page .user-card :is(
   .user-name,

@@ -1,17 +1,11 @@
-import fs from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import bcrypt from 'bcryptjs'
 import prisma from '../lib/prisma.js'
 import { AppError } from '../utils/AppError.js'
 import { assertAvatarFilename, serializeSessionUser } from '../utils/userAvatar.js'
+import { uploadExists } from './uploadStorageService.js'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const uploadsDir = path.resolve(__dirname, '../../uploads')
-
-function assertUploadExists(filename) {
-  const fullPath = path.join(uploadsDir, filename)
-  if (!fs.existsSync(fullPath)) {
+async function assertUploadExists(filename) {
+  if (!(await uploadExists(filename))) {
     throw new AppError(400, 'Ficheiro de imagem não encontrado. Envie a foto novamente.')
   }
 }
@@ -24,7 +18,7 @@ export async function updateMyAvatar(userId, filename) {
   if (!safe) {
     throw new AppError(400, 'Use uma imagem válida (PNG, JPG, WEBP ou GIF).')
   }
-  assertUploadExists(safe)
+  await assertUploadExists(safe)
 
   const user = await prisma.user.update({
     where: { id: userId },

@@ -10,7 +10,7 @@ const UPLOAD_TIMEOUT_MS = 2 * 60 * 60 * 1000
 
 /**
  * Em produção na Vercel, POST /api passa pelo proxy (~4,5 MB).
- * Leitura de anexos deve ir direto ao Render (VITE_API_UPLOAD_BASE_URL ou .env.production).
+ * Apenas envio (POST) usa URL direta ao Render. Leitura (<img>) usa /api via mediaUrl.ts.
  */
 export function resolveUploadApiBaseUrl(): string {
   const direct = (import.meta.env.VITE_API_UPLOAD_BASE_URL as string | undefined)?.trim()
