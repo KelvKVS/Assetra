@@ -5,7 +5,7 @@
       <div class="login-branding">
         <div class="brand-content">
           <div class="brand-logo">
-            <Box :size="64" color="#3b82f6" strokeWidth="1.5" />
+            <AppLogo size="xl" />
           </div>
           <h1 class="brand-title">Assetra</h1>
           <p class="brand-subtitle">Gestão corporativa de ativos de tecnologia</p>
@@ -30,6 +30,7 @@
       <div class="login-form-section">
         <div class="login-form-content">
           <div class="login-header">
+            <AppLogo size="md" class="login-header-logo" />
             <h2>Entrar no sistema</h2>
             <p class="muted">Digite suas credenciais de acesso</p>
           </div>
@@ -180,8 +181,8 @@ import { useAuthStore } from '../stores/auth'
 import { useGoogleIdToken } from '../composables/useGoogleIdToken'
 import api from '../services/api'
 import PasswordInput from '../components/PasswordInput.vue'
+import AppLogo from '../components/AppLogo.vue'
 import {
-  Box,
   CheckCircle,
   Building2,
   Mail,
@@ -370,16 +371,16 @@ onMounted(async () => {
 }
 
 .brand-logo {
-  width: 96px;
-  height: 96px;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  border-radius: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 24px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 8px;
+}
+
+.login-header-logo {
+  display: none;
+  margin: 0 auto 14px;
 }
 
 .brand-title {
@@ -714,6 +715,14 @@ onMounted(async () => {
 
   .login-branding {
     display: none;
+  }
+
+  .login-header-logo {
+    display: block;
+  }
+
+  .login-header {
+    text-align: center;
   }
 
   .login-form-section {

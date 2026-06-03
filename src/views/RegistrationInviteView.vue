@@ -3,7 +3,7 @@
     <div class="invite-shell">
       <header class="invite-brand">
         <div class="invite-logo">
-          <Box :size="36" stroke-width="1.5" />
+          <AppLogo size="lg" />
         </div>
         <span class="invite-brand-name">Assetra</span>
       </header>
@@ -75,7 +75,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { AlertTriangle, Box, CheckCircle, Loader2, LogIn, XCircle } from 'lucide-vue-next'
+import AppLogo from '../components/AppLogo.vue'
+import { AlertTriangle, CheckCircle, Loader2, LogIn, XCircle } from 'lucide-vue-next'
 import api from '../services/api'
 
 const route = useRoute()
@@ -157,15 +158,9 @@ onMounted(async () => {
 }
 
 .invite-logo {
-  width: 64px;
-  height: 64px;
-  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(139, 92, 246, 0.2));
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  color: #60a5fa;
 }
 
 .invite-brand-name {

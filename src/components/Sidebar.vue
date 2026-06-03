@@ -8,10 +8,10 @@
   <aside :class="['sidebar', { 'is-open': sidebar.state.open }]">
     <div class="sidebar-header">
       <div class="logo">
-        <div class="logo-icon-wrapper">
-          <Box :size="28" :stroke-width="2.5" color="#3b82f6" />
-        </div>
-        <RouterLink to="/dashboard" class="logo-text">Assetra</RouterLink>
+        <RouterLink to="/dashboard" class="logo-mark" aria-label="Assetra — início">
+          <AppLogo size="sm" />
+          <span class="logo-text">Assetra</span>
+        </RouterLink>
         <button
           class="sidebar-close"
           type="button"
@@ -21,7 +21,7 @@
           <X :size="20" :stroke-width="2.5" />
         </button>
       </div>
-      <p class="logo-subtitle">Gestão de Ativos</p>
+      <p class="logo-subtitle">{{ APP_TAGLINE }}</p>
     </div>
 
     <nav class="sidebar-nav">
@@ -96,6 +96,8 @@ import { computed, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useSidebar } from '../composables/useSidebar'
+import AppLogo from './AppLogo.vue'
+import { APP_TAGLINE } from '../constants/branding'
 import {
   LayoutDashboard,
   Monitor,
@@ -110,7 +112,6 @@ import {
   PlugZap,
   Sun,
   Moon,
-  Box,
   X
 } from 'lucide-vue-next'
 
@@ -185,14 +186,17 @@ watch(
   display: none;
 }
 
-.logo-icon-wrapper {
+.logo-mark {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  background: rgba(59, 130, 246, 0.1);
-  border-radius: 8px;
+  gap: 12px;
+  text-decoration: none;
+  min-width: 0;
+  flex: 1;
+}
+
+.logo-mark:hover .logo-text {
+  color: #bfdbfe;
 }
 
 .logo-text {
@@ -200,11 +204,6 @@ watch(
   font-weight: 800;
   color: #fff;
   letter-spacing: -0.5px;
-  text-decoration: none;
-}
-
-.logo-text:hover {
-  color: #bfdbfe;
 }
 
 .logo-subtitle {
