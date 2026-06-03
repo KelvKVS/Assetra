@@ -34,6 +34,8 @@
 
     <ProfilePanel v-model:open="profileOpen" :focus-password="focusPasswordSection" />
 
+    <AppToast />
+
     <ImageLightbox
       :open="imageLightbox.state.open"
       :attachments="imageLightbox.state.attachments"
@@ -53,6 +55,7 @@ import Topbar from './components/Topbar.vue'
 import PasswordConfirmModal from './components/PasswordConfirmModal.vue'
 import ProfilePanel from './components/ProfilePanel.vue'
 import ImageLightbox from './components/ImageLightbox.vue'
+import AppToast from './components/AppToast.vue'
 import { useConfirmAction } from './composables/useConfirmAction'
 import { useProfilePanel } from './composables/useProfilePanel'
 import { useImageLightbox } from './composables/useImageLightbox'

@@ -55,7 +55,21 @@
               Usada apenas para <strong>confirmar ações sensíveis</strong> no Assetra (excluir, aprovar).
               Não altera o login com Google.
             </p>
-            <form class="password-form" @submit.prevent="savePassword">
+            <div v-if="!passwordFormVisible" class="password-cta">
+              <button type="button" class="btn-password-cta" @click="openPasswordForm">
+                {{ passwordCtaLabel }}
+              </button>
+              <button
+                v-if="user.hasConfirmationPassword"
+                type="button"
+                class="btn-password-link"
+                @click="openPasswordFormForgot"
+              >
+                Esqueceu a sua senha?
+              </button>
+            </div>
+            <p v-else-if="passwordForgotHint" class="password-forgot-hint">{{ passwordForgotHint }}</p>
+            <form v-if="passwordFormVisible" class="password-form" @submit.prevent="savePassword">
               <div v-if="user.hasConfirmationPassword" class="password-field">
                 <label>Senha atual</label>
                 <PasswordInput
@@ -84,10 +98,14 @@
                 />
               </div>
               <p v-if="passwordError" class="profile-error">{{ passwordError }}</p>
-              <p v-if="passwordSuccess" class="profile-success">{{ passwordSuccess }}</p>
-              <button type="submit" class="btn-save-password" :disabled="savingPassword">
-                {{ savingPassword ? 'A guardar...' : user.hasConfirmationPassword ? 'Atualizar senha' : 'Criar senha de acesso' }}
-              </button>
+              <div class="password-form-actions">
+                <button type="button" class="btn-password-cancel" :disabled="savingPassword" @click="closePasswordForm">
+                  Cancelar
+                </button>
+                <button type="submit" class="btn-save-password" :disabled="savingPassword">
+                  {{ savingPassword ? 'A guardar...' : user.hasConfirmationPassword ? 'Atualizar senha' : 'Criar senha de acesso' }}
+                </button>
+              </div>
             </form>
           </section>
 
@@ -129,6 +147,7 @@ import { useInventoryStore } from '../stores/inventory'
 import { roleLabelPt } from '../utils/roleLabels'
 import { resolveMediaUrl } from '../utils/mediaUrl'
 import PasswordInput from './PasswordInput.vue'
+import { useToast } from '../composables/useToast'
 
 const open = defineModel<boolean>('open', { default: false })
 
@@ -141,12 +160,14 @@ const props = withDefaults(
 
 const authStore = useAuthStore()
 const inventory = useInventoryStore()
+const toast = useToast()
 
 const uploading = ref(false)
 const savingPassword = ref(false)
 const error = ref('')
 const passwordError = ref('')
-const passwordSuccess = ref('')
+const passwordFormVisible = ref(false)
+const passwordForgotHint = ref('')
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const passwordSectionRef = ref<HTMLElement | null>(null)
 
@@ -163,32 +184,67 @@ const initial = computed(() => user.value?.name?.charAt(0).toUpperCase() ?? 'U')
 const roleLabel = computed(() => roleLabelPt(user.value?.role))
 const avatarDisplayUrl = computed(() => resolveMediaUrl(user.value?.avatarUrl ?? '') || '')
 
+const passwordCtaLabel = computed(() =>
+  user.value?.hasConfirmationPassword ? 'Quer mudar a sua senha?' : 'Criar senha de acesso',
+)
+
 function resetPasswordForm() {
   passwordForm.currentPassword = ''
   passwordForm.newPassword = ''
   passwordForm.confirmPassword = ''
   passwordError.value = ''
-  passwordSuccess.value = ''
+}
+
+function openPasswordForm() {
+  passwordForgotHint.value = ''
+  passwordFormVisible.value = true
+  highlightPassword.value = true
+}
+
+function openPasswordFormForgot() {
+  passwordForgotHint.value =
+    'Defina uma nova senha abaixo. Se não se lembra da senha atual, peça apoio ao administrador da organização.'
+  passwordFormVisible.value = true
+  highlightPassword.value = true
+  void nextTick(() => {
+    passwordSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  })
+}
+
+function closePasswordForm() {
+  passwordFormVisible.value = false
+  passwordForgotHint.value = ''
+  resetPasswordForm()
+  highlightPassword.value = false
 }
 
 watch(open, async (isOpen) => {
   if (isOpen) {
     error.value = ''
     resetPasswordForm()
+    passwordForgotHint.value = ''
+    passwordFormVisible.value = props.focusPassword || !user.value?.hasConfirmationPassword
     highlightPassword.value = props.focusPassword
-    if (props.focusPassword) {
+    if (props.focusPassword || !user.value?.hasConfirmationPassword) {
       await nextTick()
       passwordSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     }
   } else {
     highlightPassword.value = false
+    passwordFormVisible.value = false
+    passwordForgotHint.value = ''
   }
 })
 
 watch(
   () => props.focusPassword,
-  (v) => {
-    if (v && open.value) highlightPassword.value = true
+  async (v) => {
+    if (v && open.value) {
+      highlightPassword.value = true
+      passwordFormVisible.value = true
+      await nextTick()
+      passwordSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
   },
 )
 
@@ -216,7 +272,9 @@ const onFilePicked = async (event: Event) => {
     if (!filename) {
       throw new Error('Upload sem ficheiro.')
     }
+    const hadAvatar = Boolean(user.value?.avatarUrl)
     await authStore.updateAvatar(filename)
+    toast.success(hadAvatar ? 'Foto de perfil alterada com sucesso.' : 'Foto de perfil enviada com sucesso.')
   } catch (e: unknown) {
     const ax = e as { response?: { data?: { message?: string } } }
     error.value = ax?.response?.data?.message ?? 'Não foi possível atualizar a foto.'
@@ -227,7 +285,6 @@ const onFilePicked = async (event: Event) => {
 
 const savePassword = async () => {
   passwordError.value = ''
-  passwordSuccess.value = ''
   if (passwordForm.newPassword.length < 8) {
     passwordError.value = 'A senha deve ter pelo menos 8 caracteres.'
     return
@@ -241,6 +298,7 @@ const savePassword = async () => {
     return
   }
   savingPassword.value = true
+  const wasNew = !user.value?.hasConfirmationPassword
   try {
     await authStore.updateMyPassword({
       currentPassword: user.value?.hasConfirmationPassword
@@ -249,8 +307,14 @@ const savePassword = async () => {
       newPassword: passwordForm.newPassword,
       confirmPassword: passwordForm.confirmPassword,
     })
-    passwordSuccess.value = 'Senha de acesso guardada. Já pode confirmar ações sensíveis.'
+    toast.success(
+      wasNew
+        ? 'Senha de acesso criada com sucesso. Já pode confirmar ações sensíveis.'
+        : 'Senha de acesso alterada com sucesso.',
+    )
     resetPasswordForm()
+    passwordFormVisible.value = false
+    passwordForgotHint.value = ''
     highlightPassword.value = false
   } catch (e: unknown) {
     const ax = e as { response?: { data?: { message?: string } } }
@@ -265,6 +329,7 @@ const removePhoto = async () => {
   error.value = ''
   try {
     await authStore.removeAvatar()
+    toast.success('Foto de perfil removida.')
   } catch (e: unknown) {
     const ax = e as { response?: { data?: { message?: string } } }
     error.value = ax?.response?.data?.message ?? 'Não foi possível remover a foto.'
@@ -448,14 +513,81 @@ const removePhoto = async () => {
   border-left: 3px solid var(--danger);
 }
 
-.profile-success {
-  margin: 0;
-  padding: 8px 12px;
+.password-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.btn-password-cta {
+  padding: 10px 14px;
+  border: 1px solid var(--primary);
+  border-radius: 10px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.btn-password-cta:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+.btn-password-link {
+  border: none;
+  background: transparent;
+  padding: 0;
   font-size: 12px;
-  color: #059669;
-  background: rgba(16, 185, 129, 0.12);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.btn-password-link:hover {
+  color: var(--primary);
+}
+
+.password-forgot-hint {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
   border-radius: 8px;
-  border-left: 3px solid #10b981;
+}
+
+.password-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.btn-password-cancel {
+  padding: 10px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-password-cancel:hover:not(:disabled) {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.btn-password-cancel:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .password-section {
@@ -505,7 +637,8 @@ const removePhoto = async () => {
 }
 
 .btn-save-password {
-  margin-top: 4px;
+  flex: 1;
+  min-width: 140px;
   padding: 10px 14px;
   border: none;
   border-radius: 10px;
