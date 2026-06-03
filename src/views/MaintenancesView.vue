@@ -27,10 +27,13 @@
         <button class="btn-secondary" @click="showBulkAssign = !showBulkAssign">
           {{ showBulkAssign ? 'Fechar lote' : 'Atribuição em lote' }}
         </button>
-        <button class="btn-primary" @click="toggleMaintenanceForm">
+        <RouterLink
+          :to="{ name: 'my-requests', query: { abrir: 'manutencao' } }"
+          class="btn-primary"
+        >
           <Plus :size="18" :stroke-width="2.5" />
-          {{ showForm ? 'Fechar' : 'Novo Chamado' }}
-        </button>
+          Novo Chamado
+        </RouterLink>
       </div>
     </header>
 
@@ -68,130 +71,6 @@
           <button class="btn-primary" @click="assignMaintenancesInBatch">Aplicar atribuição</button>
         </div>
       </div>
-    </div>
-
-    <!-- Add Maintenance Form -->
-    <div v-if="showForm && canManageMaintenances" class="form-card form-card-elevated">
-      <div class="form-head">
-        <span class="form-eyebrow">Novo chamado</span>
-        <h3>Abrir chamado de manutenção</h3>
-      </div>
-      <ol class="wizard-steps">
-        <li v-for="(label, idx) in maintenanceStepLabels" :key="label" :class="{ active: maintenanceStep === idx + 1, done: maintenanceStep > idx + 1 }">
-          <span>{{ idx + 1 }}</span>{{ label }}
-        </li>
-      </ol>
-      <form @submit.prevent="addMaintenance" class="maintenance-form modern-form">
-        <template v-if="maintenanceStep === 1">
-        <div class="form-group field">
-          <label>Tag do ativo</label>
-          <input
-            v-model.trim="newMaintenance.assetTag"
-            type="text"
-            placeholder="Ex.: AST-200"
-            required
-            @focus="isCreateAssetFocused = true"
-            @blur="hideCreateAssetSuggestions"
-          />
-          <div v-if="showCreateAssetSuggestions" class="suggestion-panel">
-            <button
-              v-for="asset in filteredCreateAssetSuggestions"
-              :key="`create-asset-${asset.id}`"
-              type="button"
-              class="suggestion-item"
-              @mousedown.prevent="pickCreateAsset(asset.tag)"
-            >
-              <strong>{{ asset.tag }}</strong>
-              <span>{{ asset.description }}</span>
-            </button>
-          </div>
-        </div>
-        <div class="form-group field">
-          <label>Tipo</label>
-          <select v-model="newMaintenance.type" required>
-            <option value="Corretiva">Corretiva</option>
-            <option value="Preventiva">Preventiva</option>
-            <option value="Preditiva">Preditiva</option>
-          </select>
-        </div>
-        <div class="form-group field field-wide details-field">
-          <label>Detalhes do chamado</label>
-          <textarea
-            v-model.trim="newMaintenance.description"
-            placeholder="Explique sintomas, impacto e contexto (ex.: equipamento não liga após queda de energia)."
-            required
-            rows="4"
-          ></textarea>
-          <small class="field-hint">Dica: informe o que acontece, quando começou e como reproduzir.</small>
-        </div>
-        <div class="form-actions field-wide">
-          <button type="button" class="btn-primary" @click="goToMaintenanceStep(2)">Continuar</button>
-        </div>
-        </template>
-        <template v-else>
-        <div class="form-group field">
-          <label>Status</label>
-          <select v-model="newMaintenance.status" required>
-            <option>Aberta</option>
-            <option>Em andamento</option>
-            <option>Concluída</option>
-          </select>
-        </div>
-        <div class="form-group field">
-          <label>Técnico responsável</label>
-          <input
-            v-model.trim="newMaintenance.assignedTechnicianEmail"
-            type="text"
-            placeholder="Email do técnico"
-            required
-            @focus="isCreateTechnicianFocused = true"
-            @blur="hideCreateTechnicianSuggestions"
-          />
-          <div v-if="showCreateTechnicianSuggestions" class="suggestion-panel">
-            <button
-              v-for="tech in filteredCreateTechnicianSuggestions"
-              :key="`create-tech-${tech.id}`"
-              type="button"
-              class="suggestion-item"
-              @mousedown.prevent="pickCreateTechnician(tech.email)"
-            >
-              <strong>{{ tech.name }}</strong>
-              <span>{{ tech.email }}</span>
-            </button>
-          </div>
-        </div>
-        <div class="form-group field field-wide">
-          <label>Anexos (fotos, PDF, relatórios)</label>
-          <div class="upload-shell">
-            <label class="btn-secondary upload-btn">
-              <Paperclip :size="16" />
-              Adicionar anexos
-              <input
-                type="file"
-                multiple
-                :accept="uploadAcceptAttr"
-                class="file-hidden"
-                @change="onCreateFilesPick"
-              />
-            </label>
-            <small class="field-hint">{{ uploadLimitsHint }}</small>
-          </div>
-          <p v-if="uploadFormError" class="upload-error">{{ uploadFormError }}</p>
-          <ul v-if="selectedCreateFiles.length" class="picked-list">
-            <li v-for="(file, idx) in selectedCreateFiles" :key="`${file.name}-${idx}`">
-              <span>{{ file.name }}</span>
-              <button type="button" class="picked-remove" @click="removeCreateFile(idx)">Remover</button>
-            </li>
-          </ul>
-        </div>
-        <div class="form-actions field-wide">
-          <button type="button" class="btn-secondary" @click="goToMaintenanceStep(1)">Voltar</button>
-          <button type="submit" class="btn-primary">Abrir Chamado</button>
-          <button type="button" class="btn-secondary" @click="closeMaintenanceForm">Cancelar</button>
-        </div>
-        </template>
-      </form>
-      <p v-if="formError" class="error-message">{{ formError }}</p>
     </div>
 
     <div class="list-toolbar">
@@ -292,7 +171,7 @@
     <div v-if="filteredMaintenances.length === 0" class="empty-state">
       <Wrench :size="64" :stroke-width="1.5" class="empty-icon" />
       <h3>Nenhum chamado encontrado</h3>
-      <p>Abra o primeiro chamado de manutenção</p>
+      <p>Crie uma solicitação de manutenção em Solicitações</p>
     </div>
 
     <!-- Edit Modal -->
@@ -393,6 +272,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useLocalPageSearch } from '../composables/useLocalPageSearch'
 import { type AttachmentRef, type MaintenanceRow, useInventoryStore } from '../stores/inventory'
 import { useConfirmAction } from '../composables/useConfirmAction'
@@ -424,29 +304,12 @@ const authStore = useAuthStore()
 
 const { pageSearch, matchesPageSearch } = useLocalPageSearch()
 
-const showForm = ref(false)
-const maintenanceStep = ref(1)
-const maintenanceStepLabels = ['Detalhes do chamado', 'Atribuição e anexos']
 const showBulkAssign = ref(false)
-const formError = ref('')
 const editingId = ref<string | null>(null)
 const bulkTechnicianEmail = ref('')
 const bulkScope = ref<'unassigned-open' | 'in-progress-all'>('unassigned-open')
-const selectedCreateFiles = ref<File[]>([])
 const selectedEditFiles = ref<File[]>([])
-const isCreateAssetFocused = ref(false)
-const isCreateTechnicianFocused = ref(false)
 const isEditTechnicianFocused = ref(false)
-
-const newMaintenance = reactive({
-  assetTag: '',
-  type: 'Corretiva',
-  description: '',
-  status: 'Aberta' as const,
-  assignedTechnicianEmail: '',
-  openingDate: new Date().toISOString().split('T')[0],
-  priority: 'Média' as const,
-})
 
 const editMaintenance = reactive({
   assetTag: '',
@@ -492,22 +355,7 @@ const pageSubtitle = computed(() =>
     ? 'Ordens de serviço atribuídas a você ou relacionadas aos seus ativos'
     : 'Gestão de chamados e ordens de serviço',
 )
-const assetOptions = computed(() => inventory.assets)
 const technicianUsers = computed(() => inventory.users.filter((u) => u.role === 'TECNICO' && u.status === 'Ativo'))
-const filteredCreateAssetSuggestions = computed(() => {
-  const q = newMaintenance.assetTag.trim().toLowerCase()
-  if (!q) return assetOptions.value.slice(0, 8)
-  return assetOptions.value
-    .filter((asset) => `${asset.tag} ${asset.description}`.toLowerCase().includes(q))
-    .slice(0, 6)
-})
-const filteredCreateTechnicianSuggestions = computed(() => {
-  const q = newMaintenance.assignedTechnicianEmail.trim().toLowerCase()
-  if (!q) return technicianUsers.value.slice(0, 8)
-  return technicianUsers.value
-    .filter((tech) => `${tech.name} ${String(tech.email ?? '').trim()}`.toLowerCase().includes(q))
-    .slice(0, 6)
-})
 const filteredEditTechnicianSuggestions = computed(() => {
   const q = editMaintenance.assignedTechnicianEmail.trim().toLowerCase()
   if (!q) return technicianUsers.value.slice(0, 8)
@@ -515,34 +363,12 @@ const filteredEditTechnicianSuggestions = computed(() => {
     .filter((tech) => `${tech.name} ${String(tech.email ?? '').trim()}`.toLowerCase().includes(q))
     .slice(0, 6)
 })
-const showCreateAssetSuggestions = computed(() => isCreateAssetFocused.value && filteredCreateAssetSuggestions.value.length > 0)
-const showCreateTechnicianSuggestions = computed(
-  () => isCreateTechnicianFocused.value && filteredCreateTechnicianSuggestions.value.length > 0,
-)
 const showEditTechnicianSuggestions = computed(
   () => isEditTechnicianFocused.value && filteredEditTechnicianSuggestions.value.length > 0,
 )
-const pickCreateAsset = (tag: string) => {
-  newMaintenance.assetTag = tag
-  isCreateAssetFocused.value = false
-}
-const pickCreateTechnician = (email: string) => {
-  newMaintenance.assignedTechnicianEmail = email
-  isCreateTechnicianFocused.value = false
-}
 const pickEditTechnician = (email: string) => {
   editMaintenance.assignedTechnicianEmail = email
   isEditTechnicianFocused.value = false
-}
-const hideCreateAssetSuggestions = () => {
-  window.setTimeout(() => {
-    isCreateAssetFocused.value = false
-  }, 120)
-}
-const hideCreateTechnicianSuggestions = () => {
-  window.setTimeout(() => {
-    isCreateTechnicianFocused.value = false
-  }, 120)
 }
 const hideEditTechnicianSuggestions = () => {
   window.setTimeout(() => {
@@ -574,38 +400,6 @@ const filteredMaintenances = computed(() =>
     ),
   ),
 )
-
-const addMaintenance = async () => {
-  formError.value = ''
-  try {
-    let attachments: AttachmentRef[] = []
-    if (selectedCreateFiles.value.length) {
-      attachments = await inventory.uploadAttachments(selectedCreateFiles.value)
-    }
-    await inventory.createMaintenance({
-      assetTag: newMaintenance.assetTag,
-      type: newMaintenance.type,
-      description: newMaintenance.description,
-      priority: newMaintenance.priority,
-      status: newMaintenance.status,
-      assignedTechnicianEmail: newMaintenance.assignedTechnicianEmail,
-      attachments,
-      openingDate: newMaintenance.openingDate,
-    })
-    newMaintenance.assetTag = ''
-    newMaintenance.type = 'Corretiva'
-    newMaintenance.description = ''
-    newMaintenance.status = 'Aberta'
-    newMaintenance.assignedTechnicianEmail = ''
-    newMaintenance.openingDate = new Date().toISOString().split('T')[0]
-    newMaintenance.priority = 'Média'
-    selectedCreateFiles.value = []
-    closeMaintenanceForm()
-  } catch (e: unknown) {
-    const ax = e as { response?: { data?: { message?: string } } }
-    formError.value = ax?.response?.data?.message ?? 'Não foi possível abrir o chamado.'
-  }
-}
 
 const removeMaintenance = async (id: string) => {
   const ok = await confirm.askSensitive('Este chamado de manutenção será excluído.', 'Excluir chamado')
@@ -658,44 +452,6 @@ const saveMaintenanceEdit = async () => {
 }
 
 const uploadFormError = ref('')
-
-const onCreateFilesPick = (ev: Event) => {
-  const input = ev.target as HTMLInputElement
-  if (!input.files?.length) return
-  const { files, error } = mergeUploadFiles(selectedCreateFiles.value, input.files)
-  if (error) uploadFormError.value = error
-  else uploadFormError.value = ''
-  selectedCreateFiles.value = files
-  input.value = ''
-}
-
-const removeCreateFile = (index: number) => {
-  selectedCreateFiles.value.splice(index, 1)
-}
-
-const toggleMaintenanceForm = () => {
-  showForm.value = !showForm.value
-  if (showForm.value) {
-    maintenanceStep.value = 1
-    formError.value = ''
-  }
-}
-
-const closeMaintenanceForm = () => {
-  showForm.value = false
-  maintenanceStep.value = 1
-}
-
-const goToMaintenanceStep = (step: number) => {
-  if (step === 2) {
-    if (!newMaintenance.assetTag.trim() || !newMaintenance.type.trim() || !newMaintenance.description.trim()) {
-      formError.value = 'Preencha ativo, tipo e descrição para continuar.'
-      return
-    }
-  }
-  formError.value = ''
-  maintenanceStep.value = step
-}
 
 const onEditFilesPick = (ev: Event) => {
   const input = ev.target as HTMLInputElement
@@ -754,6 +510,10 @@ const statusClass = (status: string) => {
 .hero-stat svg { color: var(--text-muted); }
 .hero-stat span { font-size: 11px; text-transform: uppercase; color: var(--text-muted); }
 .hero-stat strong { font-size: 20px; font-weight: 800; color: var(--text-primary); }
+
+a.btn-primary {
+  text-decoration: none;
+}
 
 .btn-primary {
   display: flex;

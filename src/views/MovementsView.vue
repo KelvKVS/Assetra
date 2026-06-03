@@ -7,92 +7,18 @@
         <h2>Movimentações</h2>
         <p class="muted">{{ pageSubtitle }}</p>
         <p v-if="canManageMovements" class="muted hero-hint">
-          A movimentação transfere o ativo para outro utilizador; o responsável atual passa a ser o destino.
+          Novas transferências são criadas em <strong>Solicitações</strong>, com aprovação do gestor.
         </p>
       </div>
-      <button v-if="canManageMovements" class="btn-primary" @click="toggleMovementForm">
+      <RouterLink
+        v-if="canManageMovements"
+        :to="{ name: 'my-requests', query: { abrir: 'movimentacao' } }"
+        class="btn-primary"
+      >
         <Plus :size="18" :stroke-width="2.5" />
-        {{ showForm ? 'Fechar' : 'Nova Movimentação' }}
-      </button>
+        Nova Movimentação
+      </RouterLink>
     </header>
-
-    <!-- Add Movement Form -->
-    <div v-if="showForm && canManageMovements" class="form-card form-card-elevated">
-      <div class="form-head">
-        <span class="form-eyebrow">Nova movimentação</span>
-        <h3>Registrar movimentação</h3>
-      </div>
-      <form @submit.prevent="addMovement" class="movement-form modern-form">
-        <div class="form-group field field--suggest">
-          <label>Tag do ativo</label>
-          <input
-            v-model.trim="newMovement.assetTag"
-            type="text"
-            placeholder="Ex.: AST-200"
-            required
-            autocomplete="off"
-            @focus="isAssetInputFocused = true"
-            @input="isAssetInputFocused = true"
-            @blur="hideAssetSuggestions"
-          />
-          <div v-if="showAssetSuggestions" class="suggestion-panel">
-            <button
-              v-for="asset in filteredAssetSuggestions"
-              :key="`asset-${asset.id}`"
-              type="button"
-              class="suggestion-item"
-              @mousedown.prevent="pickMovementAsset(asset.tag)"
-            >
-              <strong>{{ asset.tag }}</strong>
-              <span>{{ asset.description }}</span>
-            </button>
-          </div>
-        </div>
-        <div class="form-group field">
-          <label>Origem (responsável atual)</label>
-          <input
-            :value="originPreview"
-            type="text"
-            readonly
-            class="input-readonly"
-            placeholder="Selecione um ativo"
-          />
-        </div>
-        <div class="form-group field field--suggest">
-          <label>Destino (novo responsável)</label>
-          <input
-            v-model.trim="newMovement.destinationEmail"
-            type="text"
-            autocomplete="off"
-            placeholder="Digite nome ou e-mail — escolha na lista"
-            required
-            @focus="isDestinationInputFocused = true"
-            @input="isDestinationInputFocused = true"
-            @blur="hideDestinationSuggestions"
-          />
-          <div v-if="showDestinationSuggestions" class="suggestion-panel">
-            <button
-              v-for="user in filteredDestinationSuggestions"
-              :key="`dest-${user.id}`"
-              type="button"
-              class="suggestion-item"
-              @mousedown.prevent="pickDestination(user)"
-            >
-              <strong>{{ user.name }}</strong>
-              <span>{{ user.email }}</span>
-            </button>
-            <p v-if="!filteredDestinationSuggestions.length" class="suggestion-empty">
-              Nenhum utilizador corresponde à pesquisa.
-            </p>
-          </div>
-        </div>
-        <div class="form-actions field-wide">
-          <button type="submit" class="btn-primary">Registrar</button>
-          <button type="button" class="btn-secondary" @click="closeMovementForm">Cancelar</button>
-        </div>
-      </form>
-      <p v-if="movementError" class="error-message">{{ movementError }}</p>
-    </div>
 
     <div class="search-bar">
       <Search :size="18" :stroke-width="2" />
@@ -144,7 +70,7 @@
     <div v-if="filteredMovements.length === 0" class="empty-state">
       <ArrowRightLeft :size="64" :stroke-width="1.5" class="empty-icon" />
       <h3>Nenhuma movimentação encontrada</h3>
-      <p>Registre a primeira movimentação de um ativo</p>
+      <p>Crie uma solicitação de movimentação em Solicitações</p>
     </div>
 
     <!-- Edit Modal -->
@@ -185,6 +111,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { type MovementRow, useInventoryStore } from '../stores/inventory'
 import { useConfirmAction } from '../composables/useConfirmAction'
 import { useLocalPageSearch } from '../composables/useLocalPageSearch'
@@ -206,16 +133,7 @@ const authStore = useAuthStore()
 
 const { pageSearch, matchesPageSearch } = useLocalPageSearch()
 
-const showForm = ref(false)
-const movementError = ref('')
 const editingMovementId = ref<string | null>(null)
-const isAssetInputFocused = ref(false)
-const isDestinationInputFocused = ref(false)
-
-const newMovement = reactive({
-  assetTag: '',
-  destinationEmail: '',
-})
 
 const editMovement = reactive({
   date: '',
@@ -243,73 +161,9 @@ const pageSubtitle = computed(() =>
     ? 'Histórico de transferências e alocações que envolvem você'
     : 'Histórico de transferências e alocações de ativos',
 )
-const assetOptions = computed(() => inventory.assets)
-const userOptions = computed(() => inventory.users.filter((u) => u.status === 'Ativo'))
-const filteredAssetSuggestions = computed(() => {
-  const q = newMovement.assetTag.trim().toLowerCase()
-  if (!q) return assetOptions.value.slice(0, 8)
-  return assetOptions.value
-    .filter((asset) => `${asset.tag} ${asset.description}`.toLowerCase().includes(q))
-    .slice(0, 6)
-})
-function userLabelByEmail(email: string | undefined | null) {
-  const e = (email ?? '').trim().toLowerCase()
-  if (!e) return 'Não atribuído'
-  const u = userOptions.value.find((x) => x.email.toLowerCase() === e)
-  return u ? `${u.name} (${u.email})` : e
-}
-
-const selectedMovementAsset = computed(() =>
-  inventory.assets.find((a) => a.tag.toLowerCase() === newMovement.assetTag.trim().toLowerCase()),
-)
-
-const originPreview = computed(() => userLabelByEmail(selectedMovementAsset.value?.assignedTo))
-
-const filteredDestinationSuggestions = computed(() => {
-  const current = (selectedMovementAsset.value?.assignedTo ?? '').trim().toLowerCase()
-  const q = newMovement.destinationEmail.trim().toLowerCase()
-  let pool = userOptions.value.filter((u) => u.email.toLowerCase() !== current)
-  if (q) {
-    pool = pool.filter((user) => `${user.name} ${user.email}`.toLowerCase().includes(q))
-  }
-  return pool.slice(0, 8)
-})
-
-const showAssetSuggestions = computed(() => isAssetInputFocused.value && filteredAssetSuggestions.value.length > 0)
-const showDestinationSuggestions = computed(() => isDestinationInputFocused.value)
-
 const movementRouteTitle = (movement: MovementRow) => {
   const parts = [movement.origin, movement.destination].filter(Boolean)
   return parts.join(' → ')
-}
-
-const pickMovementAsset = (tag: string) => {
-  newMovement.assetTag = tag
-  newMovement.destinationEmail = ''
-  isAssetInputFocused.value = false
-}
-const pickDestination = (user: { email: string }) => {
-  newMovement.destinationEmail = user.email
-  isDestinationInputFocused.value = false
-}
-const hideAssetSuggestions = () => {
-  window.setTimeout(() => {
-    isAssetInputFocused.value = false
-  }, 120)
-}
-const hideDestinationSuggestions = () => {
-  window.setTimeout(() => {
-    isDestinationInputFocused.value = false
-  }, 120)
-}
-
-const toggleMovementForm = () => {
-  showForm.value = !showForm.value
-  if (showForm.value) movementError.value = ''
-}
-
-const closeMovementForm = () => {
-  showForm.value = false
 }
 
 const filteredMovements = computed(() =>
@@ -317,22 +171,6 @@ const filteredMovements = computed(() =>
     matchesPageSearch(movement.assetTag, movement.origin, movement.destination, movement.responsible),
   ),
 )
-
-const addMovement = async () => {
-  movementError.value = ''
-  try {
-    await inventory.createMovement({
-      assetTag: newMovement.assetTag,
-      destinationEmail: newMovement.destinationEmail,
-    })
-    newMovement.assetTag = ''
-    newMovement.destinationEmail = ''
-    closeMovementForm()
-  } catch (e: unknown) {
-    const ax = e as { response?: { data?: { message?: string } } }
-    movementError.value = ax?.response?.data?.message ?? 'Não foi possível registar a movimentação.'
-  }
-}
 
 const removeMovement = async (id: string) => {
   const ok = await confirm.askSensitive('Esta movimentação será removida do histórico.', 'Excluir movimentação')
@@ -393,6 +231,10 @@ const saveMovementEdit = async () => {
   color: var(--primary);
 }
 
+
+a.btn-primary {
+  text-decoration: none;
+}
 
 .btn-primary {
   display: flex;

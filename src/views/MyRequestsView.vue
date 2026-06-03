@@ -472,6 +472,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch, type Component } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useInventoryStore, type AttachmentRef } from '../stores/inventory'
 import { useImageLightbox } from '../composables/useImageLightbox'
@@ -711,6 +712,16 @@ const historyEmptyState = computed(() => {
   return byFilter[filter.value]
 })
 
+const route = useRoute()
+
+function openFormFromQuery() {
+  const key = String(route.query.abrir ?? '')
+    .trim()
+    .toLowerCase()
+  if (key === 'movimentacao') openForm('Movimentação')
+  else if (key === 'manutencao') openForm('Manutenção')
+}
+
 onMounted(async () => {
   usersDirectoryError.value = ''
   await Promise.allSettled([inventory.fetchAssets(), inventory.fetchMyApprovalsSafe()])
@@ -719,7 +730,13 @@ onMounted(async () => {
   } catch {
     usersDirectoryError.value = 'Não foi possível carregar a lista de utilizadores.'
   }
+  openFormFromQuery()
 })
+
+watch(
+  () => route.query.abrir,
+  () => openFormFromQuery(),
+)
 
 const openForm = (type: RequestType) => {
   form.type = type
