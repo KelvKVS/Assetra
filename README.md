@@ -24,7 +24,8 @@ Plataforma web multi-tenant para inventário, movimentações, manutenções e f
 [Arquitetura](#arquitetura) ·
 [Início rápido](#início-rápido) ·
 [Deploy](#deploy) ·
-[Documentação](#documentação)
+[Documentação](#documentação) ·
+[FAQ](FAQ.md)
 
 </div>
 
@@ -264,6 +265,7 @@ assetra-app/
 | [Brevo](docs/configurar-brevo.md) | E-mail transacional (Render free) |
 | [Resend](docs/configurar-resend.md) | Alternativa de e-mail |
 | [Padrões de arquitetura](docs/architecture-patterns.md) | Services, event bus, clean code |
+| [FAQ](FAQ.md) | Perguntas frequentes (TCC, utilizadores, deploy) |
 
 ---
 
