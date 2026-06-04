@@ -151,6 +151,65 @@ function barsChart(config: Omit<BarsChart, 'kind'>): BarsChart {
 }
 
 const adminCharts = computed<ExecChart[]>(() => {
+  const server = inventory.dashboard?.charts?.admin
+  if (server) {
+    const assetSegments = withPercents(server.assetSegments)
+    const sectorBars = toBarSeries(server.sectorBars, { maxItems: 6, color: '#6366f1' })
+    const maintSegments = withPercents(server.maintSegments)
+    const workloadBars = toBarSeries(server.workloadBars, { maxItems: 5, color: '#14b8a6' })
+    const { kpis } = server
+    return [
+      donutChart({
+        id: 'asset-mix',
+        title: 'Composição do inventário',
+        subtitle: 'Distribuição por estado operacional',
+        icon: PieChart,
+        accent: '#3b82f6',
+        kpiValue: kpis.assetsTotal,
+        kpiLabel: 'ativos',
+        centerValue: kpis.assetsTotal,
+        centerLabel: 'total',
+        segments: assetSegments,
+        emptyMessage: 'Nenhum ativo cadastrado no inventário.',
+      }),
+      barsChart({
+        id: 'sector-density',
+        title: 'Concentração por setor',
+        subtitle: 'Top setores com mais equipamentos',
+        icon: Building2,
+        accent: '#6366f1',
+        kpiValue: kpis.sectorCount,
+        kpiLabel: 'setores',
+        bars: sectorBars,
+        emptyMessage: 'Sem setores associados aos ativos.',
+      }),
+      donutChart({
+        id: 'maint-pipeline',
+        title: 'Pipeline de manutenções',
+        subtitle: 'Volume por fase do ciclo de vida',
+        icon: Wrench,
+        accent: '#f59e0b',
+        kpiValue: kpis.openMaint,
+        kpiLabel: 'em aberto',
+        centerValue: kpis.maintenancesTotal,
+        centerLabel: 'chamados',
+        segments: maintSegments,
+        emptyMessage: 'Nenhuma manutenção registada.',
+      }),
+      barsChart({
+        id: 'tech-load',
+        title: 'Carga da equipa técnica',
+        subtitle: 'Chamados ativos por responsável',
+        icon: Users,
+        accent: '#14b8a6',
+        kpiValue: kpis.techCount,
+        kpiLabel: 'técnicos',
+        bars: workloadBars,
+        emptyMessage: 'Sem chamados ativos atribuídos.',
+      }),
+    ]
+  }
+
   const assets = inventory.assets
   const maintenances = inventory.maintenances
 
@@ -236,6 +295,65 @@ const adminCharts = computed<ExecChart[]>(() => {
 })
 
 const managerCharts = computed<ExecChart[]>(() => {
+  const server = inventory.dashboard?.charts?.manager
+  if (server) {
+    const approvalSegments = withPercents(server.approvalSegments)
+    const maintSegments = withPercents(server.maintSegments)
+    const typeBars = toBarSeries(server.approvalTypeBars, { maxItems: 4, color: '#3b82f6' })
+    const pendingTypeBars = toBarSeries(server.pendingTypeBars, { maxItems: 4, color: '#f59e0b' })
+    const { kpis } = server
+    return [
+      donutChart({
+        id: 'approval-queue',
+        title: 'Fila de aprovações',
+        subtitle: 'Estado das solicitações sob gestão',
+        icon: ClipboardCheck,
+        accent: '#f59e0b',
+        kpiValue: kpis.pendingCount,
+        kpiLabel: 'pendentes',
+        centerValue: kpis.approvalsTotal,
+        centerLabel: 'solicitações',
+        segments: approvalSegments,
+        emptyMessage: 'Nenhuma solicitação de aprovação registada.',
+      }),
+      donutChart({
+        id: 'maint-health',
+        title: 'Saúde das manutenções',
+        subtitle: 'Panorama dos chamados técnicos',
+        icon: Wrench,
+        accent: '#3b82f6',
+        kpiValue: kpis.maintInProgress,
+        kpiLabel: 'em curso',
+        centerValue: kpis.maintenancesTotal,
+        centerLabel: 'chamados',
+        segments: maintSegments,
+        emptyMessage: 'Sem manutenções no tenant.',
+      }),
+      barsChart({
+        id: 'approval-types',
+        title: 'Tipos de solicitação',
+        subtitle: 'Distribuição por categoria',
+        icon: BarChart3,
+        accent: '#3b82f6',
+        kpiValue: typeBars.length,
+        kpiLabel: 'tipos',
+        bars: typeBars,
+        emptyMessage: 'Sem solicitações classificadas.',
+      }),
+      barsChart({
+        id: 'pending-types',
+        title: 'Pendências por tipo',
+        subtitle: 'O que aguarda decisão agora',
+        icon: ClipboardCheck,
+        accent: '#f59e0b',
+        kpiValue: pendingTypeBars.length,
+        kpiLabel: 'categorias',
+        bars: pendingTypeBars,
+        emptyMessage: 'Sem pendências por tipo.',
+      }),
+    ]
+  }
+
   const approvals = inventory.approvals
   const maintenances = inventory.maintenances
 

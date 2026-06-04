@@ -298,10 +298,10 @@ const canApprove = computed(() => role.value === 'ADM' || role.value === 'GESTOR
 
 onMounted(async () => {
   await Promise.allSettled([
-    inventory.fetchApprovalsSafe(),
-    inventory.fetchAssets(),
+    inventory.fetchApprovals({ force: true }),
+    inventory.fetchAssets({ force: true }),
     inventory.fetchUsers(),
-    inventory.fetchMaintenances(),
+    inventory.fetchMaintenances({ force: true }),
   ])
 })
 

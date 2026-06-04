@@ -60,8 +60,8 @@ export function useGlobalSearch() {
 
     const role = String(auth.user?.role ?? '').trim().toUpperCase()
     const jobs: Promise<unknown>[] = [
-      inventory.fetchAssets().catch(() => {}),
-      inventory.fetchMaintenances().catch(() => {}),
+      inventory.fetchAssets({ lite: true }).catch(() => {}),
+      inventory.fetchMaintenances({ lite: true }).catch(() => {}),
       inventory.fetchMyApprovalsSafe(),
     ]
 
@@ -240,6 +240,7 @@ export function useGlobalSearch() {
   function resetDataCache() {
     dataReady.value = false
     loading = null
+    inventory.invalidateListCache()
   }
 
   return {

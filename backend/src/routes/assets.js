@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { authMiddleware, authorize } from '../middlewares/auth.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { assetCreateSchema, assetUpdateSchema } from '../schemas/index.js'
+import { parseListQuery, sendListResponse } from '../utils/pagination.js'
 import {
   createAssetForTenant,
   deleteAssetForTenant,
@@ -15,8 +16,9 @@ router.get(
   '/',
   authMiddleware,
   asyncHandler(async (req, res) => {
-    const assets = await listAssetsByTenant(req.user.tenantId, req.user)
-    res.json(assets)
+    const listQuery = parseListQuery(req.query)
+    const result = await listAssetsByTenant(req.user.tenantId, req.user, listQuery)
+    sendListResponse(res, result)
   }),
 )
 

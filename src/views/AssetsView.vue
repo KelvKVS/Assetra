@@ -582,7 +582,10 @@ const usageStats = computed(() => ({
 
 onMounted(async () => {
   try {
-    await Promise.all([inventory.fetchAssets(), inventory.fetchUsers()])
+    await Promise.all([
+      inventory.fetchAssets({ force: true }),
+      inventory.fetchUsers(),
+    ])
   } catch {
     formError.value = inventory.error || 'Não foi possível carregar os ativos.'
   }

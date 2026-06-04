@@ -325,8 +325,8 @@ const editMaintenance = reactive({
 const inventory = useInventoryStore()
 
 onMounted(() => {
-  void inventory.fetchMaintenances()
-  void inventory.fetchAssets()
+  void inventory.fetchMaintenances({ force: true })
+  void inventory.fetchAssets({ force: true })
   void inventory.fetchUsers()
 })
 

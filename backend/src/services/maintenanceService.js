@@ -6,6 +6,22 @@ import { logAudit } from './auditService.js'
 import { publishDomainEventSafely } from '../lib/eventBus.js'
 import { enrichAttachmentUrls } from '../utils/enrichAttachments.js'
 import { sanitizeAttachmentsForDb } from '../utils/sanitizeAttachments.js'
+import { buildListResult } from '../utils/pagination.js'
+
+const MAINT_LIST_PROJECTION = {
+  assetTag: 1,
+  type: 1,
+  description: 1,
+  priority: 1,
+  status: 1,
+  assignedTechnicianEmail: 1,
+  assignedTechnicianName: 1,
+  validationDueAt: 1,
+  openingDate: 1,
+  lastReturnNotes: 1,
+  lastReturnedAt: 1,
+  lastReturnedByName: 1,
+}
 
 function parseOpeningInput(s) {
   if (!s || typeof s !== 'string') return null
@@ -62,10 +78,10 @@ function mapExtensionRequest(r) {
   }
 }
 
-function toDto(doc) {
+function toDto(doc, { lite = false } = {}) {
   const o = doc.toObject ? doc.toObject() : doc
-  const extensions = (o.extensionRequests ?? []).map(mapExtensionRequest)
-  const pendingExtension = extensions.find((e) => e.status === 'Pendente') ?? null
+  const extensions = lite ? [] : (o.extensionRequests ?? []).map(mapExtensionRequest)
+  const pendingExtension = lite ? null : extensions.find((e) => e.status === 'Pendente') ?? null
   return {
     id: String(o._id),
     assetTag: o.assetTag,
@@ -82,7 +98,7 @@ function toDto(doc) {
     lastReturnedByName: o.lastReturnedByName ?? '',
     extensionRequests: extensions,
     pendingExtension,
-    attachments: enrichAttachmentUrls(null, o.attachments, o.tenantId),
+    attachments: lite ? [] : enrichAttachmentUrls(null, o.attachments, o.tenantId),
     openingDate: formatOpening(o.openingDate),
   }
 }
@@ -128,9 +144,32 @@ export async function refreshAssetStatusForTag(tenantId, assetTag) {
 
 }
 
-export async function listMaintenancesForTenant(tenantId) {
-  const rows = await Maintenance.find({ tenantId }).sort({ openingDate: -1 })
-  return rows.map(toDto)
+export async function listMaintenancesForTenant(tenantId, listQuery = {}) {
+  const filter = { tenantId }
+  const { paginated, page, limit, lite, skip } = listQuery
+  const projection = lite ? MAINT_LIST_PROJECTION : undefined
+  const query = Maintenance.find(filter, projection).sort({ openingDate: -1 })
+  if (paginated && limit) {
+    const [rows, total] = await Promise.all([
+      query.skip(skip).limit(limit).exec(),
+      Maintenance.countDocuments(filter),
+    ])
+    return buildListResult({
+      items: rows.map((row) => toDto(row, { lite })),
+      total,
+      paginated: true,
+      page,
+      limit,
+    })
+  }
+  const rows = await query.exec()
+  return buildListResult({
+    items: rows.map((row) => toDto(row, { lite })),
+    total: rows.length,
+    paginated: false,
+    page: 1,
+    limit: rows.length,
+  })
 }
 
 /**

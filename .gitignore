@@ -38,3 +38,5 @@ backend/prisma/migrations/
 
 # Uploads de utilizadores (anexos de aprovações)
 backend/uploads/
+docs/entrega-4-iam-mensageria-orquestracao.md
+backend/scripts/entrega-4-evidencias.ps1

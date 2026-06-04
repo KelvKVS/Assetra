@@ -5,8 +5,20 @@ import { enrichAttachmentUrls } from '../utils/enrichAttachments.js'
 import { sanitizeAttachmentsForDb } from '../utils/sanitizeAttachments.js'
 import { logAudit } from './auditService.js'
 import { buildAssetListFilter } from '../utils/assetAccess.js'
+import { buildListResult } from '../utils/pagination.js'
 
-function toDto(doc, req = null) {
+const ASSET_LIST_PROJECTION = {
+  tag: 1,
+  shortCode: 1,
+  description: 1,
+  sector: 1,
+  status: 1,
+  assignedTo: 1,
+  createdAt: 1,
+  updatedAt: 1,
+}
+
+function toDto(doc, req = null, { lite = false } = {}) {
   if (!doc) return null
   const o = doc.toObject ? doc.toObject() : doc
   return {
@@ -17,7 +29,9 @@ function toDto(doc, req = null) {
     sector: o.sector,
     status: o.status,
     assignedTo: o.assignedTo,
-    attachments: enrichAttachmentUrls(req, o.attachments, o.tenantId),
+    attachments: lite
+      ? []
+      : enrichAttachmentUrls(req, o.attachments, o.tenantId),
     createdAt: o.createdAt,
     updatedAt: o.updatedAt,
   }
@@ -43,10 +57,32 @@ async function assertAssignedEmailExists(tenantId, email) {
   }
 }
 
-export async function listAssetsByTenant(tenantId, user = null) {
+export async function listAssetsByTenant(tenantId, user = null, listQuery = {}) {
   const filter = buildAssetListFilter(tenantId, user)
-  const rows = await Asset.find(filter).sort({ updatedAt: -1 })
-  return rows.map((row) => toDto(row, user))
+  const { paginated, page, limit, lite, skip } = listQuery
+  const projection = lite ? ASSET_LIST_PROJECTION : undefined
+  const query = Asset.find(filter, projection).sort({ updatedAt: -1 })
+  if (paginated && limit) {
+    const [rows, total] = await Promise.all([
+      query.skip(skip).limit(limit).exec(),
+      Asset.countDocuments(filter),
+    ])
+    return buildListResult({
+      items: rows.map((row) => toDto(row, user, { lite })),
+      total,
+      paginated: true,
+      page,
+      limit,
+    })
+  }
+  const rows = await query.exec()
+  return buildListResult({
+    items: rows.map((row) => toDto(row, user, { lite })),
+    total: rows.length,
+    paginated: false,
+    page: 1,
+    limit: rows.length,
+  })
 }
 
 export async function createAssetForTenant(tenantId, userId, dto) {

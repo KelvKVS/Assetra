@@ -34,6 +34,15 @@ export function createRabbitMqAdapter() {
       contentType: 'application/json',
       persistent: true,
     })
+    console.log(
+      JSON.stringify({
+        level: 'info',
+        event: 'event_bus.published',
+        driver: 'rabbitmq',
+        exchange: 'assetra.events',
+        routingKey: eventType,
+      }),
+    )
   }
 
   return {

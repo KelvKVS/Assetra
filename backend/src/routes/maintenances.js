@@ -8,6 +8,7 @@ import {
   maintenanceUpdateSchema,
   validationDueSchema,
 } from '../schemas/index.js'
+import { parseListQuery, sendListResponse } from '../utils/pagination.js'
 import {
   createMaintenance,
   decideMaintenanceExtension,
@@ -24,8 +25,9 @@ router.get(
   '/',
   authMiddleware,
   asyncHandler(async (req, res) => {
-    const rows = await listMaintenancesForTenant(req.user.tenantId)
-    res.json(rows)
+    const listQuery = parseListQuery(req.query)
+    const result = await listMaintenancesForTenant(req.user.tenantId, listQuery)
+    sendListResponse(res, result)
   }),
 )
 

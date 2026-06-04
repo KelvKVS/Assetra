@@ -4,6 +4,7 @@ import { AppError } from '../utils/AppError.js'
 import { publishDomainEventSafely } from '../lib/eventBus.js'
 import { dispatchMovementCreatedEmail } from './notificationEmailDispatchService.js'
 import { findAssetByTag } from './assetService.js'
+import { buildListResult } from '../utils/pagination.js'
 
 function formatDatePt(d) {
   if (!d) return ''
@@ -90,9 +91,31 @@ async function applyAssetTransfer(tenantId, userId, { assetTag, destinationEmail
   return { fromLabel, toLabel, fromEmail, toEmail }
 }
 
-export async function listMovementsForTenant(tenantId) {
-  const rows = await Movement.find({ tenantId }).sort({ occurredAt: -1, createdAt: -1 })
-  return rows.map(toDto)
+export async function listMovementsForTenant(tenantId, listQuery = {}) {
+  const filter = { tenantId }
+  const { paginated, page, limit, skip } = listQuery
+  const query = Movement.find(filter).sort({ occurredAt: -1, createdAt: -1 })
+  if (paginated && limit) {
+    const [rows, total] = await Promise.all([
+      query.skip(skip).limit(limit).exec(),
+      Movement.countDocuments(filter),
+    ])
+    return buildListResult({
+      items: rows.map(toDto),
+      total,
+      paginated: true,
+      page,
+      limit,
+    })
+  }
+  const rows = await query.exec()
+  return buildListResult({
+    items: rows.map(toDto),
+    total: rows.length,
+    paginated: false,
+    page: 1,
+    limit: rows.length,
+  })
 }
 
 export async function createMovement(tenantId, userId, dto) {

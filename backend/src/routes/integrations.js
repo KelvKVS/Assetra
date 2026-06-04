@@ -22,11 +22,11 @@ router.get(
   asyncHandler(async (req, res) => {
     const tenantId = String(req.integrationTenantId ?? '').trim()
     if (!tenantId) return res.status(400).json({ message: 'Tenant de integração não resolvido.' })
-    const rows = await listMaintenancesForTenant(tenantId)
+    const { items } = await listMaintenancesForTenant(tenantId)
     res.json({
       version: 'v1',
       protocol: 'REST/JSON',
-      data: rows,
+      data: items,
     })
   }),
 )

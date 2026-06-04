@@ -18,7 +18,7 @@
           <Monitor :size="22" />
           <div>
             <span class="stat-label">Ativos cadastrados</span>
-            <strong>{{ inventory.assets.length }}</strong>
+            <strong>{{ dashCounts?.assets ?? inventory.assets.length }}</strong>
           </div>
         </div>
         <div class="stat-card stat-warning">
@@ -32,7 +32,7 @@
           <ArrowRightLeft :size="22" />
           <div>
             <span class="stat-label">Movimentações</span>
-            <strong>{{ inventory.movements.length }}</strong>
+            <strong>{{ dashCounts?.movements ?? inventory.movements.length }}</strong>
           </div>
         </div>
         <div class="stat-card stat-success">
@@ -96,7 +96,7 @@
           <Monitor :size="22" />
           <div>
             <span class="stat-label">Ativos no tenant</span>
-            <strong>{{ inventory.assets.length }}</strong>
+            <strong>{{ dashCounts?.assets ?? inventory.assets.length }}</strong>
           </div>
         </div>
         <div class="stat-card stat-success">
@@ -344,7 +344,11 @@
 import { computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { useInventoryStore } from '../stores/inventory'
+import {
+  useInventoryStore,
+  type ApprovalRow,
+  type MaintenanceRow,
+} from '../stores/inventory'
 import { assetsAssignedToEmail } from '../utils/userScope'
 import DashboardCharts from '../components/dashboard/DashboardCharts.vue'
 import {
@@ -368,19 +372,22 @@ const inventory = useInventoryStore()
 onMounted(async () => {
   const r = authStore.user?.role
   if (r === 'FUNCIONARIO') {
-    await Promise.allSettled([inventory.fetchAssets(), inventory.fetchMyApprovalsSafe()])
+    await Promise.allSettled([
+      inventory.fetchAssets({ lite: true }),
+      inventory.fetchMyApprovalsSafe(),
+    ])
     return
   }
   if (r === 'TECNICO') {
     await Promise.allSettled([
-      inventory.reloadDashboardData(),
+      inventory.loadDashboardBundle(),
       inventory.fetchTasksSafe(),
       inventory.fetchMyApprovalsSafe(),
     ])
     return
   }
   await Promise.allSettled([
-    inventory.reloadDashboardData(),
+    inventory.loadDashboardBundle(),
     inventory.fetchApprovalsSafe(),
     inventory.fetchTasksSafe(),
   ])
@@ -397,19 +404,40 @@ const firstName = computed(() => (authStore.user?.name?.split(' ')[0] ?? 'utiliz
 const tenantName = computed(() => authStore.user?.tenant?.name ?? 'Assetra')
 
 /* === Admin === */
-const activeUsersCount = computed(() => inventory.users.filter((u) => u.status === 'Ativo').length)
-const openMaintenancesCount = computed(() => inventory.maintenances.filter((m) => m.status !== 'Concluída').length)
+const dashCounts = computed(() => inventory.dashboard?.counts)
+
+const activeUsersCount = computed(
+  () => dashCounts.value?.activeUsers ?? inventory.users.filter((u) => u.status === 'Ativo').length,
+)
+const openMaintenancesCount = computed(
+  () =>
+    dashCounts.value?.openMaintenances ??
+    inventory.maintenances.filter((m) => m.status !== 'Concluída').length,
+)
 
 /* === Gestor === */
-const pendingApprovals = computed(() => inventory.approvals.filter((a) => a.status === 'Pendente'))
-const recentMovements = computed(() => inventory.movements.slice(0, 5))
-const ongoingMaintenances = computed(() =>
-  inventory.maintenances.filter((m) => m.status !== 'Concluída'),
-)
+const pendingApprovals = computed(() => {
+  const preview = inventory.dashboard?.pendingApprovalsPreview
+  if (preview?.length) return preview as ApprovalRow[]
+  return inventory.approvals.filter((a) => a.status === 'Pendente')
+})
+const recentMovements = computed(() => {
+  const fromSummary = inventory.dashboard?.recentMovements
+  if (fromSummary?.length) return fromSummary
+  return inventory.movements.slice(0, 5)
+})
+const ongoingMaintenances = computed(() => {
+  const preview = inventory.dashboard?.ongoingMaintenances
+  if (preview?.length) return preview as MaintenanceRow[]
+  return inventory.maintenances.filter((m) => m.status !== 'Concluída')
+})
 const inProgressMaintenances = computed(
-  () => inventory.maintenances.filter((m) => m.status === 'Em andamento').length,
+  () =>
+    dashCounts.value?.inProgressMaintenances ??
+    inventory.maintenances.filter((m) => m.status === 'Em andamento').length,
 )
 const decisionsToday = computed(() => {
+  if (dashCounts.value?.decisionsToday != null) return dashCounts.value.decisionsToday
   const today = new Date().toDateString()
   return inventory.approvals.filter(
     (a) => a.decidedAt && new Date(a.decidedAt).toDateString() === today,
@@ -443,7 +471,7 @@ const upcomingTasks = computed(() =>
 )
 
 const handleReload = () => {
-  void inventory.reloadDashboardData()
+  void inventory.reloadDashboardData({ force: true })
 }
 
 const statusClass = (s: string) =>

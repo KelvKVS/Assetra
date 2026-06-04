@@ -266,6 +266,7 @@ assetra-app/
 | [Resend](docs/configurar-resend.md) | Alternativa de e-mail |
 | [Padrões de arquitetura](docs/architecture-patterns.md) | Services, event bus, clean code |
 | [FAQ](FAQ.md) | Perguntas frequentes (TCC, utilizadores, deploy) |
+| [Entrega 4 — IAM, RabbitMQ, Orquestração](docs/entrega-4-iam-mensageria-orquestracao.md) | Roteiro de evidências (prints/logs) |
 
 ---
 

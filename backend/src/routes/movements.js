@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { authMiddleware, authorize } from '../middlewares/auth.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { movementCreateSchema, movementUpdateSchema } from '../schemas/index.js'
+import { parseListQuery, sendListResponse } from '../utils/pagination.js'
 import {
   createMovement,
   deleteMovement,
@@ -15,8 +16,9 @@ router.get(
   '/',
   authMiddleware,
   asyncHandler(async (req, res) => {
-    const movements = await listMovementsForTenant(req.user.tenantId)
-    res.json(movements)
+    const listQuery = parseListQuery(req.query)
+    const result = await listMovementsForTenant(req.user.tenantId, listQuery)
+    sendListResponse(res, result)
   }),
 )
 

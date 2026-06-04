@@ -1,19 +1,22 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import LoginView from '../views/LoginView.vue'
-import RegistrationInviteView from '../views/RegistrationInviteView.vue'
-import DashboardView from '../views/DashboardView.vue'
-import AssetsView from '../views/AssetsView.vue'
-import MovementsView from '../views/MovementsView.vue'
-import MaintenancesView from '../views/MaintenancesView.vue'
-import UsersView from '../views/UsersView.vue'
-import ReportsView from '../views/ReportsView.vue'
-import MyAssetsView from '../views/MyAssetsView.vue'
-import ApprovalsView from '../views/ApprovalsView.vue'
-import MyRequestsView from '../views/MyRequestsView.vue'
-import TechnicianTasksView from '../views/TechnicianTasksView.vue'
-import IntegrationsView from '../views/IntegrationsView.vue'
-import ForbiddenView from '../views/ForbiddenView.vue'
 import { useAuthStore } from '../stores/auth'
+
+/** Login carrega de imediato (primeira rota); demais views em chunks separados. */
+import LoginView from '../views/LoginView.vue'
+
+const RegistrationInviteView = () => import('../views/RegistrationInviteView.vue')
+const DashboardView = () => import('../views/DashboardView.vue')
+const AssetsView = () => import('../views/AssetsView.vue')
+const MovementsView = () => import('../views/MovementsView.vue')
+const MaintenancesView = () => import('../views/MaintenancesView.vue')
+const UsersView = () => import('../views/UsersView.vue')
+const ReportsView = () => import('../views/ReportsView.vue')
+const MyAssetsView = () => import('../views/MyAssetsView.vue')
+const ApprovalsView = () => import('../views/ApprovalsView.vue')
+const MyRequestsView = () => import('../views/MyRequestsView.vue')
+const TechnicianTasksView = () => import('../views/TechnicianTasksView.vue')
+const IntegrationsView = () => import('../views/IntegrationsView.vue')
+const ForbiddenView = () => import('../views/ForbiddenView.vue')
 
 const router = createRouter({
   history: createWebHistory(),

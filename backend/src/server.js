@@ -9,6 +9,7 @@ dotenv.config({ path: path.join(__dirname, '../../.env') })
 dotenv.config()
 
 import express from 'express'
+import compression from 'compression'
 import helmet from 'helmet'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'
@@ -27,6 +28,7 @@ import uploadRoutes from './routes/uploads.js'
 import integrationRoutes from './routes/integrations.js'
 import financeIntegrationsRoutes from './routes/financeIntegrations.js'
 import reportRoutes from './routes/reports.js'
+import dashboardRoutes from './routes/dashboard.js'
 import notificationRoutes from './routes/notifications.js'
 import { AppError } from './utils/AppError.js'
 import { getEventBusHealth } from './lib/eventBus.js'
@@ -99,6 +101,15 @@ app.use(
       return callback(new AppError(403, `Origem não permitida por CORS: ${origin}`))
     },
     credentials: true,
+  }),
+)
+app.use(
+  compression({
+    threshold: 1024,
+    filter: (req, res) => {
+      if (req.headers['x-no-compression']) return false
+      return compression.filter(req, res)
+    },
   }),
 )
 app.use(express.json({ limit: '64kb' }))
@@ -210,6 +221,7 @@ app.use('/api/uploads', uploadRoutes)
 app.use('/api/integrations', integrationRoutes)
 app.use('/api/admin-integrations', financeIntegrationsRoutes)
 app.use('/api/reports', reportRoutes)
+app.use('/api/dashboard', dashboardRoutes)
 
 
 app.use((error, req, res, _next) => {

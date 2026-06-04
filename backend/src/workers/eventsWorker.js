@@ -30,10 +30,26 @@ if (!rabbitUrl) {
 async function handleMessage(data) {
   const eventType = String(data?.eventType ?? '')
   if (eventType === 'notification.email') {
+    console.log(
+      JSON.stringify({
+        level: 'info',
+        event: 'event_bus.consumed',
+        queue: EMAIL_QUEUE,
+        eventType,
+        to: String(data?.payload?.to ?? ''),
+      }),
+    )
     await processNotificationEmailEvent(data.payload ?? {})
     return
   }
-  console.log('[events-worker] evento recebido:', eventType)
+  console.log(
+    JSON.stringify({
+      level: 'info',
+      event: 'event_bus.consumed',
+      queue: AUDIT_QUEUE,
+      eventType,
+    }),
+  )
 }
 
 function consumeQueue(ch, queueName) {
