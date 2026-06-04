@@ -37,7 +37,12 @@ router.post(
   asyncHandler(async (req, res) => {
     const parsed = approvalCreateSchema.safeParse(req.body)
     if (!parsed.success) {
-      return res.status(400).json({ message: 'Dados inválidos.', issues: parsed.error.flatten() })
+      const first = parsed.error.errors[0]
+      const detail = first ? `${first.path.join('.')}: ${first.message}` : ''
+      return res.status(400).json({
+        message: detail ? `Dados inválidos (${detail}).` : 'Dados inválidos.',
+        issues: parsed.error.flatten(),
+      })
     }
     const row = await createApproval(req.user.tenantId, req.user, parsed.data)
     res.status(201).json(row)

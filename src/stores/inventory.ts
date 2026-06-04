@@ -3,6 +3,7 @@ import api from '../services/api'
 import uploadApi from '../services/uploadApi'
 import { validateUploadFiles } from '../utils/uploadLimits'
 import type { Asset, AssetStatus, AttachmentRef } from '../types/assetra'
+import { prepareAttachmentsForApi } from '../utils/attachmentPayload'
 import { mergeAttachments, normalizeAttachments } from '../utils/mediaUrl'
 import { isListCacheFresh, unwrapList, type PaginatedResponse } from '../utils/listCache'
 import { useAuthStore } from './auth'
@@ -486,7 +487,12 @@ export const useInventoryStore = defineStore('inventory', {
       feedback?: string
       attachments?: AttachmentRef[]
     }) {
-      await api.post('/approvals', payload)
+      await api.post('/approvals', {
+        ...payload,
+        ...(payload.attachments?.length
+          ? { attachments: prepareAttachmentsForApi(payload.attachments) }
+          : {}),
+      })
       this.invalidateListCache(['approvals', 'myApprovals', 'dashboard'])
       const authStore = useAuthStore()
       const canApprove = ['ADM', 'GESTOR'].includes(String(authStore.user?.role ?? '').trim().toUpperCase())

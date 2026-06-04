@@ -893,6 +893,11 @@ const onSubmit = async () => {
     return
   }
 
+  if (!form.description.trim()) {
+    formError.value = 'Informe o resumo da solicitação.'
+    return
+  }
+
   submitting.value = true
   try {
     let attachments: AttachmentRef[] = []
@@ -900,7 +905,7 @@ const onSubmit = async () => {
       attachments = await inventory.uploadAttachments(files.value)
     }
 
-    const description = form.description
+    const description = form.description.trim()
 
     const feedback =
       form.type === 'Manutenção'
@@ -919,8 +924,16 @@ const onSubmit = async () => {
 
     isFormOpen.value = false
   } catch (e: unknown) {
-    const ax = e as { response?: { data?: { message?: string } } }
-    formError.value = ax?.response?.data?.message ?? 'Não foi possível enviar a solicitação.'
+    const ax = e as {
+      response?: { data?: { message?: string; issues?: { fieldErrors?: Record<string, string[]> } } }
+    }
+    const data = ax?.response?.data
+    const fieldMsg = data?.issues?.fieldErrors
+      ? Object.entries(data.issues.fieldErrors)
+          .flatMap(([k, msgs]) => (msgs ?? []).map((m) => `${k}: ${m}`))
+          .join(' · ')
+      : ''
+    formError.value = data?.message ?? (fieldMsg || 'Não foi possível enviar a solicitação.')
   } finally {
     submitting.value = false
   }

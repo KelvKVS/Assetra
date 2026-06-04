@@ -78,7 +78,8 @@ const attachmentRefSchema = z.object({
       const n = Number(v)
       return Number.isFinite(n) && n >= 0 ? n : undefined
     }),
-  url: z.string().max(500).optional(),
+  /** URL de leitura pode incluir token JWT (?ft=) — limite alto; persistência usa path curto. */
+  url: z.string().max(4096).optional(),
 })
 
 export const assetCreateSchema = z.object({
@@ -158,7 +159,13 @@ export const approvalCreateSchema = z.object({
   assetTag: z.string().min(1).max(40),
   description: z.string().min(1).max(500),
   destinationSector: z.string().max(200).optional(),
-  destinationUserEmail: z.string().email().max(120).optional(),
+  destinationUserEmail: z.preprocess(
+    (val) => {
+      if (val === undefined || val === null || val === '') return undefined
+      return String(val).trim().toLowerCase()
+    },
+    z.string().email().max(120).optional(),
+  ),
   feedback: z.string().max(2000).optional(),
   attachments: z.array(attachmentRefSchema).max(6).optional(),
 })
