@@ -67,6 +67,15 @@ function consumeQueue(ch, queueName) {
 }
 
 async function start() {
+  const safeHost = (() => {
+    try {
+      const u = new URL(rabbitUrl.replace(/^amqp:/, 'http:').replace(/^amqps:/, 'https:'))
+      return u.hostname
+    } catch {
+      return '(url-invalida)'
+    }
+  })()
+
   const conn = await amqp.connect(rabbitUrl)
   const ch = await conn.createChannel()
   await ch.assertExchange(EXCHANGE, 'topic', { durable: true })
@@ -81,7 +90,17 @@ async function start() {
   consumeQueue(ch, auditQ.queue)
   consumeQueue(ch, emailQ.queue)
 
+  console.log('[events-worker] Ligado ao RabbitMQ (' + safeHost + ').')
   console.log('[events-worker] Filas ativas:', auditQ.queue, emailQ.queue)
+  console.log(
+    JSON.stringify({
+      level: 'info',
+      event: 'event_bus.worker_ready',
+      exchange: EXCHANGE,
+      queues: [auditQ.queue, emailQ.queue],
+      brokerHost: safeHost,
+    }),
+  )
 }
 
 start().catch((err) => {

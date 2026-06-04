@@ -40,8 +40,9 @@ Opções:
 
 1. **Recomendado (mais simples): CloudAMQP**  
    - Crie uma instância RabbitMQ no CloudAMQP.
-   - Copie a URL AMQP para `RABBITMQ_URL` no Render.
-   - Mantém o backend e worker no Render, e o broker externo.
+   - Copie a URL **`amqps://...`** (AMQP URL) para `RABBITMQ_URL` no Render — **nos dois serviços**: `assetra-backend` e `assetra-events-worker`.
+   - No painel LavinMQ, use **Connections** e **Queues** (não “Logs” de aplicação).
+   - Guia passo a passo: [cloudamqp-render-producao.md](cloudamqp-render-producao.md)
 
 2. **Hospedar broker por conta própria**  
    - Pode usar outro provedor/VM com RabbitMQ.
