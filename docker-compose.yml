@@ -1,0 +1,100 @@
+
+services:
+  # Banco de Dados Relacional (Prisma)
+  postgres:
+    image: postgres:16-alpine
+    container_name: assetra-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: assetra
+    ports:
+      - '5432:5432'
+    volumes:
+      - assetra_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Banco de Dados NoSQL (Mongoose / GridFS)
+  mongodb:
+    image: mongo:6
+    container_name: assetra-mongodb
+    ports:
+      - '27017:27017'
+    volumes:
+      - assetra_mongodb_data:/data/db
+
+  # Mensageria (RabbitMQ)
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: assetra-rabbitmq
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API Backend com 3 Réplicas
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    deploy:
+      replicas: 3
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/assetra?schema=public
+      - MONGODB_URL=mongodb://mongodb:27017/assetra
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      - JWT_SECRET=sua-chave-secreta-de-producao
+      - NODE_ENV=production
+      - PORT=3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  # Worker para processamento de eventos (2 Réplicas)
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["npm", "run", "worker:events"]
+    deploy:
+      replicas: 2
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/assetra?schema=public
+      - MONGODB_URL=mongodb://mongodb:27017/assetra
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      - NODE_ENV=production
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+
+  # Balanceador de Carga (Nginx) para as réplicas do Backend
+  backend-lb:
+    image: nginx:alpine
+    container_name: assetra-backend-lb
+    ports:
+      - '8080:80'
+    volumes:
+      - ./backend/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+
+volumes:
+  assetra_pgdata:
+  assetra_mongodb_data:

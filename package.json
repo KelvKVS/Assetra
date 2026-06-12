@@ -13,7 +13,10 @@
     "db:push": "npm run prisma:push --prefix backend",
     "db:generate": "npm run prisma:generate --prefix backend",
     "setup:backend": "npm install --prefix backend",
-    "docker:postgres": "docker compose -f backend/docker-compose.yml up -d"
+    "docker:postgres": "docker compose up -d postgres mongodb rabbitmq",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.5",

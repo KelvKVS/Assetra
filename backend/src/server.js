@@ -48,6 +48,13 @@ connectNoSQL() // Conexão MongoDB
 
 const app = express()
 app.disable('x-powered-by')
+
+// Identificação da instância para demonstrar escalabilidade
+app.use((req, res, next) => {
+  res.setHeader('X-Backend-Id', process.env.HOSTNAME || 'local-instance')
+  next()
+})
+
 app.set('trust proxy', 1)
 const port = Number(process.env.PORT) || 3000
 const startedAt = new Date().toISOString()
